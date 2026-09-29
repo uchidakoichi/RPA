@@ -411,6 +411,14 @@ input[type="text"], select, textarea {
     cursor: pointer;
 }
 .pick-list li:hover { background: #e8f3fe; border-color: #2196f3; }
+.img-capture-row { margin-top: 5px; }
+.img-preview { margin-top: 4px; }
+.img-preview img {
+    max-width: 100%;
+    max-height: 120px;
+    border: 1px dashed #f48fb1;
+    background: #ffffff;
+}
 </style>
 </head>
 <body>
@@ -522,6 +530,11 @@ var ALARM_WAV_PATH = "C:\\Windows\\Media\\Alarm01.wav";
 var WINDOW_RETRY_MAX = 3;
 var WINDOW_RETRY_INTERVAL_MS = 1000;
 var PS_TIMEOUT_SEC = 30;
+var IMAGE_FOLDER_NAME = "rpa_images";
+var IMG_DEFAULT_THRESHOLD = 0.9;
+var IMG_COLOR_TOLERANCE = 24;   // per RGB channel (0-255)
+var IMG_SEARCH_RETRY = 3;       // screen captures per CLICK_IMG (1 second apart)
+var IMG_PS_TIMEOUT_SEC = 90;
 
 // ----- Global state -----
 var shell = null;
@@ -669,6 +682,37 @@ function normalizeSendKeys(keys) {
         var n = count ? parseInt(count, 10) : 1;
         return new Array(n + 1).join(" ");
     });
+}
+
+function fileNameOf(path) {
+    return String(path == null ? "" : path).replace(/^.*[\\\/]/, "");
+}
+
+// "path,threshold" - the threshold is optional and the path itself may contain commas
+function parseImageParams(val) {
+    var s = String(val == null ? "" : val);
+    var m = s.match(/^([\s\S]*),\s*(\d*\.?\d+)\s*$/);
+    return m ? { path: trimText(m[1]), threshold: m[2] } : { path: trimText(s), threshold: String(IMG_DEFAULT_THRESHOLD) };
+}
+
+function clampThreshold(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) {
+        return IMG_DEFAULT_THRESHOLD;
+    }
+    return Math.min(1, Math.max(0.5, n));
+}
+
+// Relative image paths are resolved against the HTA folder
+function resolveImagePath(p) {
+    p = trimText(p).replace(/^"+|"+$/g, "");
+    if (p === "") {
+        return "";
+    }
+    if (/^[A-Za-z]:[\\\/]/.test(p) || /^\\\\/.test(p)) {
+        return p;
+    }
+    return appFilePath(p.replace(/\//g, "\\"));
 }
 
 // =====================================================================
@@ -952,7 +996,7 @@ function keyDisplayName(key) {
     return String(key);
 }
 
-var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "WAIT", "WAIT_FOR", "IF", "SWITCH", "RUN", "CLICK", "CLICK_POS", "GROUP_START", "COMMENT"];
+var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "WAIT", "WAIT_FOR", "IF", "SWITCH", "RUN", "CLICK", "CLICK_POS", "CLICK_IMG", "GROUP_START", "COMMENT"];
 
 var COMMAND_DEFS = {
     KEY: {
@@ -1048,8 +1092,8 @@ var COMMAND_DEFS = {
         autoLabel: function (val) { return "起動: " + truncateText(val, 30); }
     },
     CLICK: {
-        title: "ボタンをクリック(UIA)", icon: "👆", category: "mouse", defaultVal: "",
-        help: "座標じゃなくて、UIAutomationでボタン等の表示名を探して直接Invoke（押下）するキュン。表示名は完全一致だよ。PowerShellを使うので1〜数秒かかるよ。",
+        title: "オブジェクト認識クリック", icon: "👆", category: "mouse", defaultVal: "",
+        help: "【オブジェクト認識・第一推奨】座標じゃなくて、UIAutomationでボタン等の表示名（Nameプロパティ）を探して直接Invoke（押下）するキュン。表示名は完全一致だよ。PowerShellを使うので1〜数秒かかるよ。",
         fields: [{ id: "name", label: "オブジェクトの表示名", type: "text", placeholder: "例: 登録" }],
         parse: function (val) { return { name: val }; },
         compose: function (v) { return v.name; },
@@ -1057,8 +1101,8 @@ var COMMAND_DEFS = {
         autoLabel: function (val) { return "「" + val + "」をクリック"; }
     },
     CLICK_POS: {
-        title: "座標クリック", icon: "🎯", category: "mouse", defaultVal: "0,0",
-        help: "画面左上を(0,0)として、指定ピクセル位置へマウスを瞬間移動して左クリックするキュン（C#のuser32.dllをPowerShellでコンパイル実行）。",
+        title: "座標認識クリック", icon: "🎯", category: "mouse", defaultVal: "0,0",
+        help: "【座標認識】画面左上を(0,0)として、指定ピクセル位置へマウスを瞬間移動して左クリックするキュン（C#のuser32.dllをPowerShellでコンパイル実行）。",
         fields: [
             { id: "x", label: "X座標（ピクセル）", type: "text", placeholder: "100" },
             { id: "y", label: "Y座標（ピクセル）", type: "text", placeholder: "200" },
@@ -1068,6 +1112,27 @@ var COMMAND_DEFS = {
         compose: function (v) { return toInt(v.x, 0) + "," + toInt(v.y, 0); },
         validate: function (v) { return !/^-?\d+$/.test(v.x) || !/^-?\d+$/.test(v.y) ? "X・Yは整数で入れてね♡" : ""; },
         autoLabel: function (val) { var p = String(val).split(","); return "座標(" + trimText(p[0]) + ", " + trimText(p[1]) + ")をクリック"; }
+    },
+    CLICK_IMG: {
+        title: "画像認識クリック", icon: "🖼", category: "mouse", defaultVal: "," + IMG_DEFAULT_THRESHOLD,
+        help: "【画像認識】画面全体をスクリーンショットして、参照画像と同じ模様の場所をピクセル検索、見つけた場所の中心をクリックするキュン。Citrix/RDPなど中身が見えない画面に強いよ。外部ソフト不要（PowerShell＋System.Drawing）。見つからないときは1秒おきに" + IMG_SEARCH_RETRY + "回まで探すよ。",
+        fields: [
+            { id: "path", label: "参照画像ファイル（PNG/BMP/JPG）", type: "imgpath", placeholder: "例: C:\\img\\btn.png",
+              hint: "相対パスはこのHTAのフォルダ基準だよ。📷で切り取ると " + IMAGE_FOLDER_NAME + " フォルダに保存されるキュン" },
+            { id: "threshold", label: "一致率のしきい値（0.5〜1.0）", type: "text", placeholder: String(IMG_DEFAULT_THRESHOLD),
+              hint: "0.9 = 90%以上のピクセルが一致したらクリック。見つからないときは 0.85 などに下げてね" }
+        ],
+        parse: function (val) { return parseImageParams(val); },
+        compose: function (v) { return v.path + "," + clampThreshold(v.threshold); },
+        validate: function (v) {
+            if (v.path === "") { return "参照画像ファイルを指定してね♡"; }
+            var n = parseFloat(v.threshold);
+            return !/^\d*\.?\d+$/.test(v.threshold) || isNaN(n) || n < 0.5 || n > 1 ? "しきい値は0.5〜1.0の数字で入れてね♡" : "";
+        },
+        autoLabel: function (val) {
+            var p = parseImageParams(val);
+            return "画像「" + (fileNameOf(p.path) || "未指定") + "」を探してクリック（一致" + Math.round(clampThreshold(p.threshold) * 100) + "%以上）";
+        }
     },
     GROUP_START: {
         title: "グループ", icon: "📁", category: "group", defaultVal: "新しいグループ",
@@ -2223,6 +2288,12 @@ function buildFieldHtml(field, value) {
         if (cols === 0) {
             html += '<div class="form-hint">CSVを読み込んでおくと、ここで列名から選べるようになるキュン♡</div>';
         }
+    } else if (field.type === "imgpath") {
+        html += '<input type="text" id="' + id + '" class="form-input" value="' + v + '"' + ph + ' onchange="updateImagePreview()">' +
+            '<div class="img-capture-row"><button type="button" class="btn" onclick="captureImageAroundCursor()">📷 5秒後のマウス周辺を切り取り</button>' +
+            ' 幅 <input type="text" id="imgCapW" class="input-xs" value="60"> × 高さ <input type="text" id="imgCapH" class="input-xs" value="30"> px</div>' +
+            '<div id="imgCaptureStatus" class="form-hint"></div>' +
+            '<div id="imgPreview" class="img-preview"></div>';
     } else if (field.type === "capture") {
         html += '<button type="button" class="btn" onclick="captureCursorPosition()">📍 数秒後のマウス位置を取得</button>' +
             ' <span id="captureStatus" class="form-hint"></span>';
@@ -2279,6 +2350,9 @@ function openStepEditor(cmd, step, onSave) {
         } },
         { text: "キャンセル", fn: null }
     ]);
+    if (cmd === "CLICK_IMG") {
+        updateImagePreview();
+    }
 }
 
 function buildPalette() {
@@ -2456,6 +2530,63 @@ function captureCursorPosition() {
     });
 }
 
+function updateImagePreview() {
+    var input = byId("fld_path");
+    var box = byId("imgPreview");
+    if (!input || !box) {
+        return;
+    }
+    var full = resolveImagePath(input.value);
+    if (full === "") {
+        box.innerHTML = "";
+    } else if (fso && fso.FileExists(full)) {
+        box.innerHTML = '<img src="' + escapeHtml(full) + '" alt="">';
+    } else {
+        box.innerHTML = '<span class="form-hint">⚠ 画像ファイルが見つからないキュン… ' + escapeHtml(full) + "</span>";
+    }
+}
+
+function captureImageAroundCursor() {
+    var status = byId("imgCaptureStatus");
+    if (!shell || !fso || !appDir) {
+        if (status) { status.innerHTML = "ActiveXが使えないキュン…"; }
+        return;
+    }
+    var w = Math.min(400, Math.max(8, toInt(byId("imgCapW").value, 60)));
+    var h = Math.min(400, Math.max(8, toInt(byId("imgCapH").value, 30)));
+    var folder = appFilePath(IMAGE_FOLDER_NAME);
+    try {
+        if (!fso.FolderExists(folder)) {
+            fso.CreateFolder(folder);
+        }
+    } catch (e) {
+        if (status) { status.innerHTML = escapeHtml("保存フォルダを作れなかった…" + e.message); }
+        return;
+    }
+    var d = new Date();
+    var name = "img_" + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + "_" +
+        pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + ".png";
+    var relative = IMAGE_FOLDER_NAME + "\\" + name;
+    if (status) {
+        status.innerHTML = "対象の画面を前に出して、押したいボタンの真ん中にマウスを置いたまま待っててね…（5秒）";
+    }
+    runPowerShellAsync(buildImageCaptureScript(folder + "\\" + name, w, h), PS_TIMEOUT_SEC, function (ok, payload) {
+        var st = byId("imgCaptureStatus");
+        if (!ok) {
+            if (st) { st.innerHTML = escapeHtml("切り取り失敗…" + payload); }
+            return;
+        }
+        if (byId("fld_path")) {
+            byId("fld_path").value = relative;
+            updateImagePreview();
+        }
+        if (st) {
+            st.innerHTML = escapeHtml("切り取れたキュン♡ マウス位置(" + payload + ") の周り " + w + "×" + h + "px → " + relative);
+        }
+        log("📷 参照画像を保存したキュン: " + relative, "ok");
+    });
+}
+
 // =====================================================================
 //  PowerShell bridge (asynchronous: hidden window + result file polling)
 // =====================================================================
@@ -2607,6 +2738,169 @@ function buildClickPosScript(x, y) {
         "[FujiMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)",
         "Set-FujiResult 'OK'"
     ];
+}
+
+// C# template matcher on System.Drawing.Bitmap (compiled on the fly by Add-Type; no Python/OpenCV)
+function imageEngineScript() {
+    return [
+        "Add-Type -AssemblyName System.Drawing",
+        "Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @\"",
+        "using System;",
+        "using System.Collections.Generic;",
+        "using System.Drawing;",
+        "using System.Drawing.Imaging;",
+        "using System.Runtime.InteropServices;",
+        "public struct FujiImagePoint { public int X; public int Y; }",
+        "public static class FujiImage {",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();",
+        "    [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int index);",
+        "    [DllImport(\"user32.dll\")] public static extern bool GetCursorPos(out FujiImagePoint p);",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetCursorPos(int x, int y);",
+        "    [DllImport(\"user32.dll\")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);",
+        "    static int[] ReadPixels(Bitmap bmp) {",
+        "        int w = bmp.Width, h = bmp.Height;",
+        "        int[] px = new int[w * h];",
+        "        BitmapData d = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);",
+        "        try {",
+        "            for (int y = 0; y < h; y++) {",
+        "                Marshal.Copy(new IntPtr(d.Scan0.ToInt64() + (long)y * d.Stride), px, y * w, w);",
+        "            }",
+        "        } finally {",
+        "            bmp.UnlockBits(d);",
+        "        }",
+        "        return px;",
+        "    }",
+        "    static bool Near(int a, int b, int tol) {",
+        "        int d = ((a >> 16) & 255) - ((b >> 16) & 255);",
+        "        if (d > tol || d < -tol) { return false; }",
+        "        d = ((a >> 8) & 255) - ((b >> 8) & 255);",
+        "        if (d > tol || d < -tol) { return false; }",
+        "        d = (a & 255) - (b & 255);",
+        "        return d <= tol && d >= -tol;",
+        "    }",
+        "    static Bitmap CaptureRect(int x, int y, int w, int h) {",
+        "        Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);",
+        "        using (Graphics g = Graphics.FromImage(bmp)) {",
+        "            g.CopyFromScreen(x, y, 0, 0, new Size(w, h), CopyPixelOperation.SourceCopy);",
+        "        }",
+        "        return bmp;",
+        "    }",
+        // Returns "centerX,centerY,score(0-1000)" in screen coordinates, or "" when nothing reaches the threshold
+        "    public static string Find(string path, double threshold, int tol) {",
+        "        int tw, th;",
+        "        int[] tpx;",
+        "        using (Bitmap src = new Bitmap(path)) {",
+        "            tw = src.Width;",
+        "            th = src.Height;",
+        "            tpx = ReadPixels(src);",
+        "        }",
+        "        int left = GetSystemMetrics(76), top = GetSystemMetrics(77);",
+        "        int sw = GetSystemMetrics(78), sh = GetSystemMetrics(79);",
+        "        if (tw > sw || th > sh) { return \"\"; }",
+        "        List<int> offList = new List<int>();",
+        "        List<int> colList = new List<int>();",
+        "        for (int ty = 0; ty < th; ty++) {",
+        "            for (int tx = 0; tx < tw; tx++) {",
+        "                int c = tpx[ty * tw + tx];",
+        "                if (((c >> 24) & 255) < 128) { continue; }",
+        "                offList.Add(ty * sw + tx);",
+        "                colList.Add(c);",
+        "            }",
+        "        }",
+        "        int n = offList.Count;",
+        "        if (n == 0) { return \"\"; }",
+        "        int[] off = offList.ToArray();",
+        "        int[] col = colList.ToArray();",
+        // Shuffle the pixel order so that wrong positions are rejected after only a few comparisons
+        "        Random rnd = new Random(20240601);",
+        "        for (int i = n - 1; i > 0; i--) {",
+        "            int j = rnd.Next(i + 1);",
+        "            int t = off[i]; off[i] = off[j]; off[j] = t;",
+        "            t = col[i]; col[i] = col[j]; col[j] = t;",
+        "        }",
+        "        int[] spx;",
+        "        using (Bitmap screen = CaptureRect(left, top, sw, sh)) {",
+        "            spx = ReadPixels(screen);",
+        "        }",
+        "        int sampleN = Math.Min(n, 64);",
+        "        int sampleAllowed = (int)Math.Floor((1.0 - threshold) * sampleN * 2.0 + 1e-9) + 1;",
+        "        int allowed = (int)Math.Floor((1.0 - threshold) * n + 1e-9);",
+        "        int bestMiss = allowed + 1, bestX = -1, bestY = -1;",
+        "        for (int y = 0; y <= sh - th && bestMiss > 0; y++) {",
+        "            int row = y * sw;",
+        "            for (int x = 0; x <= sw - tw; x++) {",
+        "                int b = row + x;",
+        "                int miss = 0;",
+        "                int k;",
+        "                for (k = 0; k < sampleN; k++) {",
+        "                    if (!Near(spx[b + off[k]], col[k], tol) && ++miss > sampleAllowed) { break; }",
+        "                }",
+        "                if (miss > sampleAllowed) { continue; }",
+        "                int limit = bestMiss - 1;",
+        "                miss = 0;",
+        "                for (k = 0; k < n; k++) {",
+        "                    if (!Near(spx[b + off[k]], col[k], tol) && ++miss > limit) { break; }",
+        "                }",
+        "                if (miss <= limit) {",
+        "                    bestMiss = miss;",
+        "                    bestX = x;",
+        "                    bestY = y;",
+        "                    if (miss == 0) { break; }",
+        "                }",
+        "            }",
+        "        }",
+        "        if (bestX < 0) { return \"\"; }",
+        "        int score = (int)Math.Round((1.0 - (double)bestMiss / n) * 1000.0);",
+        "        return (left + bestX + tw / 2) + \",\" + (top + bestY + th / 2) + \",\" + score;",
+        "    }",
+        "    public static void Click(int x, int y) {",
+        "        SetCursorPos(x, y);",
+        "        System.Threading.Thread.Sleep(80);",
+        "        mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);",
+        "        System.Threading.Thread.Sleep(40);",
+        "        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);",
+        "    }",
+        "    public static string CaptureAroundCursor(string savePath, int w, int h) {",
+        "        FujiImagePoint p;",
+        "        GetCursorPos(out p);",
+        "        using (Bitmap bmp = CaptureRect(p.X - w / 2, p.Y - h / 2, w, h)) {",
+        "            bmp.Save(savePath, ImageFormat.Png);",
+        "        }",
+        "        return p.X + \",\" + p.Y;",
+        "    }",
+        "}",
+        "\"@",
+        // Physical pixels for both the screenshot and SetCursorPos (high-DPI safe)
+        "[void][FujiImage]::SetProcessDPIAware()"
+    ];
+}
+
+function buildClickImgScript(path, threshold) {
+    return imageEngineScript().concat([
+        "$imgPath = " + psQuote(path),
+        "if (-not (Test-Path -LiteralPath $imgPath)) { throw ('参照画像が見つからない: ' + $imgPath) }",
+        "$found = ''",
+        "for ($i = 0; $i -lt " + IMG_SEARCH_RETRY + "; $i++) {",
+        "    $found = [FujiImage]::Find($imgPath, " + threshold + ", " + IMG_COLOR_TOLERANCE + ")",
+        "    if ($found -ne '') { break }",
+        "    Start-Sleep -Milliseconds 1000",
+        "}",
+        "if ($found -eq '') {",
+        "    Set-FujiResult ('NG:画面内に一致率" + Math.round(threshold * 100) + "%以上の場所が見つからなかった（" + IMG_SEARCH_RETRY + "回探索）')",
+        "} else {",
+        "    $p = $found.Split(',')",
+        "    [FujiImage]::Click([int]$p[0], [int]$p[1])",
+        "    Set-FujiResult ('OK:' + $found)",
+        "}"
+    ]);
+}
+
+function buildImageCaptureScript(savePath, w, h) {
+    return imageEngineScript().concat([
+        "Start-Sleep -Seconds 5",
+        "$pos = [FujiImage]::CaptureAroundCursor(" + psQuote(savePath) + ", " + w + ", " + h + ")",
+        "Set-FujiResult ('OK:' + $pos)"
+    ]);
 }
 
 // =====================================================================
@@ -3104,6 +3398,27 @@ function executeStep(step, next) {
                     next("next");
                 } else {
                     stopWithError("🚨 座標クリック失敗: " + payload, true);
+                }
+            });
+        });
+        return;
+    case "CLICK_IMG":
+        var img = parseImageParams(val);
+        var imgPath = resolveImagePath(img.path);
+        var threshold = clampThreshold(img.threshold);
+        if (imgPath === "" || !fso.FileExists(imgPath)) {
+            stopWithError("🚨 参照画像が見つからないキュン: " + (imgPath || "（未指定）"), true);
+            return;
+        }
+        ensureInputTarget(function () {
+            log("🖼 画像「" + fileNameOf(imgPath) + "」を画面から探してるキュン…（一致" + Math.round(threshold * 100) + "%以上）", "info");
+            runPowerShellAsync(buildClickImgScript(imgPath, threshold), IMG_PS_TIMEOUT_SEC, function (ok, payload) {
+                if (ok) {
+                    var r = String(payload).split(",");
+                    log("🖼 見つけたキュン♡ 一致率 " + (toInt(r[2], 0) / 10) + "% → 座標(" + r[0] + ", " + r[1] + ")をクリック", "info");
+                    next("next");
+                } else {
+                    stopWithError("🚨 画像認識クリック失敗: " + payload, true);
                 }
             });
         });
