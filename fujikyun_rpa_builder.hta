@@ -1,0 +1,3402 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<title>ふじキュン♡のRPAマクロビルダー</title>
+<hta:application
+    id="fujikyunRPABuilder"
+    applicationname="FujikyunRPABuilder"
+    border="dialog" innerborder="no" scroll="auto"
+    singleinstance="yes" sysmenu="yes" maximizebutton="yes" windowstate="normal">
+<style type="text/css">
+/* ===== Base ===== */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: "Meiryo UI", "Yu Gothic UI", "Segoe UI", "Segoe UI Emoji", sans-serif;
+    font-size: 13px;
+    color: #3a3040;
+    background: #fdf5f9;
+    overflow: auto;
+}
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: 12px;
+}
+
+/* ===== Flexible layout: only .macro-container stretches ===== */
+.app {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    height: 100%;
+    min-height: 560px;
+}
+.top-panel,
+.bottom-panel {
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+}
+.macro-container {
+    -ms-flex: 1 1 0%;
+    flex: 1 1 0%;
+    position: relative;
+    min-height: 120px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    margin: 0 8px;
+    padding: 6px 8px 40px 8px;
+    background: #ffffff;
+    border: 1px solid #ead7e2;
+    border-radius: 6px;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+}
+
+/* ===== Title bar ===== */
+.title-bar {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-align: center;
+    align-items: center;
+    padding: 6px 10px;
+    background: #f7a8c8;
+    background: linear-gradient(90deg, #f48fb1 0%, #f7b6d2 55%, #b3d9ff 100%);
+    color: #ffffff;
+}
+.app-title {
+    font-size: 17px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(120, 30, 80, 0.35);
+}
+.save-state {
+    margin-left: 14px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #2e7d32;
+}
+.save-state.dirty {
+    color: #c62828;
+}
+.spacer {
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+}
+
+/* ===== Toolbar rows ===== */
+.toolbar-row {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    -ms-flex-align: center;
+    align-items: center;
+    padding: 3px 8px;
+}
+.toolbar-row > * {
+    margin: 2px 4px 2px 0;
+}
+.field-label {
+    font-weight: bold;
+    color: #8e3b66;
+    margin-left: 4px;
+}
+.chk {
+    white-space: nowrap;
+}
+.input-xs { width: 48px; }
+.input-md { width: 170px; }
+.input-lg { width: 340px; }
+input[type="text"], select, textarea {
+    border: 1px solid #d9c3d1;
+    border-radius: 3px;
+    padding: 3px 4px;
+    background: #ffffff;
+}
+.csv-info {
+    color: #6d5a66;
+    font-size: 12px;
+}
+.insert-hint {
+    color: #1565c0;
+    font-size: 12px;
+}
+
+/* ===== Buttons ===== */
+.btn {
+    border: 1px solid #d9c3d1;
+    background: #ffffff;
+    color: #3a3040;
+    border-radius: 4px;
+    padding: 3px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn:hover { background: #fdeaf3; border-color: #f48fb1; }
+.btn[disabled], .btn[disabled]:hover {
+    color: #b8adb4;
+    background: #f4f0f2;
+    border-color: #e2d8de;
+    cursor: default;
+}
+.btn-primary { background: #f06292; border-color: #e0457b; color: #ffffff; font-weight: bold; }
+.btn-primary:hover { background: #ec407a; }
+.btn-save { background: #ffffff; color: #c2185b; font-weight: bold; border-color: #ffffff; }
+.btn-run { background: #43a047; border-color: #2e7d32; color: #ffffff; font-weight: bold; }
+.btn-run:hover { background: #388e3c; border-color: #1b5e20; }
+.btn-stop { color: #c62828; font-weight: bold; }
+.btn-danger { background: #e53935; border-color: #c62828; color: #ffffff; }
+.btn-danger:hover { background: #c62828; }
+.btn-danger-lite { color: #c62828; }
+.btn-cmd { border-left-width: 4px; font-weight: bold; }
+.file-btn-wrap {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+}
+.file-btn-wrap input[type="file"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 60px;
+}
+
+/* ===== Command categories (palette + badges) ===== */
+.cat-input  { border-left-color: #1e88e5; }
+.cat-flow   { border-left-color: #fb8c00; }
+.cat-window { border-left-color: #8e24aa; }
+.cat-mouse  { border-left-color: #00897b; }
+.cat-group  { border-left-color: #795548; }
+.cat-note   { border-left-color: #43a047; }
+
+/* ===== Macro blocks ===== */
+.block {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-align: center;
+    align-items: center;
+    min-height: 26px;
+    margin: 2px 0;
+    padding: 2px 4px;
+    background: #fbf9fa;
+    border: 2px solid transparent;
+    border-left: 5px solid #cfc3ca;
+    border-radius: 4px;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.block:hover { background: #fff3f8; }
+.block.cat-input  { border-left-color: #1e88e5; }
+.block.cat-flow   { border-left-color: #fb8c00; }
+.block.cat-window { border-left-color: #8e24aa; }
+.block.cat-mouse  { border-left-color: #00897b; }
+.block.cat-group  { border-left-color: #795548; background: #f6f1ee; }
+.block.cat-note   { border-left-color: #43a047; background: #f5fbf5; }
+.block.selected {
+    border-top-color: #2196f3;
+    border-right-color: #2196f3;
+    border-bottom-color: #2196f3;
+    background: #e8f3fe;
+}
+.block.running {
+    background: #fff6c2;
+    border-top-color: #fbc02d;
+    border-right-color: #fbc02d;
+    border-bottom-color: #fbc02d;
+}
+.block.dragging { opacity: 0.4; }
+.block.drop-before { box-shadow: inset 0 4px 0 #2196f3; }
+.block.drop-after { box-shadow: inset 0 -4px 0 #2196f3; }
+.block.hidden { display: none; }
+.toggle, .toggle-space {
+    display: inline-block;
+    width: 18px;
+    text-align: center;
+    color: #795548;
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+}
+.toggle { cursor: pointer; font-size: 11px; }
+.toggle:hover { color: #e91e63; }
+.step-no {
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+    width: 30px;
+    text-align: right;
+    margin-right: 6px;
+    color: #a2939c;
+    font-size: 11px;
+}
+.badge {
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+    min-width: 74px;
+    margin-right: 8px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: bold;
+    color: #ffffff;
+    background: #9e9e9e;
+}
+.cat-input .badge  { background: #1e88e5; }
+.cat-flow .badge   { background: #fb8c00; }
+.cat-window .badge { background: #8e24aa; }
+.cat-mouse .badge  { background: #00897b; }
+.cat-group .badge  { background: #795548; }
+.cat-note .badge   { background: #43a047; }
+.step-main {
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.step-label { font-weight: bold; }
+.step-val {
+    margin-left: 10px;
+    color: #8a7d85;
+    font-family: Consolas, "MS Gothic", monospace;
+    font-size: 11px;
+}
+.comment-text { color: #2e7d32; font-style: italic; }
+.group-name { font-weight: bold; color: #5d4037; }
+.group-end-text { color: #8d6e63; font-size: 11px; }
+.collapsed-count { margin-left: 8px; color: #a1887f; font-size: 11px; }
+.actions {
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+    margin-left: 6px;
+}
+.icon-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: #8a7d85;
+    border-radius: 3px;
+    padding: 0 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.icon-btn:hover { border-color: #90caf9; background: #ffffff; color: #1565c0; }
+.icon-btn.icon-del:hover { border-color: #ef9a9a; color: #c62828; }
+.empty-hint {
+    margin: 40px auto;
+    text-align: center;
+    color: #b08aa0;
+    line-height: 2;
+}
+
+/* ===== Bottom panel & log ===== */
+.bottom-panel { padding-top: 4px; }
+.run-row { background: #fff0f6; border-top: 1px solid #f3d3e2; }
+.progress {
+    font-weight: bold;
+    color: #6a1b9a;
+}
+.log-area {
+    height: 140px;
+    overflow-y: auto;
+    padding: 4px 8px;
+    background: #2d2733;
+    color: #ece6f0;
+    font-family: Consolas, "MS Gothic", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    -ms-user-select: text;
+    user-select: text;
+}
+.log-line { white-space: pre-wrap; word-wrap: break-word; }
+.log-info  { color: #ece6f0; }
+.log-ok    { color: #a5e3a8; }
+.log-warn  { color: #ffe082; }
+.log-error { color: #ff8a9a; font-weight: bold; }
+.log-run   { color: #8fd3ff; }
+
+/* ===== Modal dialog ===== */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    background: rgba(70, 30, 55, 0.35);
+}
+.modal {
+    position: relative;
+    width: 560px;
+    max-width: 92%;
+    margin: 50px auto 0 auto;
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #f0b8d0;
+    box-shadow: 0 8px 28px rgba(80, 20, 60, 0.35);
+}
+.modal-title {
+    padding: 9px 14px;
+    border-radius: 8px 8px 0 0;
+    background: #fce4ef;
+    color: #ad1457;
+    font-weight: bold;
+    font-size: 14px;
+}
+.modal-body {
+    max-height: 62vh;
+    overflow-y: auto;
+    padding: 10px 14px;
+}
+.modal-footer {
+    padding: 8px 14px 12px 14px;
+    text-align: right;
+}
+.modal-footer .btn { margin-left: 6px; padding: 5px 14px; }
+.form-help {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: #f3f8ff;
+    border-left: 3px solid #64b5f6;
+    color: #37474f;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.form-row { margin: 8px 0; }
+.form-label {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: bold;
+    color: #6d3a58;
+}
+.form-input { width: 96%; }
+.form-inline {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-align: center;
+    align-items: center;
+}
+.form-inline .form-input { -ms-flex: 1 1 auto; flex: 1 1 auto; width: auto; margin-right: 6px; }
+.form-inline select.form-input { -ms-flex: 0 0 auto; flex: 0 0 auto; width: 190px; }
+.form-hint { margin-top: 3px; color: #8a7d85; font-size: 11px; }
+.form-error {
+    display: none;
+    margin-top: 8px;
+    padding: 5px 8px;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 3px;
+}
+.modal-message { line-height: 1.8; white-space: pre-wrap; }
+.pick-list { margin: 0; padding: 0; list-style: none; }
+.pick-list li {
+    margin: 3px 0;
+    padding: 5px 8px;
+    border: 1px solid #eadde4;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.pick-list li:hover { background: #e8f3fe; border-color: #2196f3; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+    <!-- ===== Top panel (fixed height) ===== -->
+    <div class="top-panel">
+        <div class="title-bar">
+            <span class="app-title">ふじキュン♡のRPAマクロビルダー</span>
+            <span class="save-state" id="saveState">✔ 保存済み</span>
+            <span class="spacer"></span>
+            <button class="btn btn-save" onclick="saveProduction()" title="gprime_macros.json に上書き保存します (Ctrl+S)">💾 本番ファイルに保存</button>
+        </div>
+
+        <div class="toolbar-row">
+            <span class="field-label">マクロ</span>
+            <select id="macroSelect" onchange="onMacroSelectChange()" style="min-width:220px"></select>
+            <button class="btn" onclick="addMacro()">＋ 新規</button>
+            <button class="btn" onclick="renameMacro()">✎ 名前変更</button>
+            <button class="btn" onclick="duplicateMacro()">⧉ 複製</button>
+            <button class="btn btn-danger-lite" onclick="deleteMacro()">🗑 削除</button>
+            <span class="field-label">対象ウィンドウ</span>
+            <input type="text" id="targetWindowInput" class="input-md" placeholder="例: GPRIME" onchange="onTargetWindowChange()"
+                   title="タイトルバーの文字（完全一致→前方一致→後方一致の順で探します）">
+            <button class="btn" onclick="showWindowList()" title="いま開いているウィンドウの一覧から選びます">🔍 一覧</button>
+        </div>
+
+        <div class="toolbar-row">
+            <span class="field-label">CSV</span>
+            <input type="text" id="csvPathInput" class="input-lg" placeholder="CSVファイルのフルパス（📂参照 でも選べるキュン）">
+            <span class="file-btn-wrap"><button class="btn" tabindex="-1">📂 参照</button><input type="file" id="csvFileInput" accept=".csv,.txt" onchange="onCsvFileChosen(this)"></span>
+            <button class="btn" onclick="loadCsvFromInput()">📥 読込</button>
+            <label class="chk"><input type="checkbox" id="csvHeaderCheck" checked onclick="reparseCsv()"> 1行目は見出し</label>
+            <select id="csvEncodingSelect" onchange="reloadCsvIfLoaded()" title="文字コード">
+                <option value="auto">文字コード自動判定</option>
+                <option value="shift_jis">Shift_JIS</option>
+                <option value="utf-8">UTF-8</option>
+                <option value="unicode">UTF-16</option>
+            </select>
+            <span class="csv-info" id="csvInfo">CSV未読込</span>
+        </div>
+
+        <div class="toolbar-row">
+            <span class="field-label">追加</span>
+            <span id="paletteButtons"></span>
+        </div>
+
+        <div class="toolbar-row">
+            <span class="field-label">編集</span>
+            <button class="btn" id="undoBtn" onclick="undo()" title="元に戻す (Ctrl+Z)">↩️</button>
+            <button class="btn" id="redoBtn" onclick="redo()" title="やり直し (Ctrl+Y)">↪️</button>
+            <select id="historySelect" onchange="jumpToHistory()" style="width:260px" title="履歴から好きな時点に戻せます（最大30件）"></select>
+            <button class="btn" onclick="moveSelected(-1)" title="選択ブロックを上へ (Alt+↑)">▲</button>
+            <button class="btn" onclick="moveSelected(1)" title="選択ブロックを下へ (Alt+↓)">▼</button>
+            <button class="btn" onclick="duplicateSelected()" title="選択ブロックを複製 (Ctrl+D)">⧉ 複製</button>
+            <button class="btn" onclick="setAllCollapsed(false)" title="すべてのグループを展開">▼ 全展開</button>
+            <button class="btn" onclick="setAllCollapsed(true)" title="すべてのグループを折りたたみ">▶ 全折りたたみ</button>
+            <span class="insert-hint" id="insertHint"></span>
+        </div>
+    </div>
+
+    <!-- ===== Macro command area (the only flexible area) ===== -->
+    <div class="macro-container" id="macroContainer"></div>
+
+    <!-- ===== Bottom panel (fixed height) ===== -->
+    <div class="bottom-panel">
+        <div class="toolbar-row run-row">
+            <button class="btn btn-run" id="runBtn" onclick="startRun()">▶ 実行</button>
+            <button class="btn" id="pauseBtn" onmousedown="togglePause()" disabled>⏸ 一時停止</button>
+            <button class="btn btn-stop" id="stopBtn" onmousedown="stopRun('停止ボタン')" disabled title="Escキーでも止まります">⏹ 停止</button>
+            <label>開始行 <input type="text" id="startRowInput" class="input-xs" value="1"></label>
+            <label>終了行 <input type="text" id="endRowInput" class="input-xs" placeholder="最後"></label>
+            <label>間隔 <input type="text" id="stepIntervalInput" class="input-xs" value="300"> ms</label>
+            <label class="chk"><input type="checkbox" id="alarmCheck" checked> アラーム音</label>
+            <button class="btn" onclick="playAlarm(true)" title="アラーム音をテスト再生">🔔</button>
+            <label class="chk" title="ONにすると入力系コマンドの前に毎回、対象ウィンドウを前面化して確認します"><input type="checkbox" id="safeModeCheck"> 毎ステップ前面化</label>
+            <button class="btn" id="exportErrorBtn" onclick="exportErrorRows()">↓ エラー行をCSV保存 (0)</button>
+            <span class="spacer"></span>
+            <span class="progress" id="progressText">待機中キュン♡</span>
+        </div>
+        <div class="log-area" id="logArea"></div>
+    </div>
+</div>
+
+<!-- ===== Modal dialog ===== -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer" id="modalFooter"></div>
+    </div>
+</div>
+
+<script type="text/javascript">
+// =====================================================================
+//  Fujikyun RPA Macro Builder  (HTA / ES5 only)
+// =====================================================================
+
+// ----- Constants -----
+var DATA_VERSION = 24;
+var MACRO_FILE_NAME = "gprime_macros.json";
+var TEMP_FILE_NAME = "gprime_macros_temp.json";
+var DISCARDED_TEMP_FILE_NAME = "gprime_macros_temp_discarded.json";
+var ERROR_FILE_NAME = "gprime_error_list.csv";
+var HISTORY_LIMIT = 30;
+var INDENT_PX = 25;
+var LOG_LIMIT = 500;
+var ALARM_WAV_PATH = "C:\\Windows\\Media\\Alarm01.wav";
+var WINDOW_RETRY_MAX = 3;
+var WINDOW_RETRY_INTERVAL_MS = 1000;
+var PS_TIMEOUT_SEC = 30;
+
+// ----- Global state -----
+var shell = null;
+var fso = null;
+var appDir = "";
+var appData = { version: DATA_VERSION, macros: [] };
+var currentMacroIndex = 0;
+var selectedIndex = -1;
+var selectedEl = null;
+var historyStack = [];
+var historyPos = -1;
+var isDirty = false;
+var csvState = { path: "", encoding: "", records: [], header: null, rows: [] };
+var errorRows = [];
+var runState = null;
+var dragState = null;
+var modalButtons = [];
+var modalToken = 0;
+var psSeq = 0;
+var pendingTempFiles = [];
+var lastWindowTitles = [];
+var focusCheckTrusted = true;
+
+// =====================================================================
+//  Utilities
+// =====================================================================
+function byId(id) {
+    return document.getElementById(id);
+}
+
+function escapeHtml(s) {
+    return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function trimText(s) {
+    return String(s == null ? "" : s).replace(/^\s+|\s+$/g, "");
+}
+
+function truncateText(s, n) {
+    s = String(s == null ? "" : s).replace(/\r\n|\r|\n/g, "⏎");
+    return s.length > n ? s.substring(0, n) + "…" : s;
+}
+
+function deepCopy(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+function toInt(v, def) {
+    var n = parseInt(v, 10);
+    return isNaN(n) ? def : n;
+}
+
+function pad2(n) {
+    return (n < 10 ? "0" : "") + n;
+}
+
+function timeText(d) {
+    d = d || new Date();
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+}
+
+function dateTimeText(d) {
+    d = d || new Date();
+    return d.getFullYear() + "/" + pad2(d.getMonth() + 1) + "/" + pad2(d.getDate()) + " " + timeText(d);
+}
+
+function hasClass(el, cls) {
+    return !!el && (" " + el.className + " ").indexOf(" " + cls + " ") >= 0;
+}
+
+function addClass(el, cls) {
+    if (el && !hasClass(el, cls)) {
+        el.className = el.className ? el.className + " " + cls : cls;
+    }
+}
+
+function removeClass(el, cls) {
+    if (!el || !el.className) {
+        return;
+    }
+    el.className = trimText((" " + el.className + " ").split(" " + cls + " ").join(" "));
+}
+
+function preventEvent(e) {
+    if (!e) {
+        return false;
+    }
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.returnValue = false;
+    return false;
+}
+
+function generateId() {
+    var t = ("0000" + (new Date().getTime() % 65536).toString(16)).slice(-4);
+    var r = ("0000" + Math.floor(Math.random() * 65536).toString(16)).slice(-4);
+    return t + r;
+}
+
+function uniqueMacroId() {
+    var id, i, used;
+    do {
+        id = generateId();
+        used = false;
+        for (i = 0; i < appData.macros.length; i++) {
+            if (appData.macros[i].id === id) {
+                used = true;
+            }
+        }
+    } while (used);
+    return id;
+}
+
+// Quote a string as a PowerShell single-quoted literal (smart quotes are also quote chars in PS)
+function psQuote(s) {
+    return "'" + String(s == null ? "" : s).replace(/['\u2018\u2019\u201A\u201B]/g, "$&$&") + "'";
+}
+
+// Split "a,b,c" from the right so that the first parameter (window title) may contain commas
+function splitParams(val, count) {
+    var parts = String(val == null ? "" : val).split(",");
+    var tail = [];
+    while (tail.length < count - 1 && parts.length > 1) {
+        tail.unshift(parts.pop());
+    }
+    var result = [parts.join(",")].concat(tail);
+    while (result.length < count) {
+        result.push("");
+    }
+    for (var i = 0; i < result.length; i++) {
+        result[i] = trimText(result[i]);
+    }
+    return result;
+}
+
+// WScript.Shell.SendKeys has no {SPACE} code, so translate it to a literal space
+function normalizeSendKeys(keys) {
+    return String(keys == null ? "" : keys).replace(/\{SPACE(?:\s+(\d+))?\}/gi, function (m, count) {
+        var n = count ? parseInt(count, 10) : 1;
+        return new Array(n + 1).join(" ");
+    });
+}
+
+// =====================================================================
+//  Log
+// =====================================================================
+function log(message, level) {
+    var area = byId("logArea");
+    if (!area) {
+        return;
+    }
+    var line = document.createElement("div");
+    line.className = "log-line log-" + (level || "info");
+    line.appendChild(document.createTextNode("[" + timeText() + "] " + message));
+    area.appendChild(line);
+    while (area.childNodes.length > LOG_LIMIT) {
+        area.removeChild(area.firstChild);
+    }
+    area.scrollTop = area.scrollHeight;
+}
+
+// =====================================================================
+//  ActiveX / file system
+// =====================================================================
+function initActiveX() {
+    try {
+        shell = new ActiveXObject("WScript.Shell");
+    } catch (e1) {
+        shell = null;
+    }
+    try {
+        fso = new ActiveXObject("Scripting.FileSystemObject");
+    } catch (e2) {
+        fso = null;
+    }
+    return !!(shell && fso);
+}
+
+function resolveAppDir() {
+    var path = "";
+    var m;
+    try {
+        var hta = byId("fujikyunRPABuilder");
+        var cmdLine = hta && hta.commandLine ? String(hta.commandLine) : "";
+        m = cmdLine.match(/"([^"]+\.hta)"/i) || cmdLine.match(/(\S+\.hta)/i);
+        if (m) {
+            path = m[1];
+        }
+    } catch (e1) {
+        path = "";
+    }
+    if (!path) {
+        var href = String(location.href).replace(/[?#].*$/, "");
+        try {
+            href = decodeURIComponent(href);
+        } catch (e2) {
+            try { href = unescape(href); } catch (e3) { /* keep raw */ }
+        }
+        if (/^file:\/\/\/[A-Za-z]:/i.test(href)) {
+            path = href.replace(/^file:\/\/\//i, "");
+        } else if (/^file:\/\//i.test(href)) {
+            path = "//" + href.replace(/^file:\/\/+/i, "");
+        } else {
+            path = href;
+        }
+        path = path.replace(/\//g, "\\");
+    }
+    var dir = "";
+    try {
+        dir = fso.GetParentFolderName(path);
+    } catch (e4) {
+        dir = "";
+    }
+    if (!dir || !fso.FolderExists(dir)) {
+        try { dir = shell.CurrentDirectory; } catch (e5) { dir = ""; }
+    }
+    return dir;
+}
+
+function appFilePath(name) {
+    return appDir ? appDir.replace(/\\+$/, "") + "\\" + name : name;
+}
+
+function readTextFile(path, charset) {
+    var text = "";
+    try {
+        var st = new ActiveXObject("ADODB.Stream");
+        st.Type = 2; // adTypeText
+        st.Charset = charset || "utf-8";
+        st.Open();
+        st.LoadFromFile(path);
+        text = st.ReadText(-1); // adReadAll
+        st.Close();
+    } catch (e) {
+        // Fallback: FileSystemObject (-1 = Unicode, 0 = system ANSI)
+        var ts = fso.OpenTextFile(path, 1, false, charset === "unicode" ? -1 : 0);
+        text = ts.AtEndOfStream ? "" : ts.ReadAll();
+        ts.Close();
+    }
+    if (text.charCodeAt(0) === 0xFEFF) {
+        text = text.substring(1);
+    }
+    return text;
+}
+
+// Write UTF-8 (BOM is kept only when withBom is true, e.g. CSV for Excel)
+function writeTextFile(path, text, withBom) {
+    try {
+        var st = new ActiveXObject("ADODB.Stream");
+        st.Type = 2;
+        st.Charset = "utf-8";
+        st.Open();
+        st.WriteText(text);
+        if (withBom) {
+            st.SaveToFile(path, 2); // adSaveCreateOverWrite
+            st.Close();
+            return;
+        }
+        st.Position = 0;
+        st.Type = 1; // adTypeBinary
+        st.Position = 3; // skip BOM
+        var bin = new ActiveXObject("ADODB.Stream");
+        bin.Type = 1;
+        bin.Open();
+        st.CopyTo(bin);
+        bin.SaveToFile(path, 2);
+        bin.Close();
+        st.Close();
+    } catch (e) {
+        var ts = fso.CreateTextFile(path, true, true); // Unicode fallback
+        ts.Write(text);
+        ts.Close();
+    }
+}
+
+function deleteFileQuietly(path) {
+    try {
+        if (fso && fso.FileExists(path)) {
+            fso.DeleteFile(path, true);
+        }
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function cleanupTempFiles() {
+    var remain = [];
+    for (var i = 0; i < pendingTempFiles.length; i++) {
+        deleteFileQuietly(pendingTempFiles[i]);
+        if (fso && fso.FileExists(pendingTempFiles[i])) {
+            remain.push(pendingTempFiles[i]);
+        }
+    }
+    pendingTempFiles = remain;
+}
+
+// =====================================================================
+//  CSV
+// =====================================================================
+function parseCsv(text) {
+    var records = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    var i = 0;
+    var len = text.length;
+    var c;
+    for (; i < len; i++) {
+        c = text.charAt(i);
+        if (inQuotes) {
+            if (c === '"') {
+                if (text.charAt(i + 1) === '"') {
+                    field += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                field += c;
+            }
+        } else if (c === '"') {
+            inQuotes = true;
+        } else if (c === ",") {
+            row.push(field);
+            field = "";
+        } else if (c === "\r" || c === "\n") {
+            row.push(field);
+            field = "";
+            records.push(row);
+            row = [];
+            if (c === "\r" && text.charAt(i + 1) === "\n") {
+                i++;
+            }
+        } else {
+            field += c;
+        }
+    }
+    if (field !== "" || row.length > 0) {
+        row.push(field);
+        records.push(row);
+    }
+    var result = [];
+    for (i = 0; i < records.length; i++) {
+        if (!(records[i].length === 1 && records[i][0] === "")) {
+            result.push(records[i]);
+        }
+    }
+    return result;
+}
+
+function toCsvField(v) {
+    v = v == null ? "" : String(v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+
+function readCsvText(path, encoding) {
+    if (encoding && encoding !== "auto") {
+        return { text: readTextFile(path, encoding), encoding: encoding };
+    }
+    var text = readTextFile(path, "utf-8");
+    if (text.indexOf("\uFFFD") < 0) {
+        return { text: text, encoding: "utf-8" };
+    }
+    return { text: readTextFile(path, "shift_jis"), encoding: "shift_jis" };
+}
+
+function encodingLabel(enc) {
+    var map = { "utf-8": "UTF-8", "shift_jis": "Shift_JIS", "unicode": "UTF-16", "auto": "自動" };
+    return map[enc] || enc;
+}
+
+function csvMaxColumns() {
+    var max = csvState.header ? csvState.header.length : 0;
+    var limit = Math.min(csvState.rows.length, 200);
+    for (var i = 0; i < limit; i++) {
+        if (csvState.rows[i].length > max) {
+            max = csvState.rows[i].length;
+        }
+    }
+    return max;
+}
+
+function csvHeaderName(col) {
+    return csvState.header && col >= 1 && col <= csvState.header.length ? trimText(csvState.header[col - 1]) : "";
+}
+
+// =====================================================================
+//  Command definitions
+// =====================================================================
+var KEY_PRESETS = [
+    ["{TAB}", "Tab移動"],
+    ["+{TAB}", "Shift+Tabで戻る"],
+    ["{ENTER}", "Enterキー"],
+    ["{SPACE}", "スペースキー"],
+    ["{ESC}", "Escキー"],
+    ["{UP}", "↑キー"],
+    ["{DOWN}", "↓キー"],
+    ["{LEFT}", "←キー"],
+    ["{RIGHT}", "→キー"],
+    ["{BS}", "BackSpaceキー"],
+    ["{DELETE}", "Deleteキー"],
+    ["{HOME}", "Homeキー"],
+    ["{END}", "Endキー"],
+    ["{PGUP}", "PageUpキー"],
+    ["{PGDN}", "PageDownキー"],
+    ["{F5}", "F5キー"],
+    ["^a", "全選択 (Ctrl+A)"],
+    ["^c", "コピー (Ctrl+C)"],
+    ["^v", "貼り付け (Ctrl+V)"],
+    ["^s", "保存 (Ctrl+S)"],
+    ["%{F4}", "閉じる (Alt+F4)"],
+    ["%y", "はい (Alt+Y)"],
+    ["%n", "いいえ (Alt+N)"]
+];
+
+function keyDisplayName(key) {
+    for (var i = 0; i < KEY_PRESETS.length; i++) {
+        if (KEY_PRESETS[i][0].toLowerCase() === String(key).toLowerCase()) {
+            return KEY_PRESETS[i][1];
+        }
+    }
+    return String(key);
+}
+
+var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "WAIT", "WAIT_FOR", "IF", "SWITCH", "RUN", "CLICK", "CLICK_POS", "GROUP_START", "COMMENT"];
+
+var COMMAND_DEFS = {
+    KEY: {
+        title: "キー送信", icon: "⌨", category: "input", defaultVal: "{TAB}",
+        help: "SendKeys形式でキーを送るキュン♡ 例: {TAB} / +{TAB}(Shift+Tab) / {ENTER} / {SPACE} / ^c(Ctrl+C) / ^v(Ctrl+V) / %{F4}(Alt+F4) / {TAB 3}(3回)",
+        fields: [{ id: "key", label: "送信キー", type: "keypreset", placeholder: "{TAB}" }],
+        parse: function (val) { return { key: val }; },
+        compose: function (v) { return v.key; },
+        validate: function (v) { return v.key === "" ? "送信キーを入力してね♡" : ""; },
+        autoLabel: function (val) { return keyDisplayName(val) === val ? "キー送信 " + val : keyDisplayName(val); }
+    },
+    TEXT: {
+        title: "文字列貼付", icon: "📝", category: "input", defaultVal: "",
+        help: "固定の文字列をクリップボード経由で貼り付けるよ（Ctrl+V）。日本語入力(IME)がONでも化けないキュン。",
+        fields: [{ id: "text", label: "入力する文字列", type: "textarea", raw: true }],
+        parse: function (val) { return { text: val }; },
+        compose: function (v) { return v.text; },
+        validate: function (v) { return v.text === "" ? "文字列を入力してね♡" : ""; },
+        autoLabel: function (val) { return "文字列「" + truncateText(val, 20) + "」を貼付"; }
+    },
+    CSV: {
+        title: "CSV列を貼付", icon: "📄", category: "input", defaultVal: "1",
+        help: "実行中のCSV行から、指定した列のデータをクリップボード経由で貼り付けるキュン。列番号は1始まりだよ。",
+        fields: [{ id: "col", label: "CSV列番号（1始まり）", type: "csvcol", placeholder: "1" }],
+        parse: function (val) { return { col: val }; },
+        compose: function (v) { return String(toInt(v.col, 1)); },
+        validate: function (v) { return !/^\d+$/.test(v.col) || toInt(v.col, 0) < 1 ? "列番号は1以上の数字で入れてね♡" : ""; },
+        autoLabel: function (val) {
+            var name = csvHeaderName(toInt(val, 0));
+            return "CSV " + val + "列目" + (name ? "「" + name + "」" : "") + "を貼付";
+        }
+    },
+    WAIT: {
+        title: "待機", icon: "⏳", category: "flow", defaultVal: "1000",
+        help: "指定したミリ秒だけロボットをお休みさせるキュン。1000ミリ秒 = 1秒だよ。",
+        fields: [{ id: "ms", label: "待機時間（ミリ秒）", type: "text", placeholder: "1000" }],
+        parse: function (val) { return { ms: val }; },
+        compose: function (v) { return String(toInt(v.ms, 0)); },
+        validate: function (v) { return !/^\d+$/.test(v.ms) ? "待機時間は0以上の数字（ミリ秒）で入れてね♡" : ""; },
+        autoLabel: function (val) { return val + "ミリ秒待機"; }
+    },
+    WAIT_FOR: {
+        title: "ウィンドウ出現待ち", icon: "👀", category: "flow", defaultVal: ",{ENTER},30",
+        help: "指定タイトルのウィンドウがアクティブにできるか1秒ごとに見張るよ。出てきたらキーを押して次へ。タイムアウトしたら安全停止＋アラームだキュン。",
+        fields: [
+            { id: "title", label: "待つウィンドウのタイトル（一部）", type: "text", placeholder: "例: 確認" },
+            { id: "key", label: "出現したら押すキー（空欄なら押さない）", type: "keypreset", placeholder: "{ENTER}" },
+            { id: "timeout", label: "タイムアウト（秒）", type: "text", placeholder: "30" }
+        ],
+        parse: function (val) { var p = splitParams(val, 3); return { title: p[0], key: p[1], timeout: p[2] }; },
+        compose: function (v) { return v.title + "," + v.key + "," + toInt(v.timeout, 30); },
+        validate: function (v) {
+            if (v.title === "") { return "待つウィンドウのタイトルを入れてね♡"; }
+            return !/^\d+$/.test(v.timeout) || toInt(v.timeout, 0) < 1 ? "タイムアウトは1以上の秒数で入れてね♡" : "";
+        },
+        autoLabel: function (val) {
+            var p = splitParams(val, 3);
+            return "「" + p[0] + "」を最大" + p[2] + "秒待つ" + (p[1] ? " → " + keyDisplayName(p[1]) : "");
+        }
+    },
+    IF: {
+        title: "条件分岐（異常検知）", icon: "⚠", category: "flow", defaultVal: ",{ENTER},STOP",
+        help: "指定タイトルのウィンドウが今出ているか即チェック！出ていたらキーを押して、STOPなら大音量アラームで緊急停止、SKIPならこのCSV行を打ち切って次の行へ進むキュン。",
+        fields: [
+            { id: "title", label: "検知するウィンドウのタイトル（一部）", type: "text", placeholder: "例: エラー" },
+            { id: "key", label: "検知したら押すキー（空欄なら押さない）", type: "keypreset", placeholder: "{ENTER}" },
+            { id: "mode", label: "検知したときの動き", type: "select", options: [["STOP", "STOP：アラーム＋緊急停止"], ["SKIP", "SKIP：この行を打ち切って次の行へ"]] }
+        ],
+        parse: function (val) { var p = splitParams(val, 3); return { title: p[0], key: p[1], mode: (p[2] || "STOP").toUpperCase() }; },
+        compose: function (v) { return v.title + "," + v.key + "," + (v.mode === "SKIP" ? "SKIP" : "STOP"); },
+        validate: function (v) { return v.title === "" ? "検知するウィンドウのタイトルを入れてね♡" : ""; },
+        autoLabel: function (val) {
+            var p = splitParams(val, 3);
+            return "もし「" + p[0] + "」が出たら" + (p[1] ? keyDisplayName(p[1]) + "→" : "") + (String(p[2]).toUpperCase() === "SKIP" ? "行スキップ" : "緊急停止");
+        }
+    },
+    SWITCH: {
+        title: "ウィンドウ切替", icon: "🪟", category: "window", defaultVal: "",
+        help: "指定した名前のウィンドウを前面化（アクティブ化）して、以降の操作対象にするキュン。タイトルは完全一致→前方一致→後方一致の順で探すよ。",
+        fields: [{ id: "title", label: "ウィンドウ名（一部）", type: "text", placeholder: "例: メモ帳" }],
+        parse: function (val) { return { title: val }; },
+        compose: function (v) { return v.title; },
+        validate: function (v) { return v.title === "" ? "ウィンドウ名を入れてね♡" : ""; },
+        autoLabel: function (val) { return "「" + val + "」に切替"; }
+    },
+    RUN: {
+        title: "アプリ起動", icon: "🚀", category: "window", defaultVal: "notepad.exe",
+        help: "外部アプリを起動するよ。例: notepad.exe / calc.exe / \"C:\\Program Files\\App\\app.exe\" /option",
+        fields: [{ id: "path", label: "アプリのパス／コマンド", type: "text", placeholder: "notepad.exe" }],
+        parse: function (val) { return { path: val }; },
+        compose: function (v) { return v.path; },
+        validate: function (v) { return v.path === "" ? "起動するアプリを入れてね♡" : ""; },
+        autoLabel: function (val) { return "起動: " + truncateText(val, 30); }
+    },
+    CLICK: {
+        title: "ボタンをクリック(UIA)", icon: "👆", category: "mouse", defaultVal: "",
+        help: "座標じゃなくて、UIAutomationでボタン等の表示名を探して直接Invoke（押下）するキュン。表示名は完全一致だよ。PowerShellを使うので1〜数秒かかるよ。",
+        fields: [{ id: "name", label: "オブジェクトの表示名", type: "text", placeholder: "例: 登録" }],
+        parse: function (val) { return { name: val }; },
+        compose: function (v) { return v.name; },
+        validate: function (v) { return v.name === "" ? "表示名を入れてね♡" : ""; },
+        autoLabel: function (val) { return "「" + val + "」をクリック"; }
+    },
+    CLICK_POS: {
+        title: "座標クリック", icon: "🎯", category: "mouse", defaultVal: "0,0",
+        help: "画面左上を(0,0)として、指定ピクセル位置へマウスを瞬間移動して左クリックするキュン（C#のuser32.dllをPowerShellでコンパイル実行）。",
+        fields: [
+            { id: "x", label: "X座標（ピクセル）", type: "text", placeholder: "100" },
+            { id: "y", label: "Y座標（ピクセル）", type: "text", placeholder: "200" },
+            { id: "capture", label: "座標のかんたん取得", type: "capture" }
+        ],
+        parse: function (val) { var p = String(val).split(","); return { x: trimText(p[0]), y: trimText(p[1]) }; },
+        compose: function (v) { return toInt(v.x, 0) + "," + toInt(v.y, 0); },
+        validate: function (v) { return !/^-?\d+$/.test(v.x) || !/^-?\d+$/.test(v.y) ? "X・Yは整数で入れてね♡" : ""; },
+        autoLabel: function (val) { var p = String(val).split(","); return "座標(" + trimText(p[0]) + ", " + trimText(p[1]) + ")をクリック"; }
+    },
+    GROUP_START: {
+        title: "グループ", icon: "📁", category: "group", defaultVal: "新しいグループ",
+        help: "コマンドをまとめるグループだよ。追加すると「グループ開始〜グループ終了」がセットで入るキュン。左の▼/▶で折りたためるよ。",
+        fields: [{ id: "name", label: "グループ表示名", type: "text", placeholder: "例: 基本情報の入力" }],
+        parse: function (val) { return { name: val }; },
+        compose: function (v) { return v.name; },
+        validate: function (v) { return v.name === "" ? "グループ名を入れてね♡" : ""; },
+        autoLabel: function (val) { return val; }
+    },
+    GROUP_END: {
+        title: "グループ終了", icon: "└", category: "group", defaultVal: "",
+        help: "グループの終わりの目印だよ。設定する項目はないキュン。",
+        fields: [],
+        parse: function () { return {}; },
+        compose: function () { return ""; },
+        validate: function () { return ""; },
+        autoLabel: function () { return "グループ終了"; }
+    },
+    COMMENT: {
+        title: "コメント", icon: "💬", category: "note", defaultVal: "",
+        help: "実行時は無視されるメモだよ。手順の説明を書いておくと後で助かるキュン♡",
+        fields: [{ id: "memo", label: "メモ", type: "textarea", raw: true }],
+        parse: function (val) { return { memo: val }; },
+        compose: function (v) { return v.memo; },
+        validate: function (v) { return v.memo === "" ? "メモを入力してね♡" : ""; },
+        autoLabel: function (val) { return truncateText(val, 40); }
+    }
+};
+
+function autoLabelFor(step) {
+    var def = COMMAND_DEFS[step.cmd];
+    return def ? def.autoLabel(step.val == null ? "" : String(step.val)) : String(step.val);
+}
+
+function isExecutableStep(step) {
+    return step.cmd !== "COMMENT" && step.cmd !== "GROUP_START" && step.cmd !== "GROUP_END";
+}
+
+// =====================================================================
+//  Data model
+// =====================================================================
+function currentMacro() {
+    return appData.macros[currentMacroIndex] || null;
+}
+
+function currentSteps() {
+    var m = currentMacro();
+    return m ? m.steps : [];
+}
+
+function normalizeData(obj) {
+    var data = { version: DATA_VERSION, macros: [] };
+    var list = obj && obj.macros instanceof Array ? obj.macros : [];
+    var usedIds = {};
+    for (var i = 0; i < list.length; i++) {
+        var m = list[i] || {};
+        var steps = [];
+        var src = m.steps instanceof Array ? m.steps : [];
+        for (var j = 0; j < src.length; j++) {
+            var s = src[j];
+            if (!s || !s.cmd) {
+                continue;
+            }
+            var cmd = String(s.cmd).toUpperCase();
+            var val = s.val == null ? "" : String(s.val);
+            if (!COMMAND_DEFS[cmd]) {
+                val = "[不明なコマンド " + cmd + "] " + val;
+                cmd = "COMMENT";
+            }
+            var step = { cmd: cmd, val: val, label: s.label == null ? "" : String(s.label) };
+            if (!step.label) {
+                step.label = autoLabelFor(step);
+            }
+            steps.push(step);
+        }
+        var id = m.id ? String(m.id) : generateId();
+        while (usedIds[id]) {
+            id = generateId();
+        }
+        usedIds[id] = true;
+        data.macros.push({
+            id: id,
+            name: m.name ? String(m.name) : "名称未設定マクロ",
+            targetWindow: m.targetWindow ? String(m.targetWindow) : "",
+            steps: steps
+        });
+    }
+    return data;
+}
+
+function createSampleData() {
+    return {
+        version: DATA_VERSION,
+        macros: [{
+            id: generateId(),
+            name: "サンプル：メモ帳にCSVを入力",
+            targetWindow: "メモ帳",
+            steps: [
+                { cmd: "COMMENT", val: "はじめてのマクロだキュン♡ メモ帳を開いてからCSVを読み込んで▶実行してね", label: "" },
+                { cmd: "GROUP_START", val: "1行ぶんの入力", label: "" },
+                { cmd: "CSV", val: "1", label: "" },
+                { cmd: "KEY", val: "{TAB}", label: "" },
+                { cmd: "CSV", val: "2", label: "" },
+                { cmd: "KEY", val: "{ENTER}", label: "" },
+                { cmd: "GROUP_END", val: "", label: "" },
+                { cmd: "WAIT", val: "500", label: "" }
+            ]
+        }]
+    };
+}
+
+function ensureMacroExists() {
+    if (appData.macros.length === 0) {
+        appData.macros.push({ id: uniqueMacroId(), name: "新しいマクロ", targetWindow: "", steps: [] });
+    }
+    if (currentMacroIndex < 0 || currentMacroIndex >= appData.macros.length) {
+        currentMacroIndex = 0;
+    }
+}
+
+function serializeData() {
+    return JSON.stringify({ version: DATA_VERSION, macros: appData.macros }, function (key, value) {
+        return key === "collapsed" ? undefined : value;
+    }, 2);
+}
+
+function loadJsonFile(path) {
+    try {
+        return JSON.parse(readTextFile(path, "utf-8"));
+    } catch (e) {
+        log("「" + path + "」を読めなかったキュン…（" + e.message + "）", "error");
+        return null;
+    }
+}
+
+function discardTempFile() {
+    try {
+        var dest = appFilePath(DISCARDED_TEMP_FILE_NAME);
+        fso.CopyFile(appFilePath(TEMP_FILE_NAME), dest, true);
+        fso.DeleteFile(appFilePath(TEMP_FILE_NAME), true);
+        log("一時ファイルは「" + DISCARDED_TEMP_FILE_NAME + "」に退避しておいたキュン", "info");
+    } catch (e) {
+        log("一時ファイルの退避に失敗…（" + e.message + "）", "warn");
+    }
+}
+
+function loadInitialData() {
+    var loaded = null;
+    var tempPath = appFilePath(TEMP_FILE_NAME);
+    var mainPath = appFilePath(MACRO_FILE_NAME);
+    if (fso && fso.FileExists(tempPath)) {
+        var restore = confirm("前回の編集中データ（未保存の一時ファイル）が見つかったキュン♡\n\n" +
+            "［OK］一時ファイルから復元する\n" +
+            "［キャンセル］本番ファイル（" + MACRO_FILE_NAME + "）を読み込む\n" +
+            "　　　　　　 ※一時ファイルは " + DISCARDED_TEMP_FILE_NAME + " に退避します");
+        if (restore) {
+            loaded = loadJsonFile(tempPath);
+            if (loaded) {
+                isDirty = true;
+                log("♻ 一時ファイルから未保存データを復元したキュン♡", "ok");
+            }
+        } else {
+            discardTempFile();
+        }
+    }
+    if (!loaded && fso && fso.FileExists(mainPath)) {
+        loaded = loadJsonFile(mainPath);
+        if (loaded) {
+            log("📂 本番ファイル「" + MACRO_FILE_NAME + "」を読み込んだキュン♡", "ok");
+        }
+    }
+    if (!loaded) {
+        loaded = createSampleData();
+        log("マクロファイルがまだ無いから、サンプルマクロを用意したキュン♡", "info");
+    }
+    appData = normalizeData(loaded);
+    currentMacroIndex = 0;
+    ensureMacroExists();
+}
+
+function autoSaveTemp() {
+    if (!fso || !appDir) {
+        return;
+    }
+    try {
+        writeTextFile(appFilePath(TEMP_FILE_NAME), serializeData(), false);
+    } catch (e) {
+        log("一時ファイルへの自動保存に失敗したキュン…（" + e.message + "）", "error");
+    }
+}
+
+function saveProduction() {
+    if (!fso) {
+        showMessage("保存できないキュン", "ActiveXが使えない環境なのでファイルに保存できないよ。HTAとして起動してね♡");
+        return;
+    }
+    try {
+        writeTextFile(appFilePath(MACRO_FILE_NAME), serializeData(), false);
+        deleteFileQuietly(appFilePath(TEMP_FILE_NAME));
+        isDirty = false;
+        updateSaveState();
+        log("💾 本番ファイル「" + MACRO_FILE_NAME + "」に保存したキュン♡（一時ファイルは削除したよ）", "ok");
+    } catch (e) {
+        log("本番ファイルの保存に失敗したキュン…（" + e.message + "）", "error");
+        showMessage("保存エラー", "本番ファイルに保存できなかったキュン…\n" + e.message);
+    }
+}
+
+function updateSaveState() {
+    var el = byId("saveState");
+    if (isDirty) {
+        el.innerHTML = "● 未保存の変更あり（一時ファイルに自動保存中）";
+        addClass(el, "dirty");
+    } else {
+        el.innerHTML = "✔ 本番ファイルと同じ内容";
+        removeClass(el, "dirty");
+    }
+}
+
+// =====================================================================
+//  UNDO / REDO history
+// =====================================================================
+function recordHistory(desc) {
+    if (historyPos < historyStack.length - 1) {
+        historyStack.splice(historyPos + 1, historyStack.length - historyPos - 1);
+    }
+    historyStack.push({
+        desc: desc,
+        time: timeText(),
+        macroIndex: currentMacroIndex,
+        selectedIndex: selectedIndex,
+        data: deepCopy(appData)
+    });
+    while (historyStack.length > HISTORY_LIMIT) {
+        historyStack.shift();
+    }
+    historyPos = historyStack.length - 1;
+    updateHistoryUi();
+}
+
+// Call after every data change (add / edit / delete / move ...)
+function commitChange(desc) {
+    recordHistory(desc);
+    isDirty = true;
+    updateSaveState();
+    autoSaveTemp();
+    refreshMacroSelect();
+}
+
+function restoreHistory(pos) {
+    if (pos < 0 || pos >= historyStack.length || pos === historyPos) {
+        updateHistoryUi();
+        return;
+    }
+    if (guardRunning()) {
+        updateHistoryUi();
+        return;
+    }
+    var h = historyStack[pos];
+    appData = deepCopy(h.data);
+    historyPos = pos;
+    currentMacroIndex = Math.min(h.macroIndex, appData.macros.length - 1);
+    ensureMacroExists();
+    selectedIndex = Math.min(h.selectedIndex, currentSteps().length - 1);
+    isDirty = true;
+    updateSaveState();
+    autoSaveTemp();
+    refreshMacroSelect();
+    renderSteps();
+    scrollToSelected();
+    updateHistoryUi();
+    log("↩ 履歴 #" + (pos + 1) + "「" + h.desc + "」の状態にしたキュン", "info");
+}
+
+function undo() {
+    restoreHistory(historyPos - 1);
+}
+
+function redo() {
+    restoreHistory(historyPos + 1);
+}
+
+function jumpToHistory() {
+    restoreHistory(toInt(byId("historySelect").value, historyPos));
+}
+
+function updateHistoryUi() {
+    var sel = byId("historySelect");
+    sel.options.length = 0;
+    for (var i = historyStack.length - 1; i >= 0; i--) {
+        var h = historyStack[i];
+        var opt = document.createElement("option");
+        opt.text = (i === historyPos ? "▶ " : "　 ") + "#" + (i + 1) + " " + h.time + " " + h.desc;
+        opt.value = String(i);
+        sel.options.add(opt);
+        if (i === historyPos) {
+            opt.selected = true;
+        }
+    }
+    byId("undoBtn").disabled = historyPos <= 0;
+    byId("redoBtn").disabled = historyPos >= historyStack.length - 1;
+}
+
+// =====================================================================
+//  Macro management
+// =====================================================================
+function refreshMacroSelect() {
+    var sel = byId("macroSelect");
+    sel.options.length = 0;
+    for (var i = 0; i < appData.macros.length; i++) {
+        var m = appData.macros[i];
+        var opt = document.createElement("option");
+        opt.text = (i + 1) + ". " + m.name + "（" + m.steps.length + "件）";
+        opt.value = String(i);
+        sel.options.add(opt);
+    }
+    sel.selectedIndex = currentMacroIndex;
+    var macro = currentMacro();
+    byId("targetWindowInput").value = macro ? macro.targetWindow : "";
+}
+
+function onMacroSelectChange() {
+    if (isRunning()) {
+        byId("macroSelect").selectedIndex = currentMacroIndex;
+        guardRunning();
+        return;
+    }
+    currentMacroIndex = byId("macroSelect").selectedIndex;
+    selectedIndex = -1;
+    refreshMacroSelect();
+    renderSteps();
+    byId("macroContainer").scrollTop = 0;
+}
+
+function onTargetWindowChange() {
+    var macro = currentMacro();
+    var value = trimText(byId("targetWindowInput").value);
+    if (!macro || macro.targetWindow === value) {
+        return;
+    }
+    if (guardRunning()) {
+        byId("targetWindowInput").value = macro.targetWindow;
+        return;
+    }
+    macro.targetWindow = value;
+    commitChange("対象ウィンドウ変更: " + (value || "（なし）"));
+    log("🎯 対象ウィンドウを「" + (value || "（未設定）") + "」にしたキュン", "info");
+}
+
+function addMacro() {
+    if (guardRunning()) {
+        return;
+    }
+    showInputDialog("＋ 新しいマクロ", "マクロの名前", "新しいマクロ", function (name) {
+        appData.macros.push({ id: uniqueMacroId(), name: name, targetWindow: "", steps: [] });
+        currentMacroIndex = appData.macros.length - 1;
+        selectedIndex = -1;
+        renderSteps();
+        commitChange("マクロ追加: " + name);
+        log("✨ マクロ「" + name + "」を作ったキュン♡", "ok");
+    });
+}
+
+function renameMacro() {
+    var macro = currentMacro();
+    if (!macro || guardRunning()) {
+        return;
+    }
+    showInputDialog("✎ マクロ名の変更", "新しい名前", macro.name, function (name) {
+        macro.name = name;
+        commitChange("マクロ名変更: " + name);
+    });
+}
+
+function duplicateMacro() {
+    var macro = currentMacro();
+    if (!macro || guardRunning()) {
+        return;
+    }
+    var copy = deepCopy(macro);
+    copy.id = uniqueMacroId();
+    copy.name = macro.name + " のコピー";
+    appData.macros.splice(currentMacroIndex + 1, 0, copy);
+    currentMacroIndex++;
+    selectedIndex = -1;
+    renderSteps();
+    commitChange("マクロ複製: " + copy.name);
+    log("⧉ マクロ「" + copy.name + "」を作ったキュン", "ok");
+}
+
+function deleteMacro() {
+    var macro = currentMacro();
+    if (!macro || guardRunning()) {
+        return;
+    }
+    showChoice("🗑 マクロの削除", "マクロ「" + macro.name + "」（" + macro.steps.length + "件）を削除する？\n※ ↩️ で元に戻せるよ", [
+        { text: "削除する", cls: "btn-danger", fn: function () {
+            appData.macros.splice(currentMacroIndex, 1);
+            ensureMacroExists();
+            if (currentMacroIndex >= appData.macros.length) {
+                currentMacroIndex = appData.macros.length - 1;
+            }
+            selectedIndex = -1;
+            renderSteps();
+            commitChange("マクロ削除: " + macro.name);
+            log("🗑 マクロ「" + macro.name + "」を削除したキュン", "warn");
+        } },
+        { text: "キャンセル", fn: null }
+    ]);
+}
+
+// =====================================================================
+//  Group helpers
+// =====================================================================
+function computeDepths(steps) {
+    var depths = [];
+    var depth = 0;
+    for (var i = 0; i < steps.length; i++) {
+        if (steps[i].cmd === "GROUP_END") {
+            depth = Math.max(0, depth - 1);
+            depths.push(depth);
+        } else {
+            depths.push(depth);
+            if (steps[i].cmd === "GROUP_START") {
+                depth++;
+            }
+        }
+    }
+    return depths;
+}
+
+function findGroupEnd(steps, startIndex) {
+    var depth = 0;
+    for (var i = startIndex; i < steps.length; i++) {
+        if (steps[i].cmd === "GROUP_START") {
+            depth++;
+        } else if (steps[i].cmd === "GROUP_END") {
+            depth--;
+            if (depth === 0) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+function findGroupStart(steps, endIndex) {
+    var depth = 0;
+    for (var i = endIndex; i >= 0; i--) {
+        if (steps[i].cmd === "GROUP_END") {
+            depth++;
+        } else if (steps[i].cmd === "GROUP_START") {
+            depth--;
+            if (depth === 0) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+// Range [from, to] that moves together (a GROUP_START carries its whole group)
+function blockRange(steps, index) {
+    var to = index;
+    if (steps[index] && steps[index].cmd === "GROUP_START") {
+        var end = findGroupEnd(steps, index);
+        if (end > index) {
+            to = end;
+        }
+    }
+    return { from: index, to: to };
+}
+
+// Expand every collapsed group that contains the given index
+function expandAncestors(steps, index) {
+    var stack = [];
+    for (var i = 0; i < index && i < steps.length; i++) {
+        if (steps[i].cmd === "GROUP_START") {
+            stack.push(i);
+        } else if (steps[i].cmd === "GROUP_END" && stack.length) {
+            stack.pop();
+        }
+    }
+    for (var j = 0; j < stack.length; j++) {
+        steps[stack[j]].collapsed = false;
+    }
+}
+
+function toggleGroup(index) {
+    var steps = currentSteps();
+    var step = steps[index];
+    if (!step || step.cmd !== "GROUP_START") {
+        return;
+    }
+    step.collapsed = !step.collapsed;
+    if (step.collapsed && selectedIndex > index) {
+        var end = findGroupEnd(steps, index);
+        if (end < 0 || selectedIndex <= end) {
+            selectedIndex = index;
+        }
+    }
+    renderSteps();
+}
+
+function setAllCollapsed(collapsed) {
+    var steps = currentSteps();
+    for (var i = 0; i < steps.length; i++) {
+        if (steps[i].cmd === "GROUP_START") {
+            steps[i].collapsed = collapsed;
+        }
+    }
+    if (collapsed) {
+        selectedIndex = -1;
+    }
+    renderSteps();
+}
+
+// =====================================================================
+//  Rendering
+// =====================================================================
+function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
+    var def = COMMAND_DEFS[step.cmd] || COMMAND_DEFS.COMMENT;
+    var cls = "block cat-" + def.category + (hidden ? " hidden" : "");
+    var toggle = step.cmd === "GROUP_START" ?
+        '<span class="toggle" data-act="toggle" title="折りたたみ／展開">' + (step.collapsed ? "▶" : "▼") + "</span>" :
+        '<span class="toggle-space"></span>';
+    var main;
+    if (step.cmd === "COMMENT") {
+        main = '<span class="comment-text">// ' + escapeHtml(truncateText(step.val, 120)) + "</span>";
+    } else if (step.cmd === "GROUP_START") {
+        main = '<span class="group-name">📁 ' + escapeHtml(step.val) + "</span>" +
+            (step.collapsed ? '<span class="collapsed-count">（' + hiddenCount + "件を折りたたみ中）</span>" : "");
+    } else if (step.cmd === "GROUP_END") {
+        main = '<span class="group-end-text">└ グループ終了</span>';
+    } else {
+        main = '<span class="step-label">' + escapeHtml(step.label || autoLabelFor(step)) + "</span>" +
+            '<span class="step-val">' + escapeHtml(truncateText(step.val, 60)) + "</span>";
+    }
+    return '<div class="' + cls + '" draggable="true" data-index="' + index + '" style="margin-left:' + (depth * INDENT_PX) + 'px">' +
+        toggle +
+        '<span class="step-no">' + (index + 1) + "</span>" +
+        '<span class="badge">' + def.icon + " " + escapeHtml(step.cmd) + "</span>" +
+        '<span class="step-main">' + main + "</span>" +
+        '<span class="actions">' +
+        '<button class="icon-btn" data-act="edit" title="編集（ダブルクリックでもOK）">✎</button>' +
+        '<button class="icon-btn icon-del" data-act="delete" title="削除 (Delete)">✕</button>' +
+        "</span></div>";
+}
+
+function renderSteps() {
+    var container = byId("macroContainer");
+    var steps = currentSteps();
+    var scrollTop = container.scrollTop;
+    selectedEl = null;
+    if (steps.length === 0) {
+        selectedIndex = -1;
+        container.innerHTML = '<div class="empty-hint">まだコマンドがないキュン♡<br>上の「追加」ボタンからコマンドを入れてみてね！<br>' +
+            "ブロックはクリックで選択（挿入位置）、ダブルクリックで編集、ドラッグで並べ替えできるよ</div>";
+        updateInsertHint();
+        return;
+    }
+    var depths = computeDepths(steps);
+    var html = [];
+    var hideUntil = -1;
+    for (var i = 0; i < steps.length; i++) {
+        var hidden = i <= hideUntil;
+        var hiddenCount = 0;
+        if (!hidden && steps[i].cmd === "GROUP_START" && steps[i].collapsed) {
+            var end = findGroupEnd(steps, i);
+            hideUntil = end < 0 ? steps.length - 1 : end;
+            hiddenCount = Math.max(0, (end < 0 ? steps.length : end) - i - 1);
+        }
+        html.push(buildBlockHtml(steps[i], i, depths[i], hidden, hiddenCount));
+    }
+    container.innerHTML = html.join("");
+    if (selectedIndex >= steps.length) {
+        selectedIndex = steps.length - 1;
+    }
+    if (selectedIndex >= 0) {
+        selectedEl = container.children[selectedIndex];
+        addClass(selectedEl, "selected");
+    }
+    container.scrollTop = scrollTop;
+    if (isRunning() && runState.macro === currentMacro()) {
+        highlightRunning(runState.stepIndex);
+    }
+    updateInsertHint();
+}
+
+function updateInsertHint() {
+    var steps = currentSteps();
+    var hint = byId("insertHint");
+    if (selectedIndex >= 0 && selectedIndex < steps.length) {
+        hint.innerHTML = "📌 挿入位置: #" + (insertionIndex()) + " の後ろ";
+    } else {
+        hint.innerHTML = "📌 挿入位置: 末尾（ブロックをクリックで指定）";
+    }
+}
+
+function scrollIntoContainer(el) {
+    var container = byId("macroContainer");
+    if (!el || hasClass(el, "hidden")) {
+        return;
+    }
+    var top = el.offsetTop;
+    var bottom = top + el.offsetHeight;
+    if (top < container.scrollTop || bottom > container.scrollTop + container.clientHeight) {
+        container.scrollTop = Math.max(0, top - Math.floor(container.clientHeight / 3));
+    }
+}
+
+function scrollToSelected() {
+    scrollIntoContainer(selectedEl);
+}
+
+// =====================================================================
+//  Selection (class swap only - no re-render)
+// =====================================================================
+function selectBlock(index) {
+    var container = byId("macroContainer");
+    if (selectedEl) {
+        removeClass(selectedEl, "selected");
+    }
+    selectedEl = null;
+    selectedIndex = -1;
+    if (index >= 0 && index < container.children.length) {
+        var el = container.children[index];
+        if (hasClass(el, "block")) {
+            selectedEl = el;
+            selectedIndex = index;
+            addClass(el, "selected");
+        }
+    }
+    updateInsertHint();
+}
+
+function selectNeighbor(dir) {
+    var container = byId("macroContainer");
+    var i = selectedIndex < 0 ? (dir > 0 ? -1 : container.children.length) : selectedIndex;
+    for (i += dir; i >= 0 && i < container.children.length; i += dir) {
+        if (hasClass(container.children[i], "block") && !hasClass(container.children[i], "hidden")) {
+            selectBlock(i);
+            scrollToSelected();
+            return;
+        }
+    }
+}
+
+// New commands go right after the selected block (after the whole group if it is collapsed)
+function insertionIndex() {
+    var steps = currentSteps();
+    if (selectedIndex < 0 || selectedIndex >= steps.length) {
+        return steps.length;
+    }
+    var step = steps[selectedIndex];
+    if (step.cmd === "GROUP_START" && step.collapsed) {
+        var end = findGroupEnd(steps, selectedIndex);
+        if (end >= 0) {
+            return end + 1;
+        }
+    }
+    return selectedIndex + 1;
+}
+
+function findBlockElement(el) {
+    while (el && el.id !== "macroContainer" && el !== document.body) {
+        if (el.nodeType === 1 && hasClass(el, "block")) {
+            return el;
+        }
+        el = el.parentNode;
+    }
+    return null;
+}
+
+function findAction(el) {
+    while (el && el.id !== "macroContainer" && el !== document.body) {
+        var act = el.getAttribute ? el.getAttribute("data-act") : null;
+        if (act) {
+            return act;
+        }
+        if (hasClass(el, "block")) {
+            return null;
+        }
+        el = el.parentNode;
+    }
+    return null;
+}
+
+function blockIndexOf(el) {
+    return el ? toInt(el.getAttribute("data-index"), -1) : -1;
+}
+
+function onContainerClick(e) {
+    e = e || window.event;
+    var target = e.target || e.srcElement;
+    var block = findBlockElement(target);
+    if (!block) {
+        selectBlock(-1);
+        return;
+    }
+    var index = blockIndexOf(block);
+    var act = findAction(target);
+    if (act === "toggle") {
+        toggleGroup(index);
+        return;
+    }
+    selectBlock(index);
+    if (act === "edit") {
+        editStep(index);
+    } else if (act === "delete") {
+        deleteStep(index);
+    }
+}
+
+function onContainerDblClick(e) {
+    e = e || window.event;
+    var target = e.target || e.srcElement;
+    if (findAction(target)) {
+        return;
+    }
+    var block = findBlockElement(target);
+    if (block) {
+        editStep(blockIndexOf(block));
+    }
+}
+
+// =====================================================================
+//  Drag & Drop (with blue inset guide line)
+// =====================================================================
+function clearDropIndicator() {
+    if (dragState && dragState.overEl) {
+        removeClass(dragState.overEl, "drop-before");
+        removeClass(dragState.overEl, "drop-after");
+        dragState.overEl = null;
+    }
+}
+
+function endDrag() {
+    if (!dragState) {
+        return;
+    }
+    clearDropIndicator();
+    var container = byId("macroContainer");
+    for (var i = dragState.from; i <= dragState.to; i++) {
+        removeClass(container.children[i], "dragging");
+    }
+    dragState = null;
+}
+
+function onDragStart(e) {
+    e = e || window.event;
+    var block = findBlockElement(e.target || e.srcElement);
+    if (!block || isRunning() || isModalOpen()) {
+        return preventEvent(e);
+    }
+    var index = blockIndexOf(block);
+    var range = blockRange(currentSteps(), index);
+    dragState = { from: range.from, to: range.to, overEl: null, overIndex: -1, before: false };
+    var container = byId("macroContainer");
+    for (var i = range.from; i <= range.to; i++) {
+        addClass(container.children[i], "dragging");
+    }
+    try {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("Text", String(index));
+    } catch (ex) {
+        /* IE requires "Text" format; ignore other failures */
+    }
+    return true;
+}
+
+function onDragEnter(e) {
+    if (dragState) {
+        return preventEvent(e || window.event);
+    }
+    return true;
+}
+
+function lastVisibleBlock() {
+    var container = byId("macroContainer");
+    for (var i = container.children.length - 1; i >= 0; i--) {
+        if (hasClass(container.children[i], "block") && !hasClass(container.children[i], "hidden")) {
+            return container.children[i];
+        }
+    }
+    return null;
+}
+
+// When the pointer is in a gap between blocks, pick the nearest visible block
+function nearestBlockByY(y) {
+    var container = byId("macroContainer");
+    for (var i = 0; i < container.children.length; i++) {
+        var el = container.children[i];
+        if (!hasClass(el, "block") || hasClass(el, "hidden")) {
+            continue;
+        }
+        var rect = el.getBoundingClientRect();
+        if (y < rect.bottom) {
+            return el;
+        }
+    }
+    return lastVisibleBlock();
+}
+
+function onDragOver(e) {
+    e = e || window.event;
+    if (!dragState) {
+        return true;
+    }
+    preventEvent(e);
+    try {
+        e.dataTransfer.dropEffect = "move";
+    } catch (ex) {
+        /* ignore */
+    }
+    var container = byId("macroContainer");
+    var crect = container.getBoundingClientRect();
+    if (e.clientY < crect.top + 30) {
+        container.scrollTop -= 12;
+    } else if (e.clientY > crect.bottom - 30) {
+        container.scrollTop += 12;
+    }
+    var block = findBlockElement(e.target || e.srcElement) || nearestBlockByY(e.clientY);
+    if (!block) {
+        return false;
+    }
+    var rect = block.getBoundingClientRect();
+    var before = e.clientY < rect.top + (rect.bottom - rect.top) / 2;
+    if (dragState.overEl === block && dragState.before === before) {
+        return false;
+    }
+    clearDropIndicator();
+    addClass(block, before ? "drop-before" : "drop-after");
+    dragState.overEl = block;
+    dragState.overIndex = blockIndexOf(block);
+    dragState.before = before;
+    return false;
+}
+
+function onDrop(e) {
+    e = e || window.event;
+    if (!dragState) {
+        return true;
+    }
+    preventEvent(e);
+    var ds = dragState;
+    var steps = currentSteps();
+    var insertAt = steps.length;
+    if (ds.overIndex >= 0) {
+        if (ds.before) {
+            insertAt = ds.overIndex;
+        } else {
+            insertAt = ds.overIndex + 1;
+            var over = steps[ds.overIndex];
+            if (over && over.cmd === "GROUP_START" && over.collapsed) {
+                var end = findGroupEnd(steps, ds.overIndex);
+                if (end >= 0) {
+                    insertAt = end + 1;
+                }
+            }
+        }
+    }
+    endDrag();
+    moveSteps(ds.from, ds.to, insertAt, "ドラッグで移動");
+    return false;
+}
+
+function onDragEnd() {
+    endDrag();
+}
+
+// =====================================================================
+//  Step operations
+// =====================================================================
+function guardRunning() {
+    if (isRunning()) {
+        log("実行中は編集できないキュン。⏹停止してからね♡", "warn");
+        return true;
+    }
+    return false;
+}
+
+function moveSteps(from, to, insertAt, desc) {
+    var steps = currentSteps();
+    var count = to - from + 1;
+    if (insertAt >= from && insertAt <= to + 1) {
+        return; // dropped onto itself: nothing to do
+    }
+    var moved = steps.splice(from, count);
+    if (insertAt > from) {
+        insertAt -= count;
+    }
+    for (var i = 0; i < moved.length; i++) {
+        steps.splice(insertAt + i, 0, moved[i]);
+    }
+    expandAncestors(steps, insertAt);
+    selectedIndex = insertAt;
+    renderSteps();
+    scrollToSelected();
+    commitChange(desc + ": " + (moved[0].label || moved[0].cmd));
+}
+
+function moveSelected(dir) {
+    var steps = currentSteps();
+    if (guardRunning() || selectedIndex < 0 || selectedIndex >= steps.length) {
+        return;
+    }
+    var range = blockRange(steps, selectedIndex);
+    if (dir < 0) {
+        if (range.from > 0) {
+            moveSteps(range.from, range.to, range.from - 1, "上へ移動");
+        }
+    } else if (range.to < steps.length - 1) {
+        moveSteps(range.from, range.to, range.to + 2, "下へ移動");
+    }
+}
+
+function addCommand(cmd) {
+    if (guardRunning()) {
+        return;
+    }
+    var def = COMMAND_DEFS[cmd];
+    openStepEditor(cmd, null, function (step) {
+        var steps = currentSteps();
+        var at = insertionIndex();
+        if (cmd === "GROUP_START") {
+            steps.splice(at, 0, step, { cmd: "GROUP_END", val: "", label: "グループ終了" });
+        } else {
+            steps.splice(at, 0, step);
+        }
+        expandAncestors(steps, at);
+        selectedIndex = at;
+        renderSteps();
+        scrollToSelected();
+        commitChange("追加: " + def.title + " " + truncateText(step.label, 20));
+    });
+}
+
+function editStep(index) {
+    if (guardRunning()) {
+        return;
+    }
+    var step = currentSteps()[index];
+    if (!step) {
+        return;
+    }
+    if (step.cmd === "GROUP_END") {
+        showMessage("└ グループ終了", "グループ終了タグには設定する項目がないキュン♡\nグループ名は「📁 グループ開始」の方で編集してね。");
+        return;
+    }
+    openStepEditor(step.cmd, step, function (updated) {
+        step.val = updated.val;
+        step.label = updated.label;
+        renderSteps();
+        commitChange("編集: " + truncateText(updated.label, 24));
+    });
+}
+
+function afterDelete(index, desc) {
+    var steps = currentSteps();
+    selectedIndex = steps.length === 0 ? -1 : Math.min(index, steps.length - 1);
+    renderSteps();
+    commitChange(desc);
+}
+
+function deleteStep(index) {
+    if (guardRunning()) {
+        return;
+    }
+    var steps = currentSteps();
+    var step = steps[index];
+    if (!step) {
+        return;
+    }
+    var start = -1;
+    var end = -1;
+    if (step.cmd === "GROUP_START") {
+        start = index;
+        end = findGroupEnd(steps, index);
+    } else if (step.cmd === "GROUP_END") {
+        end = index;
+        start = findGroupStart(steps, index);
+    }
+    if (start >= 0 && end >= 0) {
+        var name = steps[start].val;
+        showChoice("🗑 グループの削除", "グループ「" + name + "」をどうする？", [
+            { text: "🗑 中身ごと削除", cls: "btn-danger", fn: function () {
+                steps.splice(start, end - start + 1);
+                afterDelete(start, "グループ削除(中身ごと): " + name);
+            } },
+            { text: "📤 枠だけ解除", fn: function () {
+                steps.splice(end, 1);
+                steps.splice(start, 1);
+                afterDelete(start, "グループ解除: " + name);
+            } },
+            { text: "キャンセル", fn: null }
+        ]);
+        return;
+    }
+    steps.splice(index, 1);
+    afterDelete(index, "削除: " + truncateText(step.label || step.cmd, 24));
+}
+
+function duplicateSelected() {
+    var steps = currentSteps();
+    if (guardRunning() || selectedIndex < 0 || selectedIndex >= steps.length) {
+        return;
+    }
+    var range = blockRange(steps, selectedIndex);
+    var copies = deepCopy(steps.slice(range.from, range.to + 1));
+    for (var i = 0; i < copies.length; i++) {
+        steps.splice(range.to + 1 + i, 0, copies[i]);
+    }
+    selectedIndex = range.to + 1;
+    renderSteps();
+    scrollToSelected();
+    commitChange("複製: " + truncateText(copies[0].label || copies[0].cmd, 24));
+}
+
+// =====================================================================
+//  Modal dialog
+// =====================================================================
+function isModalOpen() {
+    return byId("modalOverlay").style.display === "block";
+}
+
+// buttons: [{ text, cls, fn }]  fn returning false keeps the dialog open
+function openModal(title, bodyHtml, buttons) {
+    modalToken++;
+    var token = modalToken;
+    byId("modalTitle").innerHTML = escapeHtml(title);
+    byId("modalBody").innerHTML = bodyHtml;
+    var footer = byId("modalFooter");
+    footer.innerHTML = "";
+    modalButtons = buttons || [{ text: "OK", cls: "btn-primary", fn: null }];
+    for (var i = 0; i < modalButtons.length; i++) {
+        var b = document.createElement("button");
+        b.className = "btn " + (modalButtons[i].cls || "");
+        b.innerHTML = escapeHtml(modalButtons[i].text);
+        b.onclick = makeModalHandler(i, token);
+        footer.appendChild(b);
+    }
+    byId("modalOverlay").style.display = "block";
+    var inputs = byId("modalBody").getElementsByTagName("input");
+    var areas = byId("modalBody").getElementsByTagName("textarea");
+    var first = inputs.length ? inputs[0] : (areas.length ? areas[0] : footer.getElementsByTagName("button")[0]);
+    try {
+        first.focus();
+        if (first.select) {
+            first.select();
+        }
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function makeModalHandler(i, token) {
+    return function () {
+        var btn = modalButtons[i];
+        var result = btn && btn.fn ? btn.fn() : true;
+        if (result !== false && token === modalToken) {
+            closeModal();
+        }
+    };
+}
+
+function closeModal() {
+    modalToken++;
+    byId("modalOverlay").style.display = "none";
+    byId("modalBody").innerHTML = "";
+    modalButtons = [];
+}
+
+function triggerDefaultModalButton() {
+    var buttons = byId("modalFooter").getElementsByTagName("button");
+    if (buttons.length) {
+        buttons[0].click();
+    }
+}
+
+function showMessage(title, message) {
+    openModal(title, '<div class="modal-message">' + escapeHtml(message) + "</div>", [{ text: "OK", cls: "btn-primary", fn: null }]);
+}
+
+function showChoice(title, message, buttons) {
+    openModal(title, '<div class="modal-message">' + escapeHtml(message) + "</div>", buttons);
+}
+
+function showInputDialog(title, label, defaultValue, onOk) {
+    var html = '<div class="form-row"><label class="form-label" for="dlgInput">' + escapeHtml(label) + "</label>" +
+        '<input type="text" id="dlgInput" class="form-input" value="' + escapeHtml(defaultValue) + '"></div>' +
+        '<div class="form-error" id="formError"></div>';
+    openModal(title, html, [
+        { text: "OK", cls: "btn-primary", fn: function () {
+            var value = trimText(byId("dlgInput").value);
+            if (value === "") {
+                showFormError("空っぽはダメだキュン♡");
+                return false;
+            }
+            onOk(value);
+            return true;
+        } },
+        { text: "キャンセル", fn: null }
+    ]);
+}
+
+function showFormError(message) {
+    var el = byId("formError");
+    if (el) {
+        el.innerHTML = escapeHtml(message);
+        el.style.display = "block";
+    }
+}
+
+// =====================================================================
+//  Step editor dialog
+// =====================================================================
+function buildFieldHtml(field, value) {
+    var id = "fld_" + field.id;
+    var v = escapeHtml(value == null ? "" : value);
+    var ph = field.placeholder ? ' placeholder="' + escapeHtml(field.placeholder) + '"' : "";
+    var html = '<div class="form-row"><label class="form-label" for="' + id + '">' + escapeHtml(field.label) + "</label>";
+    var i;
+    if (field.type === "textarea") {
+        html += '<textarea id="' + id + '" class="form-input" rows="4">' + v + "</textarea>";
+    } else if (field.type === "select") {
+        html += '<select id="' + id + '" class="form-input">';
+        for (i = 0; i < field.options.length; i++) {
+            html += '<option value="' + escapeHtml(field.options[i][0]) + '"' + (field.options[i][0] === value ? " selected" : "") + ">" +
+                escapeHtml(field.options[i][1]) + "</option>";
+        }
+        html += "</select>";
+    } else if (field.type === "keypreset") {
+        html += '<div class="form-inline"><input type="text" id="' + id + '" class="form-input" value="' + v + '"' + ph + ">" +
+            '<select class="form-input" onchange="applyPreset(this, \'' + id + '\')"><option value="">よく使うキー ▼</option>';
+        for (i = 0; i < KEY_PRESETS.length; i++) {
+            html += '<option value="' + escapeHtml(KEY_PRESETS[i][0]) + '">' + escapeHtml(KEY_PRESETS[i][0] + "  " + KEY_PRESETS[i][1]) + "</option>";
+        }
+        html += "</select></div>";
+    } else if (field.type === "csvcol") {
+        html += '<div class="form-inline"><input type="text" id="' + id + '" class="form-input" value="' + v + '"' + ph + ">";
+        var cols = csvMaxColumns();
+        if (cols > 0) {
+            html += '<select class="form-input" onchange="applyPreset(this, \'' + id + '\')"><option value="">読込中のCSV列 ▼</option>';
+            for (i = 1; i <= cols; i++) {
+                var sample = csvState.rows.length && csvState.rows[0][i - 1] != null ? csvState.rows[0][i - 1] : "";
+                html += '<option value="' + i + '">' + escapeHtml(i + ": " + (csvHeaderName(i) || "(見出しなし)") + "  例: " + truncateText(sample, 14)) + "</option>";
+            }
+            html += "</select>";
+        }
+        html += "</div>";
+        if (cols === 0) {
+            html += '<div class="form-hint">CSVを読み込んでおくと、ここで列名から選べるようになるキュン♡</div>';
+        }
+    } else if (field.type === "capture") {
+        html += '<button type="button" class="btn" onclick="captureCursorPosition()">📍 数秒後のマウス位置を取得</button>' +
+            ' <span id="captureStatus" class="form-hint"></span>';
+    } else {
+        html += '<input type="text" id="' + id + '" class="form-input" value="' + v + '"' + ph + ">";
+    }
+    if (field.hint) {
+        html += '<div class="form-hint">' + escapeHtml(field.hint) + "</div>";
+    }
+    return html + "</div>";
+}
+
+function applyPreset(select, inputId) {
+    if (select.value !== "") {
+        byId(inputId).value = select.value;
+    }
+    select.selectedIndex = 0;
+}
+
+function openStepEditor(cmd, step, onSave) {
+    var def = COMMAND_DEFS[cmd];
+    if (!def) {
+        return;
+    }
+    var currentVal = step ? String(step.val) : def.defaultVal;
+    var values = def.parse(currentVal);
+    var customLabel = step && step.label && step.label !== def.autoLabel(currentVal) ? step.label : "";
+    var html = '<div class="form-help">' + escapeHtml(def.help) + "</div>";
+    for (var i = 0; i < def.fields.length; i++) {
+        html += buildFieldHtml(def.fields[i], values[def.fields[i].id]);
+    }
+    html += buildFieldHtml({ id: "label", label: "表示ラベル（空欄なら自動で付けるキュン）", type: "text" }, customLabel);
+    html += '<div class="form-error" id="formError"></div>';
+    openModal((step ? "✎ 編集: " : "＋ 追加: ") + def.icon + " " + def.title + "（" + cmd + "）", html, [
+        { text: step ? "更新する" : "追加する", cls: "btn-primary", fn: function () {
+            var v = {};
+            for (var j = 0; j < def.fields.length; j++) {
+                var f = def.fields[j];
+                if (f.type === "capture") {
+                    continue;
+                }
+                var raw = byId("fld_" + f.id).value;
+                v[f.id] = f.raw ? raw : trimText(raw);
+            }
+            var err = def.validate(v);
+            if (err) {
+                showFormError(err);
+                return false;
+            }
+            var val = def.compose(v);
+            var label = trimText(byId("fld_label").value);
+            onSave({ cmd: cmd, val: val, label: label || def.autoLabel(val) });
+            return true;
+        } },
+        { text: "キャンセル", fn: null }
+    ]);
+}
+
+function buildPalette() {
+    var html = [];
+    for (var i = 0; i < COMMAND_ORDER.length; i++) {
+        var cmd = COMMAND_ORDER[i];
+        var def = COMMAND_DEFS[cmd];
+        html.push('<button class="btn btn-cmd cat-' + def.category + '" onclick="addCommand(\'' + cmd + '\')" title="' +
+            escapeHtml(def.title + "：" + def.help) + '">' + def.icon + " " + (cmd === "GROUP_START" ? "GROUP" : cmd) + "</button> ");
+    }
+    byId("paletteButtons").innerHTML = html.join("");
+}
+
+// =====================================================================
+//  CSV loading (UI)
+// =====================================================================
+function onCsvFileChosen(input) {
+    var path = input.value || "";
+    if (!path || /fakepath/i.test(path)) {
+        log("ファイルのフルパスが取れなかったキュン…パス欄に直接入力して📥読込してね", "warn");
+        return;
+    }
+    byId("csvPathInput").value = path;
+    loadCsvFromInput();
+}
+
+function loadCsvFromInput() {
+    if (guardRunning()) {
+        return;
+    }
+    var path = trimText(byId("csvPathInput").value).replace(/^"+|"+$/g, "");
+    if (!path) {
+        log("CSVのパスを入れてね♡", "warn");
+        return;
+    }
+    if (!fso) {
+        log("ActiveXが使えないのでCSVを読めないキュン…", "error");
+        return;
+    }
+    if (!fso.FileExists(path)) {
+        log("CSVファイルが見つからないキュン: " + path, "error");
+        return;
+    }
+    try {
+        var res = readCsvText(path, byId("csvEncodingSelect").value);
+        csvState.path = path;
+        csvState.encoding = res.encoding;
+        csvState.records = parseCsv(res.text);
+        applyCsvHeaderOption();
+        log("📥 CSVを読み込んだキュン♡ データ " + csvState.rows.length + "行（" + encodingLabel(res.encoding) + "）: " + path, "ok");
+    } catch (e) {
+        log("CSVの読み込みに失敗したキュン…（" + e.message + "）", "error");
+    }
+}
+
+function applyCsvHeaderOption() {
+    var hasHeader = byId("csvHeaderCheck").checked;
+    var records = csvState.records;
+    csvState.header = hasHeader && records.length > 0 ? records[0] : null;
+    csvState.rows = hasHeader ? records.slice(1) : records.slice(0);
+    byId("endRowInput").placeholder = "最後(" + csvState.rows.length + ")";
+    updateCsvInfo();
+}
+
+function reparseCsv() {
+    if (csvState.records.length) {
+        applyCsvHeaderOption();
+        log("見出し設定を切り替えたよ。データ " + csvState.rows.length + "行", "info");
+    }
+}
+
+function reloadCsvIfLoaded() {
+    if (csvState.path) {
+        loadCsvFromInput();
+    }
+}
+
+function updateCsvInfo() {
+    var info = byId("csvInfo");
+    if (!csvState.path) {
+        info.innerHTML = "CSV未読込";
+        return;
+    }
+    var text = "✔ " + csvState.rows.length + "行 × " + csvMaxColumns() + "列 [" + encodingLabel(csvState.encoding) + "]";
+    if (csvState.header) {
+        text += " 見出し: " + truncateText(csvState.header.join(", "), 60);
+    }
+    info.innerHTML = escapeHtml(text);
+    info.title = csvState.path;
+}
+
+// =====================================================================
+//  Window list / cursor capture helpers (PowerShell)
+// =====================================================================
+function showWindowList() {
+    if (!shell) {
+        log("ActiveXが使えないのでウィンドウ一覧は取れないキュン…", "error");
+        return;
+    }
+    log("🔍 開いているウィンドウを調べてるキュン…", "info");
+    runPowerShellAsync([
+        "$titles = @(Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ForEach-Object { $_.MainWindowTitle } | Sort-Object -Unique)",
+        "Set-FujiResult ('OK:' + ($titles -join \"`n\"))"
+    ], PS_TIMEOUT_SEC, function (ok, payload) {
+        if (!ok) {
+            log("ウィンドウ一覧の取得に失敗…（" + payload + "）", "error");
+            return;
+        }
+        lastWindowTitles = [];
+        var lines = String(payload).split(/\r?\n/);
+        for (var i = 0; i < lines.length; i++) {
+            if (trimText(lines[i]) !== "") {
+                lastWindowTitles.push(trimText(lines[i]));
+            }
+        }
+        var html = '<div class="form-help">クリックすると「対象ウィンドウ」に設定するキュン♡（タイトルの一部だけ残して使ってもOK）</div><ul class="pick-list">';
+        for (var j = 0; j < lastWindowTitles.length; j++) {
+            html += '<li onclick="pickWindowTitle(' + j + ')">🪟 ' + escapeHtml(lastWindowTitles[j]) + "</li>";
+        }
+        html += "</ul>";
+        if (!lastWindowTitles.length) {
+            html += '<div class="modal-message">ウィンドウが見つからなかったキュン…</div>';
+        }
+        openModal("🔍 開いているウィンドウ一覧", html, [{ text: "閉じる", fn: null }]);
+    });
+}
+
+function pickWindowTitle(i) {
+    var title = lastWindowTitles[i];
+    closeModal();
+    if (title != null) {
+        byId("targetWindowInput").value = title;
+        onTargetWindowChange();
+    }
+}
+
+function captureCursorPosition() {
+    var status = byId("captureStatus");
+    if (!shell) {
+        if (status) { status.innerHTML = "ActiveXが使えないキュン…"; }
+        return;
+    }
+    if (status) {
+        status.innerHTML = "マウスを目的の場所に置いて、そのまま待っててね…（約3〜5秒）";
+    }
+    runPowerShellAsync([
+        "Add-Type -TypeDefinition @\"",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public struct FujiPoint { public int X; public int Y; }",
+        "public static class FujiCursor {",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();",
+        "    [DllImport(\"user32.dll\")] public static extern bool GetCursorPos(out FujiPoint p);",
+        "}",
+        "\"@",
+        "[void][FujiCursor]::SetProcessDPIAware()",
+        "Start-Sleep -Seconds 3",
+        "$pt = New-Object FujiPoint",
+        "[void][FujiCursor]::GetCursorPos([ref]$pt)",
+        "Set-FujiResult ('OK:' + $pt.X + ',' + $pt.Y)"
+    ], PS_TIMEOUT_SEC, function (ok, payload) {
+        var st = byId("captureStatus");
+        if (!ok) {
+            if (st) { st.innerHTML = escapeHtml("取得失敗…" + payload); }
+            return;
+        }
+        var p = String(payload).split(",");
+        if (byId("fld_x") && byId("fld_y")) {
+            byId("fld_x").value = trimText(p[0]);
+            byId("fld_y").value = trimText(p[1]);
+        }
+        if (st) {
+            st.innerHTML = escapeHtml("取得できたキュン♡ (" + payload + ")");
+        }
+    });
+}
+
+// =====================================================================
+//  PowerShell bridge (asynchronous: hidden window + result file polling)
+// =====================================================================
+function tempFolder() {
+    try {
+        return shell.ExpandEnvironmentStrings("%TEMP%");
+    } catch (e) {
+        return appDir;
+    }
+}
+
+// onDone(ok, payload): script must call  Set-FujiResult 'OK[:payload]'  or  'NG:message'
+function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
+    psSeq++;
+    var base = tempFolder() + "\\fujikyun_rpa_" + new Date().getTime() + "_" + psSeq;
+    var ps1 = base + ".ps1";
+    var resultPath = base + ".result";
+    var later = isRunning() ? schedule : function (fn, ms) { setTimeout(fn, ms); };
+    var lines = [
+        "$ErrorActionPreference = 'Stop'",
+        "$fujiResultPath = " + psQuote(resultPath),
+        "function Set-FujiResult([string]$text) {",
+        "    $tmp = $fujiResultPath + '.part'",
+        "    [System.IO.File]::WriteAllText($tmp, $text, [System.Text.Encoding]::Unicode)",
+        "    Move-Item -LiteralPath $tmp -Destination $fujiResultPath -Force",
+        "}",
+        "try {"
+    ].concat(bodyLines).concat([
+        "} catch {",
+        "    if (-not (Test-Path -LiteralPath $fujiResultPath)) { Set-FujiResult ('NG:' + $_.Exception.Message) }",
+        "}"
+    ]);
+    try {
+        var ts = fso.CreateTextFile(ps1, true, true); // UTF-16LE with BOM (PowerShell reads it correctly)
+        ts.Write(lines.join("\r\n"));
+        ts.Close();
+    } catch (e1) {
+        onDone(false, "PowerShellスクリプトを書き出せなかった（" + e1.message + "）");
+        return;
+    }
+    pendingTempFiles.push(ps1, resultPath, resultPath + ".part");
+    // iex reads the script text, so a restricted execution policy for .ps1 files does not block it
+    var cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
+    try {
+        shell.Run(cmd, 0, false);
+    } catch (e2) {
+        onDone(false, "PowerShellを起動できなかった（" + e2.message + "）");
+        return;
+    }
+    var waited = 0;
+    var limit = timeoutSec * 1000;
+    function poll() {
+        if (fso.FileExists(resultPath)) {
+            var text = "";
+            try {
+                var rs = fso.OpenTextFile(resultPath, 1, false, -1);
+                text = rs.AtEndOfStream ? "" : rs.ReadAll();
+                rs.Close();
+            } catch (e3) {
+                waited += 200;
+                later(poll, 200);
+                return;
+            }
+            if (text.charCodeAt(0) === 0xFEFF) {
+                text = text.substring(1);
+            }
+            deleteFileQuietly(ps1);
+            deleteFileQuietly(resultPath);
+            if (text.indexOf("OK") === 0) {
+                onDone(true, text.substring(3));
+            } else {
+                onDone(false, text.replace(/^NG:/, ""));
+            }
+            return;
+        }
+        waited += 200;
+        if (waited >= limit) {
+            onDone(false, "PowerShellの応答が" + timeoutSec + "秒以内に返ってこなかった");
+            return;
+        }
+        later(poll, 200);
+    }
+    later(poll, 300);
+}
+
+function buildUiaClickScript(name, windowHint) {
+    return [
+        "Add-Type -AssemblyName UIAutomationClient",
+        "Add-Type -AssemblyName UIAutomationTypes",
+        "$AE = [System.Windows.Automation.AutomationElement]",
+        "$targetName = " + psQuote(name),
+        "$windowHint = " + psQuote(windowHint || ""),
+        "$cond = New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, $targetName)",
+        "$scopes = New-Object System.Collections.ArrayList",
+        "$focused = $null",
+        "try { $focused = $AE::FocusedElement } catch { $focused = $null }",
+        "if ($focused -ne $null) {",
+        "    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker",
+        "    $node = $focused",
+        "    $top = $focused",
+        "    while ($node -ne $null -and -not [System.Windows.Automation.Automation]::Compare($node, $AE::RootElement)) {",
+        "        $top = $node",
+        "        $node = $walker.GetParent($node)",
+        "    }",
+        "    [void]$scopes.Add($top)",
+        "}",
+        "if ($windowHint -ne '') {",
+        "    $wins = $AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)",
+        "    foreach ($w in $wins) {",
+        "        $wn = $w.Current.Name",
+        "        if ($wn -ne $null -and $wn.Contains($windowHint)) { [void]$scopes.Add($w) }",
+        "    }",
+        "}",
+        "$el = $null",
+        "foreach ($s in $scopes) {",
+        "    $el = $s.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)",
+        "    if ($el -ne $null) { break }",
+        "}",
+        "if ($el -eq $null) {",
+        "    Set-FujiResult ('NG:「' + $targetName + '」という名前のオブジェクトが見つからなかった')",
+        "} else {",
+        "    $p = $null",
+        // Result is written BEFORE Invoke: a button that opens a modal dialog can block Invoke() until it closes
+        "    if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { Set-FujiResult 'OK:Invoke'; $p.Invoke() }",
+        "    elseif ($el.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { Set-FujiResult 'OK:Toggle'; $p.Toggle() }",
+        "    elseif ($el.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { Set-FujiResult 'OK:Select'; $p.Select() }",
+        "    elseif ($el.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$p)) { Set-FujiResult 'OK:Expand'; $p.Expand() }",
+        "    else { Set-FujiResult 'NG:見つけたけど押下(Invoke)に対応していないオブジェクトだった' }",
+        "}"
+    ];
+}
+
+function buildClickPosScript(x, y) {
+    return [
+        "Add-Type -TypeDefinition @\"",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public static class FujiMouse {",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetCursorPos(int x, int y);",
+        "    [DllImport(\"user32.dll\")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);",
+        "}",
+        "\"@",
+        "[void][FujiMouse]::SetProcessDPIAware()",
+        "[void][FujiMouse]::SetCursorPos(" + x + ", " + y + ")",
+        "Start-Sleep -Milliseconds 80",
+        "[FujiMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)",
+        "Start-Sleep -Milliseconds 40",
+        "[FujiMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)",
+        "Set-FujiResult 'OK'"
+    ];
+}
+
+// =====================================================================
+//  Alarm
+// =====================================================================
+function playAlarm(force) {
+    if (!force && !byId("alarmCheck").checked) {
+        return;
+    }
+    if (!shell) {
+        log("ActiveXが使えないのでアラームを鳴らせないキュン…", "error");
+        return;
+    }
+    var wav = ALARM_WAV_PATH.replace(/'/g, "''");
+    var script = "if (Test-Path '" + wav + "') { for ($i = 0; $i -lt 3; $i++) { (New-Object System.Media.SoundPlayer '" + wav + "').PlaySync() } } " +
+        "else { for ($i = 0; $i -lt 3; $i++) { [System.Media.SystemSounds]::Hand.Play(); Start-Sleep -Milliseconds 700 } }";
+    try {
+        shell.Run("powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command \"" + script + "\"", 0, false);
+        log("🔔 アラームを鳴らしたキュン！", "warn");
+    } catch (e) {
+        log("アラームを鳴らせなかった…（" + e.message + "）", "error");
+    }
+}
+
+// =====================================================================
+//  Error rows
+// =====================================================================
+function recordErrorRow(reason) {
+    var rs = runState;
+    if (!rs || rs.rowPos >= rs.rows.length) {
+        return;
+    }
+    var row = rs.rows[rs.rowPos];
+    if (row.no <= 0) {
+        return; // test run without CSV
+    }
+    errorRows.push({ no: row.no, data: row.data.slice(0), reason: reason, time: dateTimeText() });
+    updateErrorButton();
+}
+
+function updateErrorButton() {
+    byId("exportErrorBtn").innerHTML = "↓ エラー行をCSV保存 (" + errorRows.length + ")";
+}
+
+function exportErrorRows() {
+    if (errorRows.length === 0) {
+        showMessage("↓ エラー行のCSV保存", "エラー行はまだ無いキュン♡ 平和だね！");
+        return;
+    }
+    if (!fso) {
+        log("ActiveXが使えないので保存できないキュン…", "error");
+        return;
+    }
+    var maxCols = 0;
+    var i;
+    for (i = 0; i < errorRows.length; i++) {
+        maxCols = Math.max(maxCols, errorRows[i].data.length);
+    }
+    var lines = [];
+    if (csvState.header) {
+        var header = csvState.header.slice(0);
+        maxCols = Math.max(maxCols, header.length);
+        while (header.length < maxCols) {
+            header.push("");
+        }
+        lines.push(header.concat(["元データ行No", "エラー内容", "発生日時"]).map(toCsvField).join(","));
+    }
+    for (i = 0; i < errorRows.length; i++) {
+        var cols = errorRows[i].data.slice(0);
+        while (cols.length < maxCols) {
+            cols.push("");
+        }
+        cols.push(String(errorRows[i].no), errorRows[i].reason, errorRows[i].time);
+        lines.push(cols.map(toCsvField).join(","));
+    }
+    var path = appFilePath(ERROR_FILE_NAME);
+    try {
+        writeTextFile(path, lines.join("\r\n") + "\r\n", true);
+        log("↓ エラー行 " + errorRows.length + "件を「" + path + "」に保存したキュン♡", "ok");
+        showChoice("↓ エラー行のCSV保存", "保存したキュン♡\n" + path + "\n\n元データの列はそのままの並びで、右端に「元データ行No・エラー内容・発生日時」を付けたよ。\nこのCSVを読み込めば、エラー行だけ再実行できるキュン。", [
+            { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
+                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+            } },
+            { text: "閉じる", fn: null }
+        ]);
+    } catch (e) {
+        log("エラー行CSVの保存に失敗…（" + e.message + "）", "error");
+    }
+}
+
+// =====================================================================
+//  Runner (setTimeout driven state machine)
+// =====================================================================
+function isRunning() {
+    return !!(runState && runState.running);
+}
+
+// Single timer per run: pause/stop always take effect before the next action
+function schedule(fn, ms) {
+    var rs = runState;
+    if (!rs || !rs.running) {
+        return;
+    }
+    if (rs.timer) {
+        clearTimeout(rs.timer);
+    }
+    rs.timer = setTimeout(function () {
+        rs.timer = null;
+        if (runState !== rs || !rs.running) {
+            return;
+        }
+        if (rs.paused) {
+            rs.resumeFn = fn;
+            return;
+        }
+        try {
+            fn();
+        } catch (e) {
+            stopWithError("想定外のエラーで止まったキュン…（" + e.message + "）", true);
+        }
+    }, Math.max(0, ms || 0));
+}
+
+function setRunUi(running) {
+    byId("runBtn").disabled = running;
+    byId("pauseBtn").disabled = !running;
+    byId("stopBtn").disabled = !running;
+    byId("pauseBtn").innerHTML = "⏸ 一時停止";
+    byId("macroSelect").disabled = running;
+}
+
+function rowCaption(row) {
+    return row.no > 0 ? "データ行 " + row.no : "テスト実行（CSVなし）";
+}
+
+function updateProgress(extra) {
+    var rs = runState;
+    if (!rs) {
+        return;
+    }
+    var row = rs.rows[rs.rowPos];
+    var step = rs.steps[rs.stepIndex];
+    var text = (rs.paused ? "⏸ 一時停止中: " : "▶ 実行中: ") + (row ? rowCaption(row) : "") +
+        "（" + Math.min(rs.rowPos + 1, rs.rows.length) + "/" + rs.rows.length + "件目）";
+    if (step) {
+        text += " ・ ステップ " + (rs.stepIndex + 1) + "/" + rs.steps.length + " [" + step.cmd + "]";
+    }
+    byId("progressText").innerHTML = escapeHtml(text + (extra || ""));
+}
+
+function clearRunningHighlight() {
+    if (runState && runState.highlightEl) {
+        removeClass(runState.highlightEl, "running");
+        runState.highlightEl = null;
+    }
+}
+
+function highlightRunning(index) {
+    clearRunningHighlight();
+    if (!runState || runState.macro !== currentMacro()) {
+        return;
+    }
+    var el = byId("macroContainer").children[index];
+    if (el && hasClass(el, "block")) {
+        addClass(el, "running");
+        runState.highlightEl = el;
+        scrollIntoContainer(el);
+    }
+}
+
+function startRun() {
+    if (isRunning()) {
+        return;
+    }
+    if (!shell) {
+        showMessage("実行できないキュン", "ActiveX（WScript.Shell）が使えない環境だよ。\n.hta ファイルをダブルクリックしてHTAとして起動してね♡");
+        return;
+    }
+    if (isModalOpen()) {
+        return;
+    }
+    var macro = currentMacro();
+    var steps = macro ? macro.steps : [];
+    var executable = 0;
+    var usesCsv = false;
+    for (var i = 0; i < steps.length; i++) {
+        if (isExecutableStep(steps[i])) {
+            executable++;
+        }
+        if (steps[i].cmd === "CSV") {
+            usesCsv = true;
+        }
+    }
+    if (executable === 0) {
+        log("実行できるコマンドがないキュン。まずはコマンドを追加してね♡", "warn");
+        return;
+    }
+    var list = [];
+    var rows = csvState.rows;
+    if (rows.length === 0) {
+        if (usesCsv && !confirm("CSVが読み込まれていないキュン。\nCSVコマンドは空欄扱い（貼り付けスキップ）で1回だけテスト実行する？")) {
+            return;
+        }
+        list.push({ no: 0, data: [] });
+    } else {
+        var start = Math.max(1, toInt(byId("startRowInput").value, 1));
+        var end = Math.min(rows.length, toInt(byId("endRowInput").value, rows.length));
+        if (start > end) {
+            log("開始行と終了行の指定がおかしいキュン（" + start + "〜" + end + "）", "warn");
+            return;
+        }
+        for (var r = start; r <= end; r++) {
+            list.push({ no: r, data: rows[r - 1] });
+        }
+    }
+    cleanupTempFiles();
+    errorRows = [];
+    updateErrorButton();
+    runState = {
+        running: true,
+        paused: false,
+        macro: macro,
+        steps: deepCopy(steps),
+        targetWindow: macro.targetWindow,
+        activeTitle: macro.targetWindow,
+        rows: list,
+        rowPos: 0,
+        stepIndex: 0,
+        interval: Math.max(0, toInt(byId("stepIntervalInput").value, 300)),
+        timer: null,
+        resumeFn: null,
+        highlightEl: null,
+        doneRows: 0,
+        skippedRows: 0,
+        startTime: new Date()
+    };
+    setRunUi(true);
+    log("▶ 実行開始するキュン♡ マクロ「" + macro.name + "」 対象 " + list.length + "行 / 間隔 " + runState.interval + "ms", "run");
+    if (!macro.targetWindow) {
+        log("対象ウィンドウが未設定だから3秒後に開始するよ。そのあいだに入力先の画面をクリックしておいてね♡", "warn");
+        schedule(startRow, 3000);
+    } else {
+        schedule(startRow, 100);
+    }
+}
+
+function startRow() {
+    var rs = runState;
+    if (rs.rowPos >= rs.rows.length) {
+        finishRun();
+        return;
+    }
+    var row = rs.rows[rs.rowPos];
+    rs.stepIndex = 0;
+    rs.activeTitle = rs.targetWindow;
+    updateProgress();
+    log("── " + rowCaption(row) + " 開始（" + (rs.rowPos + 1) + "/" + rs.rows.length + "件目）", "run");
+    if (rs.activeTitle) {
+        activateWithRetry(rs.activeTitle, function () {
+            schedule(runCurrentStep, 150);
+        }, function () {
+            stopWithError("🚨 対象ウィンドウ「" + rs.activeTitle + "」が見つからないキュン…" + WINDOW_RETRY_MAX + "回探してもダメだったから止めたよ", true);
+        });
+    } else {
+        schedule(runCurrentStep, 0);
+    }
+}
+
+function runCurrentStep() {
+    var rs = runState;
+    if (rs.stepIndex >= rs.steps.length) {
+        rs.doneRows++;
+        log("✔ " + rowCaption(rs.rows[rs.rowPos]) + " 完了", "ok");
+        nextRow();
+        return;
+    }
+    var step = rs.steps[rs.stepIndex];
+    highlightRunning(rs.stepIndex);
+    updateProgress();
+    executeStep(step, function (action, delay) {
+        if (runState !== rs || !rs.running) {
+            return;
+        }
+        if (action === "skipRow") {
+            rs.skippedRows++;
+            nextRow();
+            return;
+        }
+        rs.stepIndex++;
+        schedule(runCurrentStep, delay == null ? rs.interval : delay);
+    });
+}
+
+function nextRow() {
+    var rs = runState;
+    rs.rowPos++;
+    schedule(startRow, Math.max(rs.interval, 300));
+}
+
+function htaHasFocus() {
+    if (!focusCheckTrusted) {
+        return false;
+    }
+    try {
+        return document.hasFocus();
+    } catch (e) {
+        return false;
+    }
+}
+
+// Same rule as AppActivate: exact match, then prefix, then suffix
+function titleMatchesSelf(title) {
+    var own = document.title;
+    return own === title || own.indexOf(title) === 0 ||
+        (own.length >= title.length && own.substring(own.length - title.length) === title);
+}
+
+function activateWithRetry(title, onOk, onFail) {
+    var attempt = 0;
+    function tryOnce() {
+        attempt++;
+        var ok = false;
+        try {
+            ok = shell.AppActivate(title);
+        } catch (e) {
+            ok = false;
+        }
+        if (ok) {
+            schedule(function () {
+                if (!htaHasFocus()) {
+                    onOk();
+                } else if (titleMatchesSelf(title)) {
+                    log("⚠ 「" + title + "」だと、ふじキュン自身のウィンドウにマッチしちゃうキュン", "warn");
+                    retry();
+                } else {
+                    // AppActivate succeeded on another window but focus is still reported here:
+                    // do not trust document.hasFocus() from now on and re-activate before every input
+                    focusCheckTrusted = false;
+                    log("⚠ この環境ではフォーカス判定が使えないみたい。以降は入力のたびに対象ウィンドウを前面化して進めるキュン", "warn");
+                    onOk();
+                }
+            }, 250);
+            return;
+        }
+        retry();
+    }
+    function retry() {
+        if (attempt >= WINDOW_RETRY_MAX) {
+            onFail();
+            return;
+        }
+        log("🔎 ウィンドウ「" + title + "」を探してるキュン…（" + attempt + "/" + WINDOW_RETRY_MAX + "回目 失敗）", "warn");
+        schedule(tryOnce, WINDOW_RETRY_INTERVAL_MS);
+    }
+    tryOnce();
+}
+
+// Make sure keystrokes never land in this HTA itself
+function ensureInputTarget(fn) {
+    var rs = runState;
+    var htaFocused = htaHasFocus();
+    var safeMode = byId("safeModeCheck").checked || !focusCheckTrusted;
+    if (!htaFocused && !safeMode) {
+        fn();
+        return;
+    }
+    if (!rs.activeTitle) {
+        if (htaFocused) {
+            stopWithError("🚨 このままだと入力先がふじキュン自身になっちゃうから止めたキュン！ 対象ウィンドウ名を設定するか、SWITCHコマンドを入れてね", true);
+            return;
+        }
+        fn();
+        return;
+    }
+    if (htaFocused) {
+        log("ふじキュンに操作が移っていたから「" + rs.activeTitle + "」を前面に戻すキュン", "warn");
+    }
+    activateWithRetry(rs.activeTitle, fn, function () {
+        stopWithError("🚨 対象ウィンドウ「" + rs.activeTitle + "」を見失ったキュン…安全のため止めたよ", true);
+    });
+}
+
+function pasteText(text, what, next) {
+    if (text === "") {
+        log("（" + what + " は空欄なので貼り付けはスキップ）", "info");
+        next("next");
+        return;
+    }
+    var ok = false;
+    try {
+        ok = window.clipboardData.setData("Text", text) !== false;
+    } catch (e1) {
+        ok = false;
+    }
+    if (!ok) {
+        try {
+            ok = window.clipboardData.setData("Text", text) !== false;
+        } catch (e2) {
+            ok = false;
+        }
+    }
+    if (!ok) {
+        stopWithError("🚨 クリップボードに書き込めなかったキュン…", true);
+        return;
+    }
+    schedule(function () {
+        shell.SendKeys("^v");
+        log("📋 " + what + "「" + truncateText(text, 30) + "」を貼り付けたよ", "info");
+        next("next");
+    }, 80);
+}
+
+function executeStep(step, next) {
+    var rs = runState;
+    var val = step.val == null ? "" : String(step.val);
+    switch (step.cmd) {
+    case "COMMENT":
+    case "GROUP_START":
+    case "GROUP_END":
+        next("next", 0);
+        return;
+    case "KEY":
+        ensureInputTarget(function () {
+            shell.SendKeys(normalizeSendKeys(val));
+            log("⌨ キー送信 " + val + "（" + keyDisplayName(val) + "）", "info");
+            next("next");
+        });
+        return;
+    case "TEXT":
+        ensureInputTarget(function () {
+            pasteText(val, "文字列", next);
+        });
+        return;
+    case "CSV":
+        var col = toInt(val, 0);
+        var data = rs.rows[rs.rowPos].data;
+        if (rs.rows[rs.rowPos].no > 0 && (col < 1 || col > data.length)) {
+            log("⚠ CSVの" + col + "列目がこの行には無いキュン（" + data.length + "列しかないよ）", "warn");
+        }
+        var cellText = col >= 1 && col <= data.length ? String(data[col - 1]) : "";
+        ensureInputTarget(function () {
+            pasteText(cellText, "CSV " + col + "列目", next);
+        });
+        return;
+    case "WAIT":
+        var ms = Math.max(0, toInt(val, 0));
+        log("⏳ " + ms + "ミリ秒待機", "info");
+        next("next", ms);
+        return;
+    case "WAIT_FOR":
+        runWaitFor(val, next);
+        return;
+    case "IF":
+        runIf(val, next);
+        return;
+    case "SWITCH":
+        activateWithRetry(val, function () {
+            rs.activeTitle = val;
+            log("🪟 「" + val + "」に切り替えたキュン", "info");
+            next("next");
+        }, function () {
+            stopWithError("🚨 切替先ウィンドウ「" + val + "」が見つからないキュン…", true);
+        });
+        return;
+    case "RUN":
+        try {
+            shell.Run(val, 1, false);
+            log("🚀 起動: " + val, "info");
+            next("next");
+        } catch (e) {
+            stopWithError("🚨 起動できなかったキュン: " + val + "（" + e.message + "）", true);
+        }
+        return;
+    case "CLICK":
+        ensureInputTarget(function () {
+            log("👆 「" + val + "」をUIAutomationで探してるキュン…", "info");
+            runPowerShellAsync(buildUiaClickScript(val, rs.activeTitle), PS_TIMEOUT_SEC, function (ok, payload) {
+                if (ok) {
+                    log("👆 「" + val + "」をクリック（" + payload + "）", "info");
+                    next("next");
+                } else {
+                    stopWithError("🚨 CLICK失敗: " + payload, true);
+                }
+            });
+        });
+        return;
+    case "CLICK_POS":
+        var xy = String(val).split(",");
+        var x = toInt(xy[0], 0);
+        var y = toInt(xy[1], 0);
+        ensureInputTarget(function () {
+            runPowerShellAsync(buildClickPosScript(x, y), PS_TIMEOUT_SEC, function (ok, payload) {
+                if (ok) {
+                    log("🎯 座標(" + x + ", " + y + ")をクリック", "info");
+                    next("next");
+                } else {
+                    stopWithError("🚨 座標クリック失敗: " + payload, true);
+                }
+            });
+        });
+        return;
+    default:
+        log("不明なコマンド " + step.cmd + " はスキップするね", "warn");
+        next("next", 0);
+    }
+}
+
+function runWaitFor(val, next) {
+    var p = splitParams(val, 3);
+    var title = p[0];
+    var key = p[1];
+    var timeout = Math.max(1, toInt(p[2], 30));
+    var count = 0;
+    if (!title) {
+        stopWithError("🚨 WAIT_FORのタイトルが空っぽキュン", true);
+        return;
+    }
+    log("👀 「" + title + "」の出現を待つよ（最大" + timeout + "秒）", "info");
+    function poll() {
+        var found = false;
+        try {
+            found = shell.AppActivate(title);
+        } catch (e) {
+            found = false;
+        }
+        if (found) {
+            log("✨ 「" + title + "」が出てきたキュン！", "ok");
+            if (key) {
+                schedule(function () {
+                    shell.SendKeys(normalizeSendKeys(key));
+                    log("⌨ " + key + " を押したよ", "info");
+                    next("next");
+                }, 300);
+            } else {
+                next("next");
+            }
+            return;
+        }
+        count++;
+        if (count >= timeout) {
+            stopWithError("⏰ タイムアウト！「" + title + "」が" + timeout + "秒たっても出てこなかったから安全停止したキュン", true);
+            return;
+        }
+        updateProgress("（待機 " + count + "/" + timeout + "秒）");
+        schedule(poll, 1000);
+    }
+    poll();
+}
+
+function runIf(val, next) {
+    var p = splitParams(val, 3);
+    var title = p[0];
+    var key = p[1];
+    var mode = String(p[2] || "STOP").toUpperCase() === "SKIP" ? "SKIP" : "STOP";
+    var found = false;
+    try {
+        found = title ? shell.AppActivate(title) : false;
+    } catch (e) {
+        found = false;
+    }
+    if (!found) {
+        log("🔍 IF: 「" + title + "」は出ていないから続行", "info");
+        next("next", 0);
+        return;
+    }
+    log("⚠ IF: 「" + title + "」を検知したキュン！", "warn");
+    schedule(function () {
+        if (key) {
+            shell.SendKeys(normalizeSendKeys(key));
+            log("⌨ " + key + " を押したよ", "info");
+        }
+        if (mode === "SKIP") {
+            recordErrorRow("IF検知(SKIP): 「" + title + "」");
+            log("⏭ この行は打ち切って次の行へ進むキュン", "warn");
+            schedule(function () {
+                next("skipRow");
+            }, 500);
+        } else {
+            stopWithError("🚨 IF検知(STOP): 「" + title + "」が出たから緊急停止したキュン！", true);
+        }
+    }, 300);
+}
+
+function stopWithError(message, recordRow) {
+    if (!isRunning()) {
+        return;
+    }
+    log(message, "error");
+    if (recordRow) {
+        recordErrorRow(message);
+    }
+    playAlarm(false);
+    endRun("異常停止");
+    try {
+        shell.AppActivate(document.title);
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function togglePause() {
+    var rs = runState;
+    if (!rs || !rs.running) {
+        return;
+    }
+    if (!rs.paused) {
+        rs.paused = true;
+        byId("pauseBtn").innerHTML = "▶ 再開";
+        updateProgress();
+        log("⏸ 一時停止中だキュン。「▶ 再開」で続きからね", "warn");
+        return;
+    }
+    rs.paused = false;
+    byId("pauseBtn").innerHTML = "⏸ 一時停止";
+    log("▶ 再開するキュン♡", "run");
+    var fn = rs.resumeFn;
+    rs.resumeFn = null;
+    if (!fn) {
+        return; // a timer is still pending and will continue by itself
+    }
+    if (rs.activeTitle) {
+        activateWithRetry(rs.activeTitle, function () {
+            schedule(fn, 300);
+        }, function () {
+            stopWithError("🚨 再開しようとしたけど「" + rs.activeTitle + "」が見つからないキュン…", true);
+        });
+    } else {
+        log("対象ウィンドウ未設定だから1.5秒後に再開するよ。入力先をクリックしておいてね", "warn");
+        schedule(fn, 1500);
+    }
+}
+
+function stopRun(reason) {
+    if (!isRunning()) {
+        return;
+    }
+    log("⏹ 停止したキュン（" + reason + "）", "warn");
+    endRun("停止");
+}
+
+function finishRun() {
+    log("🎉 全部おわったキュン♡ おつかれさま！", "ok");
+    endRun("完了");
+}
+
+function endRun(status) {
+    var rs = runState;
+    if (!rs) {
+        return;
+    }
+    rs.running = false;
+    if (rs.timer) {
+        clearTimeout(rs.timer);
+        rs.timer = null;
+    }
+    clearRunningHighlight();
+    setRunUi(false);
+    var sec = Math.round((new Date().getTime() - rs.startTime.getTime()) / 1000);
+    var summary = status + "：完了 " + rs.doneRows + "行 / スキップ " + rs.skippedRows + "行 / エラー記録 " + errorRows.length + "件（" + sec + "秒）";
+    log("■ " + summary, status === "完了" ? "ok" : "warn");
+    byId("progressText").innerHTML = escapeHtml("■ " + summary);
+}
+
+// =====================================================================
+//  Keyboard shortcuts
+// =====================================================================
+function onKeyDown(e) {
+    e = e || window.event;
+    var key = e.keyCode;
+    var target = e.target || e.srcElement;
+    var tag = target && target.tagName ? target.tagName.toUpperCase() : "";
+    var inField = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+    if (key === 116) { // F5 would reload the HTA
+        return preventEvent(e);
+    }
+    if (isModalOpen()) {
+        if (key === 27) {
+            closeModal();
+            return preventEvent(e);
+        }
+        if (key === 13 && tag !== "TEXTAREA" && tag !== "BUTTON" && tag !== "SELECT") {
+            triggerDefaultModalButton();
+            return preventEvent(e);
+        }
+        return true;
+    }
+    if (key === 27) {
+        if (isRunning()) {
+            stopRun("Escキー");
+        } else {
+            selectBlock(-1);
+        }
+        return preventEvent(e);
+    }
+    if (e.ctrlKey && key === 83) { // Ctrl+S
+        saveProduction();
+        return preventEvent(e);
+    }
+    if (inField) {
+        return true;
+    }
+    if (e.ctrlKey && key === 90) { // Ctrl+Z
+        undo();
+        return preventEvent(e);
+    }
+    if (e.ctrlKey && key === 89) { // Ctrl+Y
+        redo();
+        return preventEvent(e);
+    }
+    if (e.ctrlKey && key === 68) { // Ctrl+D
+        duplicateSelected();
+        return preventEvent(e);
+    }
+    if (key === 46 && selectedIndex >= 0) { // Delete
+        deleteStep(selectedIndex);
+        return preventEvent(e);
+    }
+    if (key === 13 && selectedIndex >= 0 && tag !== "BUTTON") { // Enter
+        editStep(selectedIndex);
+        return preventEvent(e);
+    }
+    if (key === 38 || key === 40) { // Up / Down
+        if (e.altKey) {
+            moveSelected(key === 38 ? -1 : 1);
+        } else {
+            selectNeighbor(key === 38 ? -1 : 1);
+        }
+        return preventEvent(e);
+    }
+    return true;
+}
+
+// =====================================================================
+//  Startup
+// =====================================================================
+function fitWindow() {
+    try {
+        var w = Math.min(1220, screen.availWidth);
+        var h = Math.min(900, screen.availHeight);
+        window.resizeTo(w, h);
+        window.moveTo(Math.max(0, Math.floor((screen.availWidth - w) / 2)), Math.max(0, Math.floor((screen.availHeight - h) / 2)));
+    } catch (e) {
+        /* not an HTA (browser preview) */
+    }
+}
+
+function bindContainerEvents() {
+    var container = byId("macroContainer");
+    container.onclick = onContainerClick;
+    container.ondblclick = onContainerDblClick;
+    container.ondragstart = onDragStart;
+    container.ondragenter = onDragEnter;
+    container.ondragover = onDragOver;
+    container.ondrop = onDrop;
+    container.ondragend = onDragEnd;
+    container.onselectstart = function () { return false; };
+}
+
+window.onload = function () {
+    fitWindow();
+    buildPalette();
+    bindContainerEvents();
+    document.onkeydown = onKeyDown;
+    var ok = initActiveX();
+    if (ok) {
+        appDir = resolveAppDir();
+        log("📁 作業フォルダ: " + appDir, "info");
+    } else {
+        log("⚠ ActiveXが使えない環境だキュン（ブラウザで開いてる？）。今はお試し表示モードだよ。.hta をダブルクリックして起動してね", "error");
+    }
+    loadInitialData();
+    refreshMacroSelect();
+    renderSteps();
+    recordHistory("起動時の状態");
+    updateSaveState();
+    updateErrorButton();
+    log("ふじキュン♡のRPAマクロビルダーへようこそキュン♡ 今日もいっしょにがんばろうね！", "ok");
+};
+
+window.onbeforeunload = function () {
+    cleanupTempFiles();
+    if (isRunning()) {
+        return "実行中だキュン！閉じるとロボットが止まっちゃうよ";
+    }
+    if (isDirty) {
+        return "本番ファイルに保存していない変更があるキュン（一時ファイルには自動保存済みだから、次回起動時に復元できるよ）";
+    }
+};
+</script>
+</body>
+</html>
+
