@@ -2963,7 +2963,7 @@ function tempFolder() {
     }
 }
 
-var LAUNCH_METHOD_NAMES = { run: "WScript.Shell.Run", exec: "WScript.Shell.Exec", shell: "Shell.Application.ShellExecute" };
+var LAUNCH_METHOD_NAMES = { run: "WScript.Shell.Run", cmd: "cmd.exe経由（非表示）", exec: "WScript.Shell.Exec", shell: "Shell.Application.ShellExecute" };
 
 function expandEnv(s) {
     try {
@@ -2992,45 +2992,69 @@ function quoteExe(exe) {
     return /[\\ ]/.test(exe) ? '"' + exe + '"' : exe;
 }
 
-function startProcessHidden(method, exe, args) {
+// markerPath: the cmd route writes it when cmd.exe could not start PowerShell
+function startProcessHidden(method, exe, args, markerPath) {
     if (method === "run") {
         shell.Run(quoteExe(exe) + " " + args, 0, false);
+    } else if (method === "cmd") {
+        // /s strips only the outermost quotes, so the inner quoting of args survives
+        shell.Run(quoteExe(expandEnv("%ComSpec%")) + " /s /c \"" + quoteExe(exe) + " " + args + " || echo NG>\"" + markerPath + "\"\"", 0, false);
     } else if (method === "exec") {
-        shell.Exec(quoteExe(exe) + " " + args); // a console may flash briefly
+        shell.Exec(quoteExe(exe) + " " + args); // a console window flashes briefly
     } else {
         new ActiveXObject("Shell.Application").ShellExecute(exe, args, "", "open", 0);
     }
 }
 
-// Some security products refuse WScript.Shell.Run from mshta.exe (seen as 0xFFFFFFFF),
-// so try the other process-creation routes before giving up
-function launchPowerShell(args) {
+// Some security products refuse WScript.Shell.Run of powershell.exe from mshta.exe (seen as
+// 0xFFFFFFFF) while still allowing other routes, so walk through them in order of how quietly
+// they run: hidden Run, hidden cmd.exe, Exec (console flashes), ShellExecute.
+function createPsLauncher(args, markerPath) {
     var exes = powershellCandidates();
     var attempts = [];
-    var errors = [];
+    var seen = {};
     var i;
-    if (psPreferredLaunch) {
-        attempts.push(psPreferredLaunch);
-    }
-    for (i = 0; i < exes.length; i++) {
-        attempts.push({ method: "run", exe: exes[i] });
-    }
-    for (i = 0; i < exes.length; i++) {
-        attempts.push({ method: "exec", exe: exes[i] });
-    }
-    attempts.push({ method: "shell", exe: exes[0] });
-    for (i = 0; i < attempts.length; i++) {
-        try {
-            startProcessHidden(attempts[i].method, attempts[i].exe, args);
-            if (errors.length) {
-                log("PowerShellは " + LAUNCH_METHOD_NAMES[attempts[i].method] + " で起動したキュン（ほかの方法: " + errors.join(" / ") + "）", "warn");
-            }
-            return { ok: true, attempt: attempts[i] };
-        } catch (e) {
-            errors.push(LAUNCH_METHOD_NAMES[attempts[i].method] + "(" + fileNameOf(attempts[i].exe) + "): " + errorText(e));
+    function add(method, exe) {
+        if (!seen[method + "|" + exe]) {
+            seen[method + "|" + exe] = true;
+            attempts.push({ method: method, exe: exe });
         }
     }
-    return { ok: false, message: errors.join(" / ") };
+    if (psPreferredLaunch) {
+        add(psPreferredLaunch.method, psPreferredLaunch.exe);
+    }
+    for (i = 0; i < exes.length; i++) {
+        add("run", exes[i]);
+    }
+    add("cmd", exes[0]);
+    for (i = 0; i < exes.length; i++) {
+        add("exec", exes[i]);
+    }
+    add("shell", exes[0]);
+    var launcher = {
+        current: null,
+        errors: [],
+        // Starts the next route; false when every route has been refused
+        next: function () {
+            while (attempts.length) {
+                var a = attempts.shift();
+                try {
+                    startProcessHidden(a.method, a.exe, args, markerPath);
+                    launcher.current = a;
+                    return true;
+                } catch (e) {
+                    launcher.errors.push(LAUNCH_METHOD_NAMES[a.method] + "(" + fileNameOf(a.exe) + "): " + errorText(e));
+                }
+            }
+            launcher.current = null;
+            return false;
+        }
+    };
+    return launcher;
+}
+
+function launchDescription(a) {
+    return LAUNCH_METHOD_NAMES[a.method] + "（" + a.exe + "）";
 }
 
 // Start any command line; falls back to ShellExecute when WScript.Shell.Run is refused
@@ -3099,11 +3123,16 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
         return;
     }
     var args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
-    var launched = launchPowerShell(args);
-    if (!launched.ok) {
+    var markerPath = base + ".launchfail";
+    pendingTempFiles.push(markerPath);
+    var launcher = createPsLauncher(args, markerPath);
+    function giveUp() {
         psLaunchBlocked = true;
         psLastFailed = true;
-        onDone(false, "PowerShellを起動できなかった（" + launched.message + "）");
+        onDone(false, "PowerShellを起動できなかった（" + launcher.errors.join(" / ") + "）");
+    }
+    if (!launcher.next()) {
+        giveUp();
         return;
     }
     var waited = 0;
@@ -3125,13 +3154,28 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
             }
             deleteFileQuietly(ps1);
             deleteFileQuietly(resultPath);
-            psPreferredLaunch = launched.attempt;
+            deleteFileQuietly(markerPath);
+            if (launcher.errors.length && (!psPreferredLaunch || psPreferredLaunch.method !== launcher.current.method || psPreferredLaunch.exe !== launcher.current.exe)) {
+                log("PowerShellは " + launchDescription(launcher.current) + " で起動できたキュン。この後もこの方法を使うね（使えなかった方法: " + launcher.errors.join(" / ") + "）", "warn");
+            }
+            psPreferredLaunch = launcher.current;
             psLastFailed = false;
             if (text.indexOf("OK") === 0) {
                 onDone(true, text.substring(3));
             } else {
                 onDone(false, text.replace(/^NG:/, ""));
             }
+            return;
+        }
+        if (launcher.current.method === "cmd" && fso.FileExists(markerPath)) {
+            deleteFileQuietly(markerPath);
+            launcher.errors.push(LAUNCH_METHOD_NAMES.cmd + ": PowerShellの起動を断られた");
+            if (!launcher.next()) {
+                giveUp();
+                return;
+            }
+            waited = 0;
+            later(poll, 300);
             return;
         }
         waited += 200;
@@ -3574,7 +3618,10 @@ function runDiagnostics() {
             }
         }
         add(true, "PowerShellの起動・実行", "バージョン " + (map.PSVERSION || "?") +
-            (psPreferredLaunch ? " ／ 起動方法: " + LAUNCH_METHOD_NAMES[psPreferredLaunch.method] + "（" + psPreferredLaunch.exe + "）" : ""));
+            (psPreferredLaunch ? " ／ 起動方法: " + launchDescription(psPreferredLaunch) : ""));
+        if (psPreferredLaunch && psPreferredLaunch.method === "exec") {
+            hints.push("PowerShellは Exec で起動しているので、実行のたびに黒い画面が一瞬出るよ。入力先のウィンドウがずれて見えたら、CLICK系の前に SWITCH を入れておくと安心だキュン。");
+        }
         add(map.LANGMODE === "FullLanguage", "PowerShellの言語モード", map.LANGMODE || "?");
         if (map.LANGMODE && map.LANGMODE !== "FullLanguage") {
             hints.push("PowerShellが制限モード（" + map.LANGMODE + "）だよ。C#を使う CLICK_POS・CLICK_IMG・SCREENSHOT は動かない可能性が高いキュン。キーボード操作（KEY・TEXT・CSV）中心で組んでね。");

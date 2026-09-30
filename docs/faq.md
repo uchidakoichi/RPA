@@ -26,9 +26,12 @@ HTA を置いたフォルダに書き込めません。デスクトップ、ド�
 ### Q. 「PowerShellを起動できなかった（… [0xFFFFFFFF]）」と出る
 PowerShell を起動する前の「プログラムを起動する」段階で断られています。ふじキュンは次の順に起動方法を自動で試し、うまくいった方法をその後も使います。
 
-1. WScript.Shell.Run（通常の方法）
-2. WScript.Shell.Exec（黒い画面が一瞬出ることがあります）
-3. Shell.Application.ShellExecute
+1. WScript.Shell.Run（通常の方法・画面なし）
+2. cmd.exe を画面なしで起動し、その中から PowerShell を起動（画面なし）
+3. WScript.Shell.Exec（黒い画面が一瞬出ることがあります）
+4. Shell.Application.ShellExecute
+
+一度うまくいった方法は、その後ずっと最初に使います。ログに「PowerShellは ○○ で起動できたキュン」と出るので、どの方法になったか確認できます。
 
 ［🩺 環境チェック］の「プログラムの起動（WScript.Shell.Run）」と「PowerShellの起動・実行」の行を見ると、どの方法なら動くかが分かります。全部だめな場合はセキュリティ製品や組織のポリシーで止められているので、下の「使える機能」で組み立ててください。
 
