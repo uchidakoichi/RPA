@@ -632,7 +632,9 @@ var alarmPlayer = null;
 var notifyPlayer = null;
 var alarmVoice = null;
 var modalDismissFn = null;
-var psExeCache = "";
+var psPreferredLaunch = null;  // launch method confirmed to deliver a result this session
+var psLaunchBlocked = false;    // every launch method threw: fail fast until the next diagnostics
+var psLastFailed = false;       // the latest PowerShell call did not come back (alarm skips straight to fallbacks)
 
 // =====================================================================
 //  Utilities
@@ -2961,18 +2963,104 @@ function tempFolder() {
     }
 }
 
-// Full path first: a bare "powershell.exe" fails when PATH is trimmed by policy
-function powershellExe() {
-    if (!psExeCache) {
-        var p = "";
-        try {
-            p = shell.ExpandEnvironmentStrings(POWERSHELL_PATH);
-        } catch (e) {
-            p = "";
-        }
-        psExeCache = p && fso && fso.FileExists(p) ? '"' + p + '"' : "powershell.exe";
+var LAUNCH_METHOD_NAMES = { run: "WScript.Shell.Run", exec: "WScript.Shell.Exec", shell: "Shell.Application.ShellExecute" };
+
+function expandEnv(s) {
+    try {
+        return shell.ExpandEnvironmentStrings(s);
+    } catch (e) {
+        return s;
     }
-    return psExeCache;
+}
+
+// Full paths first (a bare "powershell.exe" fails when PATH is trimmed); Sysnative reaches
+// the 64-bit PowerShell from a 32-bit mshta.exe
+function powershellCandidates() {
+    var list = [];
+    var paths = [POWERSHELL_PATH, "%SystemRoot%\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe"];
+    for (var i = 0; i < paths.length; i++) {
+        var p = expandEnv(paths[i]);
+        if (p && fso && fso.FileExists(p)) {
+            list.push(p);
+        }
+    }
+    list.push("powershell.exe");
+    return list;
+}
+
+function quoteExe(exe) {
+    return /[\\ ]/.test(exe) ? '"' + exe + '"' : exe;
+}
+
+function startProcessHidden(method, exe, args) {
+    if (method === "run") {
+        shell.Run(quoteExe(exe) + " " + args, 0, false);
+    } else if (method === "exec") {
+        shell.Exec(quoteExe(exe) + " " + args); // a console may flash briefly
+    } else {
+        new ActiveXObject("Shell.Application").ShellExecute(exe, args, "", "open", 0);
+    }
+}
+
+// Some security products refuse WScript.Shell.Run from mshta.exe (seen as 0xFFFFFFFF),
+// so try the other process-creation routes before giving up
+function launchPowerShell(args) {
+    var exes = powershellCandidates();
+    var attempts = [];
+    var errors = [];
+    var i;
+    if (psPreferredLaunch) {
+        attempts.push(psPreferredLaunch);
+    }
+    for (i = 0; i < exes.length; i++) {
+        attempts.push({ method: "run", exe: exes[i] });
+    }
+    for (i = 0; i < exes.length; i++) {
+        attempts.push({ method: "exec", exe: exes[i] });
+    }
+    attempts.push({ method: "shell", exe: exes[0] });
+    for (i = 0; i < attempts.length; i++) {
+        try {
+            startProcessHidden(attempts[i].method, attempts[i].exe, args);
+            if (errors.length) {
+                log("PowerShellは " + LAUNCH_METHOD_NAMES[attempts[i].method] + " で起動したキュン（ほかの方法: " + errors.join(" / ") + "）", "warn");
+            }
+            return { ok: true, attempt: attempts[i] };
+        } catch (e) {
+            errors.push(LAUNCH_METHOD_NAMES[attempts[i].method] + "(" + fileNameOf(attempts[i].exe) + "): " + errorText(e));
+        }
+    }
+    return { ok: false, message: errors.join(" / ") };
+}
+
+// Start any command line; falls back to ShellExecute when WScript.Shell.Run is refused
+function splitCommandLine(cmd) {
+    cmd = trimText(cmd);
+    var m = cmd.match(/^"([^"]*)"\s*([\s\S]*)$/) || cmd.match(/^(\S+)\s*([\s\S]*)$/);
+    return m ? { file: m[1], args: m[2] } : { file: cmd, args: "" };
+}
+
+function runCommand(cmd, windowStyle) {
+    try {
+        shell.Run(cmd, windowStyle, false);
+        return "run";
+    } catch (e1) {
+        var parts = splitCommandLine(cmd);
+        try {
+            new ActiveXObject("Shell.Application").ShellExecute(parts.file, parts.args, "", "open", windowStyle);
+            return "shell";
+        } catch (e2) {
+            throw new Error("Run: " + errorText(e1) + " / ShellExecute: " + errorText(e2));
+        }
+    }
+}
+
+function openFolderSelect(path) {
+    try {
+        runCommand("explorer.exe /select,\"" + path + "\"", 1);
+    } catch (e) {
+        log("フォルダを開けなかったキュン…（" + errorText(e) + "）", "warn");
+    }
 }
 
 // onDone(ok, payload): script must call  Set-FujiResult 'OK[:payload]'  or  'NG:message'
@@ -3006,11 +3094,16 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
     }
     pendingTempFiles.push(ps1, resultPath, resultPath + ".part");
     // iex reads the script text, so a restricted execution policy for .ps1 files does not block it
-    var cmd = powershellExe() + " -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
-    try {
-        shell.Run(cmd, 0, false);
-    } catch (e2) {
-        onDone(false, "PowerShellを起動できなかった（" + errorText(e2) + "）");
+    if (psLaunchBlocked) {
+        onDone(false, "この端末ではPowerShellを起動できないみたい（さっき全部の方法で失敗したよ。🩺環境チェックでもう一度確かめられるよ）");
+        return;
+    }
+    var args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
+    var launched = launchPowerShell(args);
+    if (!launched.ok) {
+        psLaunchBlocked = true;
+        psLastFailed = true;
+        onDone(false, "PowerShellを起動できなかった（" + launched.message + "）");
         return;
     }
     var waited = 0;
@@ -3032,6 +3125,8 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
             }
             deleteFileQuietly(ps1);
             deleteFileQuietly(resultPath);
+            psPreferredLaunch = launched.attempt;
+            psLastFailed = false;
             if (text.indexOf("OK") === 0) {
                 onDone(true, text.substring(3));
             } else {
@@ -3041,6 +3136,7 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
         }
         waited += 200;
         if (waited >= limit) {
+            psLastFailed = true;
             onDone(false, "PowerShellの応答が" + timeoutSec + "秒以内に返ってこなかった");
             return;
         }
@@ -3317,6 +3413,10 @@ function playAlarm(force) {
         return;
     }
     log("🔔 アラームを鳴らすキュン！", "warn");
+    if (psLastFailed || psLaunchBlocked) {
+        playAlarmFallback();
+        return;
+    }
     // 1st choice (spec): PowerShell SoundPlayer. 'OK' is reported once the WAV is loaded, then it plays 3 times.
     runPowerShellAsync([
         "$wav = " + psQuote(ALARM_WAV_PATH),
@@ -3427,8 +3527,21 @@ function runDiagnostics() {
     if (!wmpOk && !sapiOk) {
         hints.push("PowerShellが使えない場合、アラームを鳴らす予備手段がないよ。画面のログで異常を確認してね。");
     }
-    var psPath = shell ? powershellExe() : "";
-    add(psPath.indexOf("\\") >= 0, "PowerShell本体", psPath || "（未確認）");
+    if (shell && fso) {
+        psLaunchBlocked = false;
+        var exes = powershellCandidates();
+        add(exes.length > 1, "PowerShell本体", exes.join(" ／ "));
+        add(true, "HTA（mshta.exe）の種類", fso.FolderExists(expandEnv("%SystemRoot%\\Sysnative")) ? "32ビット版で動作中" : "64ビット版で動作中");
+        try {
+            shell.Run(quoteExe(expandEnv("%ComSpec%")) + " /c exit", 0, false);
+            add(true, "プログラムの起動（WScript.Shell.Run）", "cmd.exe を起動できた");
+        } catch (eRun) {
+            add(false, "プログラムの起動（WScript.Shell.Run）", "cmd.exe … " + errorText(eRun));
+            hints.push("WScript.Shell.Run でプログラムを起動できないよ（" + errorText(eRun) + "）。ウイルス対策・EDRなどのセキュリティ製品や組織のポリシーが、HTA（mshta.exe）からのプログラム起動を止めている可能性があるキュン。\n" +
+                "→ ふじキュンは Exec・ShellExecute でも起動を試すよ。下の「PowerShellの起動・実行」の結果を見てね。\n" +
+                "→ RUN コマンドも ShellExecute で代わりに起動を試すよ。");
+        }
+    }
     showDiagnostics(items, hints, "⏳ PowerShellで使える機能を確認中…（最大60秒）");
     if (!shell || !fso) {
         showDiagnostics(items, hints, "");
@@ -3460,7 +3573,8 @@ function runDiagnostics() {
                 map[lines[i].substring(0, pos)] = lines[i].substring(pos + 1);
             }
         }
-        add(true, "PowerShellの起動・実行", "バージョン " + (map.PSVERSION || "?"));
+        add(true, "PowerShellの起動・実行", "バージョン " + (map.PSVERSION || "?") +
+            (psPreferredLaunch ? " ／ 起動方法: " + LAUNCH_METHOD_NAMES[psPreferredLaunch.method] + "（" + psPreferredLaunch.exe + "）" : ""));
         add(map.LANGMODE === "FullLanguage", "PowerShellの言語モード", map.LANGMODE || "?");
         if (map.LANGMODE && map.LANGMODE !== "FullLanguage") {
             hints.push("PowerShellが制限モード（" + map.LANGMODE + "）だよ。C#を使う CLICK_POS・CLICK_IMG・SCREENSHOT は動かない可能性が高いキュン。キーボード操作（KEY・TEXT・CSV）中心で組んでね。");
@@ -3556,7 +3670,7 @@ function exportErrorRows() {
         log("↓ エラー行 " + errorRows.length + "件を「" + path + "」に保存したキュン♡", "ok");
         showChoice("↓ エラー行のCSV保存", "保存したキュン♡\n" + path + "\n\n元データの列はそのままの並びで、右端に「元データ行No・エラー内容・発生日時」を付けたよ。\nこのCSVを読み込めば、エラー行だけ再実行できるキュン。", [
             { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
-                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+                openFolderSelect(path);
             } },
             { text: "閉じる", fn: null }
         ]);
@@ -3642,7 +3756,7 @@ function exportResultRows() {
         log("↓ 実行結果 " + resultRows.length + "件を「" + path + "」に保存したキュン♡", "ok");
         showChoice("↓ 実行結果CSV", "保存したキュン♡\n" + path + "\n\n元データの右に、COPY_SAVEで記録した値・実行結果（完了／スキップ／エラー／中断）・備考を付けたよ。Excelで開いてフィルターすると便利だよ。", [
             { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
-                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+                openFolderSelect(path);
             } },
             { text: "閉じる", fn: null }
         ]);
@@ -3670,7 +3784,7 @@ function exportMacro() {
         log("📤 マクロ「" + macro.name + "」を書き出したキュン: " + path, "ok");
         showChoice("📤 マクロの書き出し", "書き出したキュン♡\n" + path + "\n\nこのファイルを同僚に渡して［📥 取込］してもらえば、同じマクロが使えるよ。", [
             { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
-                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+                openFolderSelect(path);
             } },
             { text: "閉じる", fn: null }
         ]);
@@ -4111,8 +4225,8 @@ function executeStep(step, next) {
         return;
     case "RUN":
         try {
-            shell.Run(val, 1, false);
-            log("🚀 起動: " + val, "info");
+            var how = runCommand(val, 1);
+            log("🚀 起動: " + val + (how === "shell" ? "（ShellExecuteで起動）" : ""), "info");
             next("next");
         } catch (e) {
             stopWithError("🚨 起動できなかったキュン: " + val + "（" + errorText(e) + "）", true);
