@@ -411,6 +411,61 @@ input[type="text"], select, textarea {
     cursor: pointer;
 }
 .pick-list li:hover { background: #e8f3fe; border-color: #2196f3; }
+.block.disabled { opacity: 0.45; }
+.block.disabled .step-label,
+.block.disabled .group-name { text-decoration: line-through; }
+.off-tag, .when-tag {
+    margin: 0 6px 0 0;
+    padding: 0 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #ffffff;
+    background: #9e9e9e;
+}
+.when-tag { margin-left: 8px; background: #7e57c2; }
+.ph-select { margin-top: 3px; max-width: 96%; }
+.modal.wide { width: 900px; }
+.tpl-toolbar { margin-bottom: 6px; }
+.tpl-cat {
+    margin: 12px 0 4px 0;
+    padding-bottom: 2px;
+    border-bottom: 2px solid #f3d3e2;
+    color: #ad1457;
+    font-weight: bold;
+    font-size: 14px;
+}
+.tpl-card {
+    margin: 6px 0;
+    padding: 6px 10px;
+    border: 1px solid #eadde4;
+    border-radius: 6px;
+    background: #fffafd;
+}
+.tpl-head {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-align: center;
+    align-items: center;
+}
+.tpl-name { -ms-flex: 1 1 auto; flex: 1 1 auto; font-weight: bold; color: #4a2340; }
+.tpl-level {
+    margin-right: 6px;
+    padding: 1px 7px;
+    border-radius: 9px;
+    font-size: 11px;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+.tpl-level.lv2 { background: #fff3e0; color: #e65100; }
+.tpl-level.lv3 { background: #fce4ec; color: #ad1457; }
+.tpl-new { margin-right: 6px; padding: 1px 6px; border-radius: 9px; font-size: 11px; background: #fff59d; color: #6d4c00; }
+.tpl-desc { margin-top: 3px; font-size: 12px; line-height: 1.6; color: #4a3f47; }
+.tpl-meta { margin-top: 2px; font-size: 11px; color: #8a7d85; }
+.diag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.diag-table td { padding: 4px 6px; border-bottom: 1px solid #f0e6ec; vertical-align: top; }
+.diag-ok { color: #2e7d32; font-weight: bold; white-space: nowrap; }
+.diag-ng { color: #c62828; font-weight: bold; white-space: nowrap; }
+.diag-hint { margin-top: 8px; padding: 6px 8px; background: #fff8e1; border-left: 3px solid #ffb300; line-height: 1.7; white-space: pre-wrap; }
 .img-capture-row { margin-top: 5px; }
 .img-preview { margin-top: 4px; }
 .img-preview img {
@@ -440,6 +495,9 @@ input[type="text"], select, textarea {
             <button class="btn" onclick="renameMacro()">✎ 名前変更</button>
             <button class="btn" onclick="duplicateMacro()">⧉ 複製</button>
             <button class="btn btn-danger-lite" onclick="deleteMacro()">🗑 削除</button>
+            <button class="btn btn-primary" onclick="showTemplateGallery()" title="Excel・Word・起案・財務会計などのお手本マクロから作ります">📚 テンプレート</button>
+            <button class="btn" onclick="exportMacro()" title="選択中のマクロを1つのJSONファイルに書き出します（同僚との共有に）">📤 書出</button>
+            <span class="file-btn-wrap"><button class="btn" tabindex="-1" title="書き出したマクロJSONを取り込みます">📥 取込</button><input type="file" id="macroImportInput" accept=".json" onchange="importMacroFile(this)"></span>
             <span class="field-label">対象ウィンドウ</span>
             <input type="text" id="targetWindowInput" class="input-md" placeholder="例: GPRIME" onchange="onTargetWindowChange()"
                    title="タイトルバーの文字（完全一致→前方一致→後方一致の順で探します）">
@@ -474,6 +532,7 @@ input[type="text"], select, textarea {
             <button class="btn" onclick="moveSelected(-1)" title="選択ブロックを上へ (Alt+↑)">▲</button>
             <button class="btn" onclick="moveSelected(1)" title="選択ブロックを下へ (Alt+↓)">▼</button>
             <button class="btn" onclick="duplicateSelected()" title="選択ブロックを複製 (Ctrl+D)">⧉ 複製</button>
+            <button class="btn" onclick="toggleDisabledSelected()" title="選択ブロックを一時的に無効化／有効化（実行時に飛ばします） (Ctrl+/)">⊘ 無効化</button>
             <button class="btn" onclick="setAllCollapsed(false)" title="すべてのグループを展開">▼ 全展開</button>
             <button class="btn" onclick="setAllCollapsed(true)" title="すべてのグループを折りたたみ">▶ 全折りたたみ</button>
             <span class="insert-hint" id="insertHint"></span>
@@ -495,7 +554,10 @@ input[type="text"], select, textarea {
             <label class="chk"><input type="checkbox" id="alarmCheck" checked> アラーム音</label>
             <button class="btn" onclick="playAlarm(true)" title="アラーム音をテスト再生">🔔</button>
             <label class="chk" title="ONにすると入力系コマンドの前に毎回、対象ウィンドウを前面化して確認します"><input type="checkbox" id="safeModeCheck"> 毎ステップ前面化</label>
+            <label class="chk" title="全行おわったら完了の音を鳴らします"><input type="checkbox" id="notifyCheck" checked> 完了音</label>
             <button class="btn" id="exportErrorBtn" onclick="exportErrorRows()">↓ エラー行をCSV保存 (0)</button>
+            <button class="btn" id="exportResultBtn" onclick="exportResultRows()" title="各行の実行結果と、COPY_SAVEで記録した値をCSVに保存します">↓ 実行結果CSV (0)</button>
+            <button class="btn" onclick="runDiagnostics()" title="PowerShell・音・クリップボードなど、この端末で使える機能を調べます">🩺 環境チェック</button>
             <span class="spacer"></span>
             <span class="progress" id="progressText">待機中キュン♡</span>
         </div>
@@ -505,7 +567,7 @@ input[type="text"], select, textarea {
 
 <!-- ===== Modal dialog ===== -->
 <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
+    <div class="modal" id="modalBox">
         <div class="modal-title" id="modalTitle"></div>
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-footer" id="modalFooter"></div>
@@ -535,6 +597,13 @@ var IMG_DEFAULT_THRESHOLD = 0.9;
 var IMG_COLOR_TOLERANCE = 24;   // per RGB channel (0-255)
 var IMG_SEARCH_RETRY = 3;       // screen captures per CLICK_IMG (1 second apart)
 var IMG_PS_TIMEOUT_SEC = 90;
+var RESULT_FILE_NAME = "gprime_result.csv";
+var SAMPLE_FOLDER_NAME = "samples";
+var EVIDENCE_FOLDER_NAME = "evidence";
+var EXPORT_FOLDER_NAME = "macro_export";
+var NOTIFY_WAV_PATH = "C:\\Windows\\Media\\tada.wav";
+var POWERSHELL_PATH = "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+var COPY_WAIT_MS = 400;
 
 // ----- Global state -----
 var shell = null;
@@ -557,6 +626,13 @@ var psSeq = 0;
 var pendingTempFiles = [];
 var lastWindowTitles = [];
 var focusCheckTrusted = true;
+var resultRows = [];
+var resultColumns = [];
+var alarmPlayer = null;
+var notifyPlayer = null;
+var alarmVoice = null;
+var modalDismissFn = null;
+var psExeCache = "";
 
 // =====================================================================
 //  Utilities
@@ -682,6 +758,58 @@ function normalizeSendKeys(keys) {
         var n = count ? parseInt(count, 10) : 1;
         return new Array(n + 1).join(" ");
     });
+}
+
+// COM errors may come with an empty message: always show the HRESULT too
+function errorText(e) {
+    if (!e) {
+        return "不明なエラー";
+    }
+    var msg = e["message"] || e["description"] || "";
+    var code = typeof e.number === "number" && e.number !== 0 ? " [0x" + (e.number >>> 0).toString(16).toUpperCase() + "]" : "";
+    return (msg || "詳細不明") + code;
+}
+
+function safeFileName(s) {
+    var name = trimText(String(s == null ? "" : s).replace(/[\\\/:*?"<>|\r\n\t]/g, "_"));
+    return name.length > 80 ? name.substring(0, 80) : name;
+}
+
+function dateStamp(d) {
+    d = d || new Date();
+    return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate());
+}
+
+function timeStamp(d) {
+    d = d || new Date();
+    return dateStamp(d) + "_" + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+}
+
+function ensureFolder(path) {
+    if (!fso.FolderExists(path)) {
+        var parent = fso.GetParentFolderName(path);
+        if (parent && !fso.FolderExists(parent)) {
+            ensureFolder(parent);
+        }
+        fso.CreateFolder(path);
+    }
+    return path;
+}
+
+// Japanese era (only the eras a clerk will meet in practice)
+function warekiOf(d) {
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var era;
+    var ey;
+    if (y > 2019 || (y === 2019 && m >= 5)) {
+        era = "令和"; ey = y - 2018;
+    } else if (y > 1989 || (y === 1989 && (m > 1 || d.getDate() >= 8))) {
+        era = "平成"; ey = y - 1988;
+    } else {
+        era = "昭和"; ey = y - 1925;
+    }
+    return era + (ey === 1 ? "元" : String(ey)) + "年";
 }
 
 function fileNameOf(path) {
@@ -959,6 +1087,111 @@ function csvHeaderName(col) {
 }
 
 // =====================================================================
+//  Placeholders  {{1}} {{列名}} {{ROW}} {{ROW+1}} {{TODAY}} {{WAREKI}} {{COPY:項目}} ...
+// =====================================================================
+var PLACEHOLDER_HELP = [
+    ["{{ROW}}", "CSVの行番号（1始まり）"],
+    ["{{ROW+1}}", "行番号＋1（Excelの見出し行ぶんずらす時に）"],
+    ["{{TODAY}}", "今日 2026/09/30 形式"],
+    ["{{TODAY_JP}}", "今日 2026年9月30日 形式"],
+    ["{{WAREKI}}", "今日 令和8年9月30日 形式"],
+    ["{{WAREKI_YEAR}}", "令和8年 形式"],
+    ["{{YYYYMMDD}}", "今日 20260930 形式"],
+    ["{{NOW}}", "いまの時刻 14:05 形式"],
+    ["{{TIMESTAMP}}", "20260930_140512 形式（ファイル名向け）"],
+    ["{{YEAR}}", "西暦の年"],
+    ["{{MONTH}}", "月"],
+    ["{{DAY}}", "日"]
+];
+
+function currentRowForPlaceholders(rs) {
+    return rs && rs.rows && rs.rows[rs.rowPos] ? rs.rows[rs.rowPos] : { no: 0, data: [] };
+}
+
+function placeholderValue(key, rs) {
+    var d = new Date();
+    var row = currentRowForPlaceholders(rs);
+    var up = key.toUpperCase();
+    var m;
+    var i;
+    if (/^\d+$/.test(key)) {
+        var col = toInt(key, 0);
+        return col >= 1 && col <= row.data.length ? String(row.data[col - 1]) : "";
+    }
+    if ((m = up.match(/^ROW\s*([+\-])\s*(\d+)$/))) {
+        return String(row.no + (m[1] === "+" ? 1 : -1) * toInt(m[2], 0));
+    }
+    if (up.indexOf("COPY:") === 0) {
+        var name = trimText(key.substring(5));
+        return rs && rs.captured && rs.captured.hasOwnProperty(name) ? rs.captured[name] : "";
+    }
+    switch (up) {
+    case "ROW": return String(row.no);
+    case "TODAY": return d.getFullYear() + "/" + pad2(d.getMonth() + 1) + "/" + pad2(d.getDate());
+    case "TODAY_JP": return d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    case "WAREKI": return warekiOf(d) + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    case "WAREKI_YEAR": return warekiOf(d);
+    case "YYYYMMDD": return dateStamp(d);
+    case "NOW": return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    case "TIMESTAMP": return timeStamp(d);
+    case "YEAR": return String(d.getFullYear());
+    case "MONTH": return String(d.getMonth() + 1);
+    case "DAY": return String(d.getDate());
+    }
+    if (csvState.header) {
+        for (i = 0; i < csvState.header.length; i++) {
+            if (trimText(csvState.header[i]) === key) {
+                return i < row.data.length ? String(row.data[i]) : "";
+            }
+        }
+    }
+    return null;
+}
+
+function expandPlaceholders(text, rs) {
+    return String(text == null ? "" : text).replace(/\{\{([^{}]+)\}\}/g, function (all, rawKey) {
+        var v = placeholderValue(trimText(rawKey), rs);
+        if (v === null) {
+            log("⚠ 差し込み " + all + " が何か分からなかったから、そのままにしたキュン（列名のつづりを確認してね）", "warn");
+            return all;
+        }
+        return v;
+    });
+}
+
+// Choices for the "差し込み ▼" helper in the editor
+function placeholderChoices() {
+    var list = [];
+    var cols = csvMaxColumns();
+    var i;
+    for (i = 1; i <= cols; i++) {
+        var name = csvHeaderName(i);
+        list.push([name ? "{{" + name + "}}" : "{{" + i + "}}", "CSV " + i + "列目" + (name ? "「" + name + "」" : "")]);
+    }
+    if (cols === 0) {
+        list.push(["{{1}}", "CSV 1列目（{{2}}なら2列目…／見出し名 {{氏名}} でもOK）"]);
+    }
+    var steps = currentSteps();
+    var seen = {};
+    for (i = 0; i < steps.length; i++) {
+        if (steps[i].cmd === "COPY_SAVE" && !seen[steps[i].val]) {
+            seen[steps[i].val] = true;
+            list.push(["{{COPY:" + steps[i].val + "}}", "コピーした値「" + steps[i].val + "」"]);
+        }
+    }
+    return list.concat(PLACEHOLDER_HELP);
+}
+
+function insertPlaceholder(select, inputId) {
+    var el = byId(inputId);
+    if (el && select.value !== "") {
+        el.value += select.value;
+        try { el.focus(); } catch (e) { /* ignore */ }
+    }
+    select.selectedIndex = 0;
+}
+
+// =====================================================================
 //  Command definitions
 // =====================================================================
 var KEY_PRESETS = [
@@ -978,6 +1211,14 @@ var KEY_PRESETS = [
     ["{PGUP}", "PageUpキー"],
     ["{PGDN}", "PageDownキー"],
     ["{F5}", "F5キー"],
+    ["{F12}", "名前を付けて保存 (F12)"],
+    ["^{HOME}", "先頭へ (Ctrl+Home)"],
+    ["^{END}", "末尾へ (Ctrl+End)"],
+    ["^g", "ジャンプ (Ctrl+G)"],
+    ["^h", "置換 (Ctrl+H)"],
+    ["^n", "新規作成 (Ctrl+N)"],
+    ["^w", "閉じる (Ctrl+W)"],
+    ["^l", "アドレスバーへ (Ctrl+L)"],
     ["^a", "全選択 (Ctrl+A)"],
     ["^c", "コピー (Ctrl+C)"],
     ["^v", "貼り付け (Ctrl+V)"],
@@ -996,7 +1237,7 @@ function keyDisplayName(key) {
     return String(key);
 }
 
-var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "WAIT", "WAIT_FOR", "IF", "SWITCH", "RUN", "CLICK", "CLICK_POS", "CLICK_IMG", "GROUP_START", "COMMENT"];
+var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "COPY_SAVE", "WAIT", "WAIT_FOR", "IF", "CONFIRM", "SWITCH", "RUN", "CLICK", "CLICK_POS", "CLICK_IMG", "SCREENSHOT", "GROUP_START", "COMMENT"];
 
 var COMMAND_DEFS = {
     KEY: {
@@ -1010,8 +1251,8 @@ var COMMAND_DEFS = {
     },
     TEXT: {
         title: "文字列貼付", icon: "📝", category: "input", defaultVal: "",
-        help: "固定の文字列をクリップボード経由で貼り付けるよ（Ctrl+V）。日本語入力(IME)がONでも化けないキュン。",
-        fields: [{ id: "text", label: "入力する文字列", type: "textarea", raw: true }],
+        help: "文字列をクリップボード経由で貼り付けるよ（Ctrl+V）。日本語入力(IME)がONでも化けないキュン。{{氏名}} や {{1}} でCSVの値、{{WAREKI}} で今日の和暦…みたいに「差し込み」もできるよ♡",
+        fields: [{ id: "text", label: "入力する文字列（差し込み可）", type: "textarea", raw: true, placeholders: true }],
         parse: function (val) { return { text: val }; },
         compose: function (v) { return v.text; },
         validate: function (v) { return v.text === "" ? "文字列を入力してね♡" : ""; },
@@ -1059,18 +1300,53 @@ var COMMAND_DEFS = {
     },
     IF: {
         title: "条件分岐（異常検知）", icon: "⚠", category: "flow", defaultVal: ",{ENTER},STOP",
-        help: "指定タイトルのウィンドウが今出ているか即チェック！出ていたらキーを押して、STOPなら大音量アラームで緊急停止、SKIPならこのCSV行を打ち切って次の行へ進むキュン。",
+        help: "指定タイトルのウィンドウが今出ているか即チェック！出ていたらキーを押して、STOPなら大音量アラームで緊急停止、SKIPならこのCSV行を打ち切って次の行へ、CONTINUEならそのまま続行（ときどき出るお知らせを閉じるのに便利）だキュン。",
         fields: [
             { id: "title", label: "検知するウィンドウのタイトル（一部）", type: "text", placeholder: "例: エラー" },
             { id: "key", label: "検知したら押すキー（空欄なら押さない）", type: "keypreset", placeholder: "{ENTER}" },
-            { id: "mode", label: "検知したときの動き", type: "select", options: [["STOP", "STOP：アラーム＋緊急停止"], ["SKIP", "SKIP：この行を打ち切って次の行へ"]] }
+            { id: "mode", label: "検知したときの動き", type: "select", options: [["STOP", "STOP：アラーム＋緊急停止"], ["SKIP", "SKIP：この行を打ち切って次の行へ"], ["CONTINUE", "CONTINUE：キーを押して、そのまま続行"]] }
         ],
-        parse: function (val) { var p = splitParams(val, 3); return { title: p[0], key: p[1], mode: (p[2] || "STOP").toUpperCase() }; },
-        compose: function (v) { return v.title + "," + v.key + "," + (v.mode === "SKIP" ? "SKIP" : "STOP"); },
+        parse: function (val) { var p = splitParams(val, 3); return { title: p[0], key: p[1], mode: normalizeIfMode(p[2]) }; },
+        compose: function (v) { return v.title + "," + v.key + "," + normalizeIfMode(v.mode); },
         validate: function (v) { return v.title === "" ? "検知するウィンドウのタイトルを入れてね♡" : ""; },
         autoLabel: function (val) {
             var p = splitParams(val, 3);
-            return "もし「" + p[0] + "」が出たら" + (p[1] ? keyDisplayName(p[1]) + "→" : "") + (String(p[2]).toUpperCase() === "SKIP" ? "行スキップ" : "緊急停止");
+            var mode = normalizeIfMode(p[2]);
+            return "もし「" + p[0] + "」が出たら" + (p[1] ? keyDisplayName(p[1]) + "→" : "") +
+                (mode === "SKIP" ? "行スキップ" : mode === "CONTINUE" ? "そのまま続行" : "緊急停止");
+        }
+    },
+    CONFIRM: {
+        title: "確認ポイント（人が確認）", icon: "✋", category: "flow", defaultVal: "内容を確認してね。よければ［▶ 続行］を押してね♡",
+        help: "ロボットをいったん止めて、メッセージを出して人の確認を待つキュン。［続行］［この行をスキップ］［停止］を選べるよ。登録ボタンを押す前の最終チェックや、カーソル位置を手で合わせたい時に使ってね。{{氏名}} などの差し込みもできるよ。",
+        fields: [{ id: "message", label: "表示するメッセージ（差し込み可）", type: "textarea", raw: true, placeholders: true }],
+        parse: function (val) { return { message: val }; },
+        compose: function (v) { return v.message; },
+        validate: function (v) { return trimText(v.message) === "" ? "メッセージを入れてね♡" : ""; },
+        autoLabel: function (val) { return "確認: " + truncateText(val, 30); }
+    },
+    COPY_SAVE: {
+        title: "値をコピーして記録", icon: "📋", category: "input", defaultVal: "取得値",
+        help: "いま選択されている文字を Ctrl+C でコピーして、「項目名」で記録するキュン。記録した値は［↓ 実行結果CSV］に列として出るし、あとのTEXTで {{COPY:項目名}} として貼り付けもできるよ。直前に KEY ^a（全選択）を入れると確実だよ。",
+        fields: [{ id: "name", label: "項目名（実行結果CSVの列名になるよ）", type: "text", placeholder: "例: 伝票番号" }],
+        parse: function (val) { return { name: val }; },
+        compose: function (v) { return v.name; },
+        validate: function (v) { return v.name === "" ? "項目名を入れてね♡" : /[{}:,]/.test(v.name) ? "項目名に { } : , は使えないキュン" : ""; },
+        autoLabel: function (val) { return "コピーして「" + val + "」に記録"; }
+    },
+    SCREENSHOT: {
+        title: "画面を撮影して保存", icon: "📸", category: "window", defaultVal: "証跡_{{ROW}},WINDOW",
+        help: "画面をPNGで保存するキュン（証跡・エビデンス用）。保存先は HTAのフォルダ\\" + EVIDENCE_FOLDER_NAME + "\\日付\\ だよ。ファイル名には {{ROW}} や {{氏名}} を差し込めて、最後に時刻が自動で付くよ。",
+        fields: [
+            { id: "name", label: "ファイル名（差し込み可・拡張子なし）", type: "text", placeholder: "証跡_{{ROW}}", placeholders: true },
+            { id: "scope", label: "撮る範囲", type: "select", options: [["WINDOW", "いま前面のウィンドウだけ"], ["FULL", "画面全体（全モニター）"]] }
+        ],
+        parse: function (val) { var p = splitParams(val, 2); return { name: p[0], scope: String(p[1]).toUpperCase() === "FULL" ? "FULL" : "WINDOW" }; },
+        compose: function (v) { return v.name + "," + (v.scope === "FULL" ? "FULL" : "WINDOW"); },
+        validate: function (v) { return v.name === "" ? "ファイル名を入れてね♡" : ""; },
+        autoLabel: function (val) {
+            var p = splitParams(val, 2);
+            return "画面を撮影「" + truncateText(p[0], 20) + "」（" + (String(p[1]).toUpperCase() === "FULL" ? "全体" : "ウィンドウ") + "）";
         }
     },
     SWITCH: {
@@ -1084,8 +1360,8 @@ var COMMAND_DEFS = {
     },
     RUN: {
         title: "アプリ起動", icon: "🚀", category: "window", defaultVal: "notepad.exe",
-        help: "外部アプリを起動するよ。例: notepad.exe / calc.exe / \"C:\\Program Files\\App\\app.exe\" /option",
-        fields: [{ id: "path", label: "アプリのパス／コマンド", type: "text", placeholder: "notepad.exe" }],
+        help: "外部アプリやファイルを開くよ。例: notepad.exe / \"C:\\RPA作業\\台帳.xlsx\" / cmd /c mkdir \"C:\\RPA作業\\{{1}}\"（差し込み可）。スペースを含むパスは \" \" で囲んでね。",
+        fields: [{ id: "path", label: "アプリのパス／コマンド（差し込み可）", type: "text", placeholder: "notepad.exe", placeholders: true }],
         parse: function (val) { return { path: val }; },
         compose: function (v) { return v.path; },
         validate: function (v) { return v.path === "" ? "起動するアプリを入れてね♡" : ""; },
@@ -1136,8 +1412,11 @@ var COMMAND_DEFS = {
     },
     GROUP_START: {
         title: "グループ", icon: "📁", category: "group", defaultVal: "新しいグループ",
-        help: "コマンドをまとめるグループだよ。追加すると「グループ開始〜グループ終了」がセットで入るキュン。左の▼/▶で折りたためるよ。",
-        fields: [{ id: "name", label: "グループ表示名", type: "text", placeholder: "例: 基本情報の入力" }],
+        help: "コマンドをまとめるグループだよ。追加すると「グループ開始〜グループ終了」がセットで入るキュン。左の▼/▶で折りたためるよ。「実行タイミング」を変えると、アプリ起動などの準備を最初の1行だけ、保存などの後片付けを最後の1行だけにできるよ。",
+        fields: [
+            { id: "name", label: "グループ表示名", type: "text", placeholder: "例: 基本情報の入力" },
+            { id: "when", label: "実行タイミング", type: "select", prop: true, options: [["", "毎行（ふつう）"], ["first", "最初の1行だけ（準備・アプリ起動など）"], ["last", "最後の1行だけ（保存・後片付けなど）"]] }
+        ],
         parse: function (val) { return { name: val }; },
         compose: function (v) { return v.name; },
         validate: function (v) { return v.name === "" ? "グループ名を入れてね♡" : ""; },
@@ -1169,7 +1448,23 @@ function autoLabelFor(step) {
 }
 
 function isExecutableStep(step) {
-    return step.cmd !== "COMMENT" && step.cmd !== "GROUP_START" && step.cmd !== "GROUP_END";
+    return !step.disabled && step.cmd !== "COMMENT" && step.cmd !== "GROUP_START" && step.cmd !== "GROUP_END";
+}
+
+function normalizeIfMode(mode) {
+    mode = String(mode || "").toUpperCase();
+    return mode === "SKIP" || mode === "CONTINUE" ? mode : "STOP";
+}
+
+// Extra per-step properties stored beside cmd/val/label
+function propFields(def) {
+    var list = [];
+    for (var i = 0; i < def.fields.length; i++) {
+        if (def.fields[i].prop) {
+            list.push(def.fields[i]);
+        }
+    }
+    return list;
 }
 
 // =====================================================================
@@ -1204,6 +1499,12 @@ function normalizeData(obj) {
                 cmd = "COMMENT";
             }
             var step = { cmd: cmd, val: val, label: s.label == null ? "" : String(s.label) };
+            if (cmd === "GROUP_START" && (s.when === "first" || s.when === "last")) {
+                step.when = s.when;
+            }
+            if (s.disabled === true) {
+                step.disabled = true;
+            }
             if (!step.label) {
                 step.label = autoLabelFor(step);
             }
@@ -1264,7 +1565,7 @@ function loadJsonFile(path) {
     try {
         return JSON.parse(readTextFile(path, "utf-8"));
     } catch (e) {
-        log("「" + path + "」を読めなかったキュン…（" + e.message + "）", "error");
+        log("「" + path + "」を読めなかったキュン…（" + errorText(e) + "）", "error");
         return null;
     }
 }
@@ -1276,7 +1577,7 @@ function discardTempFile() {
         fso.DeleteFile(appFilePath(TEMP_FILE_NAME), true);
         log("一時ファイルは「" + DISCARDED_TEMP_FILE_NAME + "」に退避しておいたキュン", "info");
     } catch (e) {
-        log("一時ファイルの退避に失敗…（" + e.message + "）", "warn");
+        log("一時ファイルの退避に失敗…（" + errorText(e) + "）", "warn");
     }
 }
 
@@ -1321,7 +1622,7 @@ function autoSaveTemp() {
     try {
         writeTextFile(appFilePath(TEMP_FILE_NAME), serializeData(), false);
     } catch (e) {
-        log("一時ファイルへの自動保存に失敗したキュン…（" + e.message + "）", "error");
+        log("一時ファイルへの自動保存に失敗したキュン…（" + errorText(e) + "）", "error");
     }
 }
 
@@ -1337,8 +1638,8 @@ function saveProduction() {
         updateSaveState();
         log("💾 本番ファイル「" + MACRO_FILE_NAME + "」に保存したキュン♡（一時ファイルは削除したよ）", "ok");
     } catch (e) {
-        log("本番ファイルの保存に失敗したキュン…（" + e.message + "）", "error");
-        showMessage("保存エラー", "本番ファイルに保存できなかったキュン…\n" + e.message);
+        log("本番ファイルの保存に失敗したキュン…（" + errorText(e) + "）", "error");
+        showMessage("保存エラー", "本番ファイルに保存できなかったキュン…\n" + errorText(e));
     }
 }
 
@@ -1656,7 +1957,10 @@ function setAllCollapsed(collapsed) {
 // =====================================================================
 function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
     var def = COMMAND_DEFS[step.cmd] || COMMAND_DEFS.COMMENT;
-    var cls = "block cat-" + def.category + (hidden ? " hidden" : "");
+    var cls = "block cat-" + def.category + (hidden ? " hidden" : "") + (step.disabled ? " disabled" : "");
+    var whenTag = step.when === "first" ? '<span class="when-tag">最初の1行だけ</span>' :
+        step.when === "last" ? '<span class="when-tag">最後の1行だけ</span>' : "";
+    var offTag = step.disabled ? '<span class="off-tag">無効</span>' : "";
     var toggle = step.cmd === "GROUP_START" ?
         '<span class="toggle" data-act="toggle" title="折りたたみ／展開">' + (step.collapsed ? "▶" : "▼") + "</span>" :
         '<span class="toggle-space"></span>';
@@ -1664,7 +1968,7 @@ function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
     if (step.cmd === "COMMENT") {
         main = '<span class="comment-text">// ' + escapeHtml(truncateText(step.val, 120)) + "</span>";
     } else if (step.cmd === "GROUP_START") {
-        main = '<span class="group-name">📁 ' + escapeHtml(step.val) + "</span>" +
+        main = '<span class="group-name">📁 ' + escapeHtml(step.val) + "</span>" + whenTag +
             (step.collapsed ? '<span class="collapsed-count">（' + hiddenCount + "件を折りたたみ中）</span>" : "");
     } else if (step.cmd === "GROUP_END") {
         main = '<span class="group-end-text">└ グループ終了</span>';
@@ -1676,7 +1980,7 @@ function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
         toggle +
         '<span class="step-no">' + (index + 1) + "</span>" +
         '<span class="badge">' + def.icon + " " + escapeHtml(step.cmd) + "</span>" +
-        '<span class="step-main">' + main + "</span>" +
+        '<span class="step-main">' + offTag + main + "</span>" +
         '<span class="actions">' +
         '<button class="icon-btn" data-act="edit" title="編集（ダブルクリックでもOK）">✎</button>' +
         '<button class="icon-btn icon-del" data-act="delete" title="削除 (Delete)">✕</button>' +
@@ -2087,6 +2391,14 @@ function editStep(index) {
     openStepEditor(step.cmd, step, function (updated) {
         step.val = updated.val;
         step.label = updated.label;
+        var props = propFields(COMMAND_DEFS[step.cmd]);
+        for (var i = 0; i < props.length; i++) {
+            if (updated[props[i].id]) {
+                step[props[i].id] = updated[props[i].id];
+            } else {
+                delete step[props[i].id];
+            }
+        }
         renderSteps();
         commitChange("編集: " + truncateText(updated.label, 24));
     });
@@ -2153,6 +2465,26 @@ function duplicateSelected() {
     commitChange("複製: " + truncateText(copies[0].label || copies[0].cmd, 24));
 }
 
+// A disabled step is kept but skipped at run time (a disabled GROUP_START skips the whole group)
+function toggleDisabledSelected() {
+    var steps = currentSteps();
+    if (guardRunning() || selectedIndex < 0 || selectedIndex >= steps.length) {
+        return;
+    }
+    var step = steps[selectedIndex];
+    if (step.cmd === "GROUP_END") {
+        log("グループ終了タグは無効化できないキュン。📁グループ開始の方を無効化すると、グループまるごと止まるよ", "warn");
+        return;
+    }
+    if (step.disabled) {
+        delete step.disabled;
+    } else {
+        step.disabled = true;
+    }
+    renderSteps();
+    commitChange((step.disabled ? "無効化: " : "有効化: ") + truncateText(step.label || step.cmd, 24));
+}
+
 // =====================================================================
 //  Modal dialog
 // =====================================================================
@@ -2161,9 +2493,13 @@ function isModalOpen() {
 }
 
 // buttons: [{ text, cls, fn }]  fn returning false keeps the dialog open
-function openModal(title, bodyHtml, buttons) {
+// opts: { wide: true, onDismiss: fn }  onDismiss runs when the dialog is closed with Esc
+function openModal(title, bodyHtml, buttons, opts) {
+    opts = opts || {};
     modalToken++;
     var token = modalToken;
+    modalDismissFn = opts.onDismiss || null;
+    byId("modalBox").className = opts.wide ? "modal wide" : "modal";
     byId("modalTitle").innerHTML = escapeHtml(title);
     byId("modalBody").innerHTML = bodyHtml;
     var footer = byId("modalFooter");
@@ -2200,8 +2536,17 @@ function makeModalHandler(i, token) {
     };
 }
 
+function dismissModal() {
+    var fn = modalDismissFn;
+    closeModal();
+    if (fn) {
+        fn();
+    }
+}
+
 function closeModal() {
     modalToken++;
+    modalDismissFn = null;
     byId("modalOverlay").style.display = "none";
     byId("modalBody").innerHTML = "";
     modalButtons = [];
@@ -2300,6 +2645,14 @@ function buildFieldHtml(field, value) {
     } else {
         html += '<input type="text" id="' + id + '" class="form-input" value="' + v + '"' + ph + ">";
     }
+    if (field.placeholders) {
+        var choices = placeholderChoices();
+        html += '<select class="ph-select" onchange="insertPlaceholder(this, \'' + id + '\')"><option value="">＋ 差し込みを追加 ▼</option>';
+        for (i = 0; i < choices.length; i++) {
+            html += '<option value="' + escapeHtml(choices[i][0]) + '">' + escapeHtml(choices[i][0] + "  " + choices[i][1]) + "</option>";
+        }
+        html += "</select>";
+    }
     if (field.hint) {
         html += '<div class="form-hint">' + escapeHtml(field.hint) + "</div>";
     }
@@ -2320,6 +2673,10 @@ function openStepEditor(cmd, step, onSave) {
     }
     var currentVal = step ? String(step.val) : def.defaultVal;
     var values = def.parse(currentVal);
+    var props = propFields(def);
+    for (var p = 0; p < props.length; p++) {
+        values[props[p].id] = step && step[props[p].id] ? step[props[p].id] : "";
+    }
     var customLabel = step && step.label && step.label !== def.autoLabel(currentVal) ? step.label : "";
     var html = '<div class="form-help">' + escapeHtml(def.help) + "</div>";
     for (var i = 0; i < def.fields.length; i++) {
@@ -2345,7 +2702,13 @@ function openStepEditor(cmd, step, onSave) {
             }
             var val = def.compose(v);
             var label = trimText(byId("fld_label").value);
-            onSave({ cmd: cmd, val: val, label: label || def.autoLabel(val) });
+            var result = { cmd: cmd, val: val, label: label || def.autoLabel(val) };
+            for (var q = 0; q < props.length; q++) {
+                if (v[props[q].id]) {
+                    result[props[q].id] = v[props[q].id];
+                }
+            }
+            onSave(result);
             return true;
         } },
         { text: "キャンセル", fn: null }
@@ -2404,7 +2767,7 @@ function loadCsvFromInput() {
         applyCsvHeaderOption();
         log("📥 CSVを読み込んだキュン♡ データ " + csvState.rows.length + "行（" + encodingLabel(res.encoding) + "）: " + path, "ok");
     } catch (e) {
-        log("CSVの読み込みに失敗したキュン…（" + e.message + "）", "error");
+        log("CSVの読み込みに失敗したキュン…（" + errorText(e) + "）", "error");
     }
 }
 
@@ -2560,7 +2923,7 @@ function captureImageAroundCursor() {
             fso.CreateFolder(folder);
         }
     } catch (e) {
-        if (status) { status.innerHTML = escapeHtml("保存フォルダを作れなかった…" + e.message); }
+        if (status) { status.innerHTML = escapeHtml("保存フォルダを作れなかった…" + errorText(e)); }
         return;
     }
     var d = new Date();
@@ -2598,6 +2961,20 @@ function tempFolder() {
     }
 }
 
+// Full path first: a bare "powershell.exe" fails when PATH is trimmed by policy
+function powershellExe() {
+    if (!psExeCache) {
+        var p = "";
+        try {
+            p = shell.ExpandEnvironmentStrings(POWERSHELL_PATH);
+        } catch (e) {
+            p = "";
+        }
+        psExeCache = p && fso && fso.FileExists(p) ? '"' + p + '"' : "powershell.exe";
+    }
+    return psExeCache;
+}
+
 // onDone(ok, payload): script must call  Set-FujiResult 'OK[:payload]'  or  'NG:message'
 function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
     psSeq++;
@@ -2624,16 +3001,16 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
         ts.Write(lines.join("\r\n"));
         ts.Close();
     } catch (e1) {
-        onDone(false, "PowerShellスクリプトを書き出せなかった（" + e1.message + "）");
+        onDone(false, "PowerShellスクリプトを書き出せなかった（" + errorText(e1) + "）");
         return;
     }
     pendingTempFiles.push(ps1, resultPath, resultPath + ".part");
     // iex reads the script text, so a restricted execution policy for .ps1 files does not block it
-    var cmd = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
+    var cmd = powershellExe() + " -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
     try {
         shell.Run(cmd, 0, false);
     } catch (e2) {
-        onDone(false, "PowerShellを起動できなかった（" + e2.message + "）");
+        onDone(false, "PowerShellを起動できなかった（" + errorText(e2) + "）");
         return;
     }
     var waited = 0;
@@ -2751,12 +3128,15 @@ function imageEngineScript() {
         "using System.Drawing.Imaging;",
         "using System.Runtime.InteropServices;",
         "public struct FujiImagePoint { public int X; public int Y; }",
+        "public struct FujiImageRect { public int Left; public int Top; public int Right; public int Bottom; }",
         "public static class FujiImage {",
         "    [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();",
         "    [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int index);",
         "    [DllImport(\"user32.dll\")] public static extern bool GetCursorPos(out FujiImagePoint p);",
         "    [DllImport(\"user32.dll\")] public static extern bool SetCursorPos(int x, int y);",
         "    [DllImport(\"user32.dll\")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);",
+        "    [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
+        "    [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr hWnd, out FujiImageRect r);",
         "    static int[] ReadPixels(Bitmap bmp) {",
         "        int w = bmp.Width, h = bmp.Height;",
         "        int[] px = new int[w * h];",
@@ -2868,6 +3248,21 @@ function imageEngineScript() {
         "        }",
         "        return p.X + \",\" + p.Y;",
         "    }",
+        "    public static string SaveScreenshot(string savePath, bool activeWindowOnly) {",
+        "        int x = GetSystemMetrics(76), y = GetSystemMetrics(77);",
+        "        int w = GetSystemMetrics(78), h = GetSystemMetrics(79);",
+        "        if (activeWindowOnly) {",
+        "            FujiImageRect r;",
+        "            IntPtr hWnd = GetForegroundWindow();",
+        "            if (hWnd != IntPtr.Zero && GetWindowRect(hWnd, out r) && r.Right > r.Left && r.Bottom > r.Top) {",
+        "                x = r.Left; y = r.Top; w = r.Right - r.Left; h = r.Bottom - r.Top;",
+        "            }",
+        "        }",
+        "        using (Bitmap bmp = CaptureRect(x, y, w, h)) {",
+        "            bmp.Save(savePath, ImageFormat.Png);",
+        "        }",
+        "        return w + \"x\" + h;",
+        "    }",
         "}",
         "\"@",
         // Physical pixels for both the screenshot and SetCursorPos (high-DPI safe)
@@ -2895,6 +3290,13 @@ function buildClickImgScript(path, threshold) {
     ]);
 }
 
+function buildScreenshotScript(savePath, fullScreen) {
+    return imageEngineScript().concat([
+        "$size = [FujiImage]::SaveScreenshot(" + psQuote(savePath) + ", $" + (fullScreen ? "false" : "true") + ")",
+        "Set-FujiResult ('OK:' + $size)"
+    ]);
+}
+
 function buildImageCaptureScript(savePath, w, h) {
     return imageEngineScript().concat([
         "Start-Sleep -Seconds 5",
@@ -2914,15 +3316,187 @@ function playAlarm(force) {
         log("ActiveXが使えないのでアラームを鳴らせないキュン…", "error");
         return;
     }
-    var wav = ALARM_WAV_PATH.replace(/'/g, "''");
-    var script = "if (Test-Path '" + wav + "') { for ($i = 0; $i -lt 3; $i++) { (New-Object System.Media.SoundPlayer '" + wav + "').PlaySync() } } " +
-        "else { for ($i = 0; $i -lt 3; $i++) { [System.Media.SystemSounds]::Hand.Play(); Start-Sleep -Milliseconds 700 } }";
+    log("🔔 アラームを鳴らすキュン！", "warn");
+    // 1st choice (spec): PowerShell SoundPlayer. 'OK' is reported once the WAV is loaded, then it plays 3 times.
+    runPowerShellAsync([
+        "$wav = " + psQuote(ALARM_WAV_PATH),
+        "if (-not (Test-Path -LiteralPath $wav)) { throw ('WAVファイルが無い: ' + $wav) }",
+        "$player = New-Object System.Media.SoundPlayer $wav",
+        "$player.Load()",
+        "Set-FujiResult 'OK'",
+        "for ($i = 0; $i -lt 3; $i++) { $player.PlaySync() }"
+    ], 15, function (ok, payload) {
+        if (!ok) {
+            log("PowerShellでは鳴らせなかったから、別の方法で鳴らすね（" + payload + "）", "warn");
+            playAlarmFallback();
+        }
+    });
+}
+
+// Fallbacks that need no child process: Windows Media Player control, then speech
+function playAlarmFallback() {
     try {
-        shell.Run("powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command \"" + script + "\"", 0, false);
-        log("🔔 アラームを鳴らしたキュン！", "warn");
-    } catch (e) {
-        log("アラームを鳴らせなかった…（" + e.message + "）", "error");
+        if (!alarmPlayer) {
+            alarmPlayer = new ActiveXObject("WMPlayer.OCX");
+        }
+        alarmPlayer.settings.volume = 100;
+        alarmPlayer.settings.playCount = 3;
+        alarmPlayer.URL = ALARM_WAV_PATH;
+        alarmPlayer.controls.play();
+        log("🔔 Windows Media Player部品でアラームを鳴らしたキュン", "warn");
+        return;
+    } catch (e1) {
+        log("WMPlayer.OCX も使えなかった（" + errorText(e1) + "）", "warn");
     }
+    try {
+        if (!alarmVoice) {
+            alarmVoice = new ActiveXObject("SAPI.SpVoice");
+        }
+        alarmVoice.Volume = 100;
+        alarmVoice.Speak("エラーが発生しました。ロボットを停止しました。確認してください。", 1); // 1 = SVSFlagsAsync
+        log("🔔 音声でお知らせしたキュン", "warn");
+        return;
+    } catch (e2) {
+        log("音声合成も使えなかった（" + errorText(e2) + "）", "warn");
+    }
+    log("🚨 この端末では音を鳴らす方法が見つからなかったキュン…🩺環境チェックで原因を確認してね", "error");
+}
+
+function playNotify() {
+    if (!byId("notifyCheck").checked) {
+        return;
+    }
+    try {
+        if (!notifyPlayer) {
+            notifyPlayer = new ActiveXObject("WMPlayer.OCX");
+        }
+        notifyPlayer.settings.volume = 80;
+        notifyPlayer.URL = NOTIFY_WAV_PATH;
+        notifyPlayer.controls.play();
+    } catch (e) {
+        /* the completion sound is a nicety; silence is fine */
+    }
+}
+
+// =====================================================================
+//  Environment diagnostics
+// =====================================================================
+function runDiagnostics() {
+    var items = [];
+    var hints = [];
+    function add(ok, name, detail) {
+        items.push({ ok: ok, name: name, detail: detail || "" });
+    }
+    function tryActiveX(progId, name) {
+        try {
+            new ActiveXObject(progId);
+            add(true, name, progId);
+            return true;
+        } catch (e) {
+            add(false, name, progId + " … " + errorText(e));
+            return false;
+        }
+    }
+    add(!!shell, "WScript.Shell（キー送信・起動）", shell ? "OK" : "作成できない");
+    add(!!fso, "FileSystemObject（ファイル読み書き）", fso ? "OK" : "作成できない");
+    if (!shell || !fso) {
+        hints.push("ActiveXが使えないよ。.hta をダブルクリックしてHTAとして起動してね（ブラウザで開くと動かない）。");
+    }
+    tryActiveX("ADODB.Stream", "ADODB.Stream（UTF-8の読み書き）");
+    if (fso && appDir) {
+        try {
+            var testPath = appFilePath("_fujikyun_write_test.tmp");
+            writeTextFile(testPath, "test", false);
+            fso.DeleteFile(testPath, true);
+            add(true, "作業フォルダへの書き込み", appDir);
+        } catch (e1) {
+            add(false, "作業フォルダへの書き込み", appDir + " … " + errorText(e1));
+            hints.push("HTAのあるフォルダに書き込めないよ。デスクトップやドキュメントなど、書き込めるフォルダにHTAを置いてね。");
+        }
+    }
+    try {
+        window.clipboardData.setData("Text", "fujikyun");
+        var clip = window.clipboardData.getData("Text");
+        add(clip === "fujikyun", "クリップボード（TEXT・CSV・COPY_SAVE）", clip === "fujikyun" ? "OK" : "読み書きの結果が一致しない");
+    } catch (e2) {
+        add(false, "クリップボード（TEXT・CSV・COPY_SAVE）", errorText(e2));
+    }
+    add(!!(fso && fso.FileExists(ALARM_WAV_PATH)), "アラーム音ファイル", ALARM_WAV_PATH);
+    var wmpOk = tryActiveX("WMPlayer.OCX", "Windows Media Player部品（音の予備手段）");
+    var sapiOk = tryActiveX("SAPI.SpVoice", "音声合成（音の予備手段）");
+    if (!wmpOk && !sapiOk) {
+        hints.push("PowerShellが使えない場合、アラームを鳴らす予備手段がないよ。画面のログで異常を確認してね。");
+    }
+    var psPath = shell ? powershellExe() : "";
+    add(psPath.indexOf("\\") >= 0, "PowerShell本体", psPath || "（未確認）");
+    showDiagnostics(items, hints, "⏳ PowerShellで使える機能を確認中…（最大60秒）");
+    if (!shell || !fso) {
+        showDiagnostics(items, hints, "");
+        return;
+    }
+    runPowerShellAsync([
+        "$lines = New-Object System.Collections.ArrayList",
+        "[void]$lines.Add('PSVERSION=' + $PSVersionTable.PSVersion.ToString())",
+        "[void]$lines.Add('LANGMODE=' + $ExecutionContext.SessionState.LanguageMode)",
+        "try { Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; [void]$lines.Add('UIA=OK') } catch { [void]$lines.Add('UIA=NG ' + $_.Exception.Message) }",
+        "try { Add-Type -AssemblyName System.Drawing; [void]$lines.Add('DRAWING=OK') } catch { [void]$lines.Add('DRAWING=NG ' + $_.Exception.Message) }",
+        "try { Add-Type -TypeDefinition 'public static class FujiDiag { public static int Two() { return 2; } }'; [void]$lines.Add('CSHARP=OK ' + [FujiDiag]::Two()) } catch { [void]$lines.Add('CSHARP=NG ' + $_.Exception.Message) }",
+        "try { $p = New-Object System.Media.SoundPlayer; [void]$lines.Add('SOUND=OK') } catch { [void]$lines.Add('SOUND=NG ' + $_.Exception.Message) }",
+        "Set-FujiResult ('OK:' + ($lines -join \"`n\"))"
+    ], 60, function (ok, payload) {
+        if (!ok) {
+            add(false, "PowerShellの起動・実行", payload);
+            hints.push("PowerShellが起動できない／結果を返せないよ。グループポリシーやAppLockerでPowerShellが止められている可能性があるキュン。\n" +
+                "→ 使えなくなる機能: CLICK・CLICK_POS・CLICK_IMG・SCREENSHOT・座標/画像の取得・ウィンドウ一覧・アラーム(PowerShell版)\n" +
+                "→ 使える機能: KEY・TEXT・CSV・WAIT・WAIT_FOR・IF・SWITCH・RUN・CONFIRM・COPY_SAVE（キーボード操作中心のマクロは大丈夫）");
+            showDiagnostics(items, hints, "");
+            return;
+        }
+        var map = {};
+        var lines = String(payload).split(/\r?\n/);
+        for (var i = 0; i < lines.length; i++) {
+            var pos = lines[i].indexOf("=");
+            if (pos > 0) {
+                map[lines[i].substring(0, pos)] = lines[i].substring(pos + 1);
+            }
+        }
+        add(true, "PowerShellの起動・実行", "バージョン " + (map.PSVERSION || "?"));
+        add(map.LANGMODE === "FullLanguage", "PowerShellの言語モード", map.LANGMODE || "?");
+        if (map.LANGMODE && map.LANGMODE !== "FullLanguage") {
+            hints.push("PowerShellが制限モード（" + map.LANGMODE + "）だよ。C#を使う CLICK_POS・CLICK_IMG・SCREENSHOT は動かない可能性が高いキュン。キーボード操作（KEY・TEXT・CSV）中心で組んでね。");
+        }
+        add(String(map.UIA).indexOf("OK") === 0, "オブジェクト認識 CLICK（UIAutomation）", map.UIA || "?");
+        add(String(map.DRAWING).indexOf("OK") === 0, "画像処理（System.Drawing）", map.DRAWING || "?");
+        add(String(map.CSHARP).indexOf("OK") === 0, "C#のその場コンパイル（CLICK_POS・CLICK_IMG・SCREENSHOT）", map.CSHARP || "?");
+        add(String(map.SOUND).indexOf("OK") === 0, "PowerShellでの音再生（アラーム）", map.SOUND || "?");
+        if (String(map.CSHARP).indexOf("OK") !== 0) {
+            hints.push("C#のコンパイルができないよ。CLICK_POS・CLICK_IMG・SCREENSHOT・座標/画像の取得が使えないキュン。");
+        }
+        showDiagnostics(items, hints, "");
+    });
+}
+
+function showDiagnostics(items, hints, pending) {
+    var html = '<div class="form-help">この端末でふじキュンが使える機能を調べたよ♡ ❌ がある機能はこの端末では動かないかも。</div><table class="diag-table">';
+    for (var i = 0; i < items.length; i++) {
+        html += "<tr><td class=\"" + (items[i].ok ? "diag-ok\">✅ OK" : "diag-ng\">❌ NG") + "</td><td>" + escapeHtml(items[i].name) +
+            '</td><td class="form-hint">' + escapeHtml(items[i].detail) + "</td></tr>";
+    }
+    html += "</table>";
+    if (pending) {
+        html += '<div class="form-hint" style="margin-top:8px">' + escapeHtml(pending) + "</div>";
+    }
+    if (hints.length) {
+        html += '<div class="diag-hint">' + escapeHtml("💡 " + hints.join("\n\n💡 ")) + "</div>";
+    }
+    openModal("🩺 環境チェック", html, [
+        { text: "結果をログにコピー", fn: function () {
+            for (var j = 0; j < items.length; j++) {
+                log("🩺 " + (items[j].ok ? "OK " : "NG ") + items[j].name + " … " + items[j].detail, items[j].ok ? "info" : "warn");
+            }
+        } },
+        { text: "閉じる", cls: "btn-primary", fn: null }
+    ], { wide: true });
 }
 
 // =====================================================================
@@ -2987,8 +3561,151 @@ function exportErrorRows() {
             { text: "閉じる", fn: null }
         ]);
     } catch (e) {
-        log("エラー行CSVの保存に失敗…（" + e.message + "）", "error");
+        log("エラー行CSVの保存に失敗…（" + errorText(e) + "）", "error");
     }
+}
+
+// =====================================================================
+//  Run results (one record per processed row + values captured by COPY_SAVE)
+// =====================================================================
+function beginResultRow(row) {
+    var r = { no: row.no, data: row.data.slice(0), values: {}, status: "実行中", note: "", time: dateTimeText() };
+    resultRows.push(r);
+    updateResultButton();
+    return r;
+}
+
+function setRowResult(status, note) {
+    var r = runState && runState.currentResult;
+    if (r && r.status === "実行中") {
+        r.status = status;
+        r.note = note || "";
+    }
+}
+
+function addResultValue(name, value) {
+    var r = runState && runState.currentResult;
+    if (!r) {
+        return;
+    }
+    var known = false;
+    for (var i = 0; i < resultColumns.length; i++) {
+        if (resultColumns[i] === name) {
+            known = true;
+        }
+    }
+    if (!known) {
+        resultColumns.push(name);
+    }
+    r.values[name] = value;
+}
+
+function updateResultButton() {
+    byId("exportResultBtn").innerHTML = "↓ 実行結果CSV (" + resultRows.length + ")";
+}
+
+function exportResultRows() {
+    if (resultRows.length === 0) {
+        showMessage("↓ 実行結果CSV", "まだ実行結果がないキュン。▶実行すると、1行ごとの結果（完了／スキップ／エラー）と COPY_SAVE で記録した値がたまっていくよ♡");
+        return;
+    }
+    if (!fso) {
+        log("ActiveXが使えないので保存できないキュン…", "error");
+        return;
+    }
+    var i;
+    var maxCols = csvState.header ? csvState.header.length : 0;
+    for (i = 0; i < resultRows.length; i++) {
+        maxCols = Math.max(maxCols, resultRows[i].data.length);
+    }
+    var header = [];
+    for (i = 0; i < maxCols; i++) {
+        header.push(csvState.header && i < csvState.header.length ? csvState.header[i] : "列" + (i + 1));
+    }
+    header = header.concat(resultColumns).concat(["実行結果", "備考", "元データ行No", "開始日時"]);
+    var lines = [header.map(toCsvField).join(",")];
+    for (i = 0; i < resultRows.length; i++) {
+        var r = resultRows[i];
+        var cols = r.data.slice(0);
+        while (cols.length < maxCols) {
+            cols.push("");
+        }
+        for (var c = 0; c < resultColumns.length; c++) {
+            cols.push(r.values.hasOwnProperty(resultColumns[c]) ? r.values[resultColumns[c]] : "");
+        }
+        cols.push(r.status, r.note, r.no > 0 ? String(r.no) : "テスト", r.time);
+        lines.push(cols.map(toCsvField).join(","));
+    }
+    var path = appFilePath(RESULT_FILE_NAME);
+    try {
+        writeTextFile(path, lines.join("\r\n") + "\r\n", true);
+        log("↓ 実行結果 " + resultRows.length + "件を「" + path + "」に保存したキュン♡", "ok");
+        showChoice("↓ 実行結果CSV", "保存したキュン♡\n" + path + "\n\n元データの右に、COPY_SAVEで記録した値・実行結果（完了／スキップ／エラー／中断）・備考を付けたよ。Excelで開いてフィルターすると便利だよ。", [
+            { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
+                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+            } },
+            { text: "閉じる", fn: null }
+        ]);
+    } catch (e) {
+        log("実行結果CSVの保存に失敗…（" + errorText(e) + "）", "error");
+    }
+}
+
+// =====================================================================
+//  Macro export / import (share one macro as a JSON file)
+// =====================================================================
+function exportMacro() {
+    var macro = currentMacro();
+    if (!macro || !fso || !appDir) {
+        log("書き出せないキュン（ActiveXが使えない環境かも）", "error");
+        return;
+    }
+    try {
+        var folder = ensureFolder(appFilePath(EXPORT_FOLDER_NAME));
+        var path = folder + "\\" + (safeFileName(macro.name) || "macro") + ".json";
+        var json = JSON.stringify({ version: DATA_VERSION, macros: [macro] }, function (key, value) {
+            return key === "collapsed" ? undefined : value;
+        }, 2);
+        writeTextFile(path, json, false);
+        log("📤 マクロ「" + macro.name + "」を書き出したキュン: " + path, "ok");
+        showChoice("📤 マクロの書き出し", "書き出したキュン♡\n" + path + "\n\nこのファイルを同僚に渡して［📥 取込］してもらえば、同じマクロが使えるよ。", [
+            { text: "📂 フォルダを開く", cls: "btn-primary", fn: function () {
+                try { shell.Run("explorer.exe /select,\"" + path + "\"", 1, false); } catch (e) { /* ignore */ }
+            } },
+            { text: "閉じる", fn: null }
+        ]);
+    } catch (e1) {
+        log("書き出しに失敗したキュン…（" + errorText(e1) + "）", "error");
+    }
+}
+
+function importMacroFile(input) {
+    var path = input.value || "";
+    if (guardRunning()) {
+        return;
+    }
+    if (!path || /fakepath/i.test(path) || !fso || !fso.FileExists(path)) {
+        log("取り込むファイルのパスが取れなかったキュン…", "warn");
+        return;
+    }
+    var obj = loadJsonFile(path);
+    if (!obj) {
+        return;
+    }
+    var data = normalizeData(obj);
+    if (data.macros.length === 0) {
+        log("このファイルにはマクロが入っていなかったキュン: " + path, "warn");
+        return;
+    }
+    for (var i = 0; i < data.macros.length; i++) {
+        data.macros[i].id = uniqueMacroId();
+        appData.macros.push(data.macros[i]);
+    }
+    currentMacroIndex = appData.macros.length - 1;
+    selectedIndex = -1;
+    renderSteps();
+    commitChange("マクロ取込: " + data.macros[0].name);
+    log("📥 " + data.macros.length + "個のマクロを取り込んだキュン♡（" + path + "）", "ok");
 }
 
 // =====================================================================
@@ -3019,7 +3736,7 @@ function schedule(fn, ms) {
         try {
             fn();
         } catch (e) {
-            stopWithError("想定外のエラーで止まったキュン…（" + e.message + "）", true);
+            stopWithError("想定外のエラーで止まったキュン…（" + errorText(e) + "）", true);
         }
     }, Math.max(0, ms || 0));
 }
@@ -3119,6 +3836,9 @@ function startRun() {
     cleanupTempFiles();
     errorRows = [];
     updateErrorButton();
+    resultRows = [];
+    resultColumns = [];
+    updateResultButton();
     runState = {
         running: true,
         paused: false,
@@ -3135,12 +3855,15 @@ function startRun() {
         highlightEl: null,
         doneRows: 0,
         skippedRows: 0,
+        captured: {},
+        currentResult: null,
+        confirmOpen: false,
         startTime: new Date()
     };
     setRunUi(true);
     log("▶ 実行開始するキュン♡ マクロ「" + macro.name + "」 対象 " + list.length + "行 / 間隔 " + runState.interval + "ms", "run");
     if (!macro.targetWindow) {
-        log("対象ウィンドウが未設定だから3秒後に開始するよ。そのあいだに入力先の画面をクリックしておいてね♡", "warn");
+        log("対象ウィンドウが未設定だから3秒後に開始するよ。入力先の画面をクリックしておいてね♡（マクロの中でRUN・SWITCHしているならそのままでOK）", "warn");
         schedule(startRow, 3000);
     } else {
         schedule(startRow, 100);
@@ -3156,6 +3879,8 @@ function startRow() {
     var row = rs.rows[rs.rowPos];
     rs.stepIndex = 0;
     rs.activeTitle = rs.targetWindow;
+    rs.captured = {};
+    rs.currentResult = beginResultRow(row);
     updateProgress();
     log("── " + rowCaption(row) + " 開始（" + (rs.rowPos + 1) + "/" + rs.rows.length + "件目）", "run");
     if (rs.activeTitle) {
@@ -3173,6 +3898,7 @@ function runCurrentStep() {
     var rs = runState;
     if (rs.stepIndex >= rs.steps.length) {
         rs.doneRows++;
+        setRowResult("完了");
         log("✔ " + rowCaption(rs.rows[rs.rowPos]) + " 完了", "ok");
         nextRow();
         return;
@@ -3186,6 +3912,7 @@ function runCurrentStep() {
         }
         if (action === "skipRow") {
             rs.skippedRows++;
+            setRowResult("スキップ");
             nextRow();
             return;
         }
@@ -3316,9 +4043,26 @@ function pasteText(text, what, next) {
 function executeStep(step, next) {
     var rs = runState;
     var val = step.val == null ? "" : String(step.val);
+    if (step.disabled) {
+        if (step.cmd === "GROUP_START") {
+            skipGroupBody(rs, "（無効化されたグループ「" + val + "」は飛ばすよ）");
+        }
+        next("next", 0);
+        return;
+    }
+    if (PLACEHOLDER_COMMANDS[step.cmd]) {
+        val = expandPlaceholders(val, rs);
+    }
     switch (step.cmd) {
-    case "COMMENT":
     case "GROUP_START":
+        if (step.when === "first" && rs.rowPos !== 0) {
+            skipGroupBody(rs, "");
+        } else if (step.when === "last" && rs.rowPos !== rs.rows.length - 1) {
+            skipGroupBody(rs, "");
+        }
+        next("next", 0);
+        return;
+    case "COMMENT":
     case "GROUP_END":
         next("next", 0);
         return;
@@ -3371,7 +4115,7 @@ function executeStep(step, next) {
             log("🚀 起動: " + val, "info");
             next("next");
         } catch (e) {
-            stopWithError("🚨 起動できなかったキュン: " + val + "（" + e.message + "）", true);
+            stopWithError("🚨 起動できなかったキュン: " + val + "（" + errorText(e) + "）", true);
         }
         return;
     case "CLICK":
@@ -3422,6 +4166,23 @@ function executeStep(step, next) {
                 }
             });
         });
+        return;
+    case "CONFIRM":
+        askConfirm(val, next);
+        return;
+    case "COPY_SAVE":
+        ensureInputTarget(function () {
+            copyAndSave(val, next);
+        });
+        return;
+    case "SCREENSHOT":
+        if (String(splitParams(val, 2)[1]).toUpperCase() === "FULL") {
+            saveScreenshot(val, next);
+        } else {
+            ensureInputTarget(function () {
+                saveScreenshot(val, next);
+            });
+        }
         return;
     default:
         log("不明なコマンド " + step.cmd + " はスキップするね", "warn");
@@ -3475,7 +4236,7 @@ function runIf(val, next) {
     var p = splitParams(val, 3);
     var title = p[0];
     var key = p[1];
-    var mode = String(p[2] || "STOP").toUpperCase() === "SKIP" ? "SKIP" : "STOP";
+    var mode = normalizeIfMode(p[2]);
     var found = false;
     try {
         found = title ? shell.AppActivate(title) : false;
@@ -3493,8 +4254,14 @@ function runIf(val, next) {
             shell.SendKeys(normalizeSendKeys(key));
             log("⌨ " + key + " を押したよ", "info");
         }
-        if (mode === "SKIP") {
+        if (mode === "CONTINUE") {
+            log("▶ ポップアップを処理したから、そのまま続けるキュン", "info");
+            schedule(function () {
+                next("next");
+            }, 500);
+        } else if (mode === "SKIP") {
             recordErrorRow("IF検知(SKIP): 「" + title + "」");
+            setRowResult("スキップ", "IF検知: 「" + title + "」");
             log("⏭ この行は打ち切って次の行へ進むキュン", "warn");
             schedule(function () {
                 next("skipRow");
@@ -3505,6 +4272,122 @@ function runIf(val, next) {
     }, 300);
 }
 
+var PLACEHOLDER_COMMANDS = { TEXT: true, RUN: true, SWITCH: true, WAIT_FOR: true, IF: true, CONFIRM: true, SCREENSHOT: true };
+
+// Jump to the matching GROUP_END (the runner then continues after it)
+function skipGroupBody(rs, message) {
+    var end = findGroupEnd(rs.steps, rs.stepIndex);
+    if (end > rs.stepIndex) {
+        rs.stepIndex = end;
+    }
+    if (message) {
+        log(message, "info");
+    }
+}
+
+// Human-in-the-loop: pause and let the operator continue / skip the row / stop
+function askConfirm(message, next) {
+    var rs = runState;
+    var row = rs.rows[rs.rowPos];
+    try {
+        shell.AppActivate(document.title);
+    } catch (e) {
+        /* ignore */
+    }
+    rs.confirmOpen = true;
+    updateProgress("（✋ 確認待ち）");
+    log("✋ 確認ポイント: あなたの確認を待ってるキュン", "warn");
+    openModal("✋ 確認ポイント（" + rowCaption(row) + "）", '<div class="modal-message">' + escapeHtml(message) + "</div>", [
+        { text: "▶ 続行", cls: "btn-run", fn: function () {
+            rs.confirmOpen = false;
+            if (runState !== rs || !rs.running) {
+                return true;
+            }
+            log("▶ 確認OK、続けるキュン♡", "run");
+            if (rs.activeTitle) {
+                activateWithRetry(rs.activeTitle, function () {
+                    next("next", 300);
+                }, function () {
+                    stopWithError("🚨 確認のあと「" + rs.activeTitle + "」に戻れなかったキュン…", true);
+                });
+            } else {
+                log("対象ウィンドウ未設定だから1.5秒後に続けるよ。入力先をクリックしておいてね", "warn");
+                schedule(function () {
+                    next("next", 0);
+                }, 1500);
+            }
+            return true;
+        } },
+        { text: "⏭ この行をスキップ", fn: function () {
+            rs.confirmOpen = false;
+            if (runState === rs && rs.running) {
+                setRowResult("スキップ", "確認ポイントでスキップ");
+                log("⏭ この行はスキップするキュン", "warn");
+                next("skipRow");
+            }
+            return true;
+        } },
+        { text: "⏹ 停止", cls: "btn-danger", fn: function () {
+            rs.confirmOpen = false;
+            stopRun("確認ポイントで停止");
+            return true;
+        } }
+    ], { onDismiss: function () {
+        rs.confirmOpen = false;
+        stopRun("確認ポイントでEsc");
+    } });
+}
+
+function copyAndSave(name, next) {
+    var rs = runState;
+    try {
+        window.clipboardData.setData("Text", "");
+    } catch (e1) {
+        /* ignore */
+    }
+    shell.SendKeys("^c");
+    schedule(function () {
+        var text = "";
+        try {
+            text = window.clipboardData.getData("Text") || "";
+        } catch (e2) {
+            text = "";
+        }
+        text = String(text).replace(/(\r\n|\n|\r)+$/, "");
+        rs.captured[name] = text;
+        addResultValue(name, text);
+        if (text === "") {
+            log("⚠ 「" + name + "」は空っぽだったキュン（文字が選択されていなかったかも。直前に KEY ^a を入れてみてね）", "warn");
+        } else {
+            log("📋 「" + name + "」= " + truncateText(text, 40), "info");
+        }
+        next("next");
+    }, COPY_WAIT_MS);
+}
+
+function saveScreenshot(val, next) {
+    var p = splitParams(val, 2);
+    var full = String(p[1]).toUpperCase() === "FULL";
+    var path;
+    try {
+        var folder = ensureFolder(appFilePath(EVIDENCE_FOLDER_NAME) + "\\" + dateStamp());
+        var d = new Date();
+        path = folder + "\\" + (safeFileName(p[0]) || "screen") + "_" + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + ".png";
+    } catch (e) {
+        stopWithError("🚨 証跡フォルダを作れなかったキュン…（" + errorText(e) + "）", true);
+        return;
+    }
+    runPowerShellAsync(buildScreenshotScript(path, full), PS_TIMEOUT_SEC, function (ok, payload) {
+        if (ok) {
+            log("📸 画面を保存したキュン（" + payload + "）: " + path, "info");
+            addResultValue("証跡ファイル", path);
+            next("next");
+        } else {
+            stopWithError("🚨 画面の撮影に失敗: " + payload, true);
+        }
+    });
+}
+
 function stopWithError(message, recordRow) {
     if (!isRunning()) {
         return;
@@ -3513,8 +4396,9 @@ function stopWithError(message, recordRow) {
     if (recordRow) {
         recordErrorRow(message);
     }
-    playAlarm(false);
+    setRowResult("エラー", message);
     endRun("異常停止");
+    playAlarm(false);
     try {
         shell.AppActivate(document.title);
     } catch (e) {
@@ -3559,12 +4443,14 @@ function stopRun(reason) {
         return;
     }
     log("⏹ 停止したキュン（" + reason + "）", "warn");
+    setRowResult("中断", reason);
     endRun("停止");
 }
 
 function finishRun() {
     log("🎉 全部おわったキュン♡ おつかれさま！", "ok");
     endRun("完了");
+    playNotify();
 }
 
 function endRun(status) {
@@ -3577,12 +4463,904 @@ function endRun(status) {
         clearTimeout(rs.timer);
         rs.timer = null;
     }
+    if (rs.confirmOpen) {
+        rs.confirmOpen = false;
+        closeModal();
+    }
+    updateResultButton();
     clearRunningHighlight();
     setRunUi(false);
     var sec = Math.round((new Date().getTime() - rs.startTime.getTime()) / 1000);
     var summary = status + "：完了 " + rs.doneRows + "行 / スキップ " + rs.skippedRows + "行 / エラー記録 " + errorRows.length + "件（" + sec + "秒）";
     log("■ " + summary, status === "完了" ? "ok" : "warn");
     byId("progressText").innerHTML = escapeHtml("■ " + summary);
+}
+
+// =====================================================================
+//  Built-in templates
+//  steps: [cmd, val, props]  (props: { when: "first"|"last", disabled: true, label: "..." })
+//  csv:   array of rows (first row = header). Written to samples\<csvFile> on demand.
+// =====================================================================
+// @@TEMPLATE_DATA_BEGIN
+var TEMPLATE_CATEGORIES = [
+    "入門・Windows",
+    "Excel",
+    "Word",
+    "文書起案システム",
+    "財務会計システム",
+    "グループウェア",
+    "福祉システム（GPRIME等）",
+    "発見！便利ワザ"
+];
+
+var TEMPLATES = [
+    // ----------------------------------------------------------------- 入門・Windows
+    {
+        id: "basic-notepad", category: "入門・Windows", level: 1,
+        name: "はじめての1本：メモ帳にCSVを入力",
+        summary: "メモ帳を自動で開いて、CSVの「氏名・フリガナ・電話番号」を1行ずつ入力します。RPAの基本「開く→切り替える→貼り付ける→キーを押す」が全部入っています。",
+        useCase: "まず動きを見てみたいとき。ここで流れをつかめば、ほかのテンプレートも読めるようになります。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["CSVの列を増やしたら、CSVブロックとTABブロックを追加します", "区切りをカンマにしたいときは KEY {TAB} を TEXT「,」に変えます"],
+        ideas: ["メモ帳の代わりに社内システムの入力画面に向ければ、そのまま入力ロボットになります"],
+        targetWindow: "", csvFile: "01_basic_meibo.csv",
+        csv: [
+            ["氏名", "フリガナ", "電話番号"],
+            ["見本 太郎", "ミホン タロウ", "000-0000-0001"],
+            ["試験 花子", "シケン ハナコ", "000-0000-0002"],
+            ["練習 一郎", "レンシュウ イチロウ", "000-0000-0003"],
+            ["仮名 さくら", "カメイ サクラ", "000-0000-0004"],
+            ["例題 健太", "レイダイ ケンタ", "000-0000-0005"]
+        ],
+        steps: [
+            ["COMMENT", "はじめての1本！メモ帳を自動で開いて、CSVを1行ずつ入力するよ。▶実行を押して見ていてね"],
+            ["GROUP_START", "準備（最初の1行だけ）", { when: "first" }],
+            ["RUN", "notepad.exe"],
+            ["WAIT", "2000"],
+            ["GROUP_END", ""],
+            ["SWITCH", "メモ帳"],
+            ["GROUP_START", "1行ぶんの入力"],
+            ["CSV", "1"],
+            ["KEY", "{TAB}"],
+            ["CSV", "2"],
+            ["KEY", "{TAB}"],
+            ["CSV", "3"],
+            ["KEY", "{ENTER}"],
+            ["GROUP_END", ""]
+        ]
+    },
+    {
+        id: "letters-notepad", category: "入門・Windows", level: 1,
+        name: "差し込み文章の量産（メモ帳）",
+        summary: "「{{氏名}} 様」のような差し込み文字を使って、1人1通のお知らせ文を一気に作ります。今日の日付（和暦）も自動で入ります。",
+        useCase: "受付番号の案内、日程のお知らせなど、名前と数字だけが違う文章をたくさん作るとき。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["TEXTブロックの文章を自由に書き換えます。{{列名}} の部分にCSVの値が入ります", "文章の中に {{WAREKI}}（令和の日付）や {{TODAY_JP}}（西暦の日付）も使えます"],
+        ideas: ["メモ帳の代わりにメールの本文欄やグループウェアの投稿欄に向けても使えます", "最後にSCREENSHOTを足すと、作った文章の控えを画像で残せます"],
+        targetWindow: "", csvFile: "02_letters.csv",
+        csv: [
+            ["氏名", "イベント名", "受付番号", "会場"],
+            ["見本 太郎", "市民健康講座", "A-001", "第1会議室"],
+            ["試験 花子", "市民健康講座", "A-002", "第1会議室"],
+            ["練習 一郎", "子育て相談会", "B-001", "多目的ホール"],
+            ["仮名 さくら", "子育て相談会", "B-002", "多目的ホール"],
+            ["例題 健太", "防災ワークショップ", "C-001", "研修室"]
+        ],
+        steps: [
+            ["COMMENT", "TEXTの中の {{氏名}} などに、CSVの同じ名前の列の値が入るよ（差し込み）"],
+            ["GROUP_START", "準備（最初の1行だけ）", { when: "first" }],
+            ["RUN", "notepad.exe"],
+            ["WAIT", "2000"],
+            ["GROUP_END", ""],
+            ["SWITCH", "メモ帳"],
+            ["TEXT", "{{氏名}} 様\r\n\r\n{{WAREKI}}\r\n\r\nこのたびは「{{イベント名}}」にお申し込みいただき、ありがとうございます。\r\n受付番号は {{受付番号}} です。当日は {{会場}} へお越しください。\r\n\r\n------------------------------------------------------------\r\n"]
+        ]
+    },
+    {
+        id: "evidence-browser", category: "入門・Windows", level: 1,
+        name: "ページを順番に開いて画面を証跡保存",
+        summary: "CSVに並べたURL（社内ポータルやシステムの照会ページ）を1つずつEdgeで開き、画面をPNGで保存します。",
+        useCase: "毎月の点検で「このページがこう表示されていた」という証跡（エビデンス）を残すとき。",
+        prepare: ["Microsoft Edge が使えること", "CSVのURLを、自分の職場のページに書き換えること（見本のURLは架空です）"],
+        customize: ["読み込みが遅いページは WAIT を 4000→8000 などに増やします", "画面全体を撮りたいときは SCREENSHOT の範囲を「画面全体」にします"],
+        ideas: ["保存先は HTAのフォルダ\\evidence\\日付\\ です。月ごとにフォルダを分けて保管すると監査対応がラクになります"],
+        targetWindow: "", csvFile: "03_urls.csv",
+        csv: [
+            ["ページ名", "URL"],
+            ["お知らせ一覧", "http://portal.example/info"],
+            ["庁内掲示板", "http://portal.example/board"],
+            ["施設予約状況", "http://portal.example/facility"]
+        ],
+        steps: [
+            ["COMMENT", "見本のURLは架空だよ。CSVを自分の職場のページに書き換えてね"],
+            ["RUN", "msedge \"{{URL}}\""],
+            ["WAIT", "4000"],
+            ["SWITCH", "Edge"],
+            ["SCREENSHOT", "{{ページ名}},WINDOW"],
+            ["KEY", "^w"],
+            ["WAIT", "800"]
+        ]
+    },
+    // ----------------------------------------------------------------- Excel
+    {
+        id: "excel-ledger", category: "Excel", level: 1,
+        name: "Excelの台帳に1行ずつ転記",
+        summary: "開いているExcelの台帳に、CSVの内容を「A列の○行目」から順に転記します。ジャンプ（Ctrl+G）で書き込む行を毎回指定するので、途中で止めても行がずれません。",
+        useCase: "決まった書式の台帳・集計表（色や罫線つき）に、システムから出したデータを写すとき。",
+        prepare: ["転記先のExcelブックを開き、1行目に見出しがある状態にしておく", "対象ウィンドウ「Excel」はタイトル末尾の「- Excel」に合わせています"],
+        customize: ["2行目以外から書き始めたいときは TEXT「A{{ROW+1}}」の +1 を変えます（例: 5行目からなら +4）", "転記先の列が離れているときは KEY {TAB} を {TAB 2} などにします"],
+        ideas: ["CSVの行番号 {{ROW}} を使ってセル番地を作るのがポイント。どの業務でも使える小ワザです"],
+        targetWindow: "Excel", csvFile: "04_excel_ledger.csv",
+        csv: [
+            ["受付日", "氏名", "区分", "金額"],
+            ["2026/10/01", "見本 太郎", "新規", "12000"],
+            ["2026/10/01", "試験 花子", "更新", "8000"],
+            ["2026/10/02", "練習 一郎", "新規", "15000"],
+            ["2026/10/03", "仮名 さくら", "変更", "3000"],
+            ["2026/10/03", "例題 健太", "更新", "8000"]
+        ],
+        steps: [
+            ["COMMENT", "Excelで転記先のブックを開いてから▶実行してね。1行目が見出しの想定だよ"],
+            ["GROUP_START", "書き込む行へジャンプ"],
+            ["KEY", "^g"],
+            ["WAIT", "600"],
+            ["TEXT", "A{{ROW+1}}"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "300"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "1行ぶん転記"],
+            ["CSV", "1"],
+            ["KEY", "{TAB}"],
+            ["CSV", "2"],
+            ["KEY", "{TAB}"],
+            ["CSV", "3"],
+            ["KEY", "{TAB}"],
+            ["CSV", "4"],
+            ["KEY", "{ENTER}"],
+            ["GROUP_END", ""]
+        ]
+    },
+    {
+        id: "excel-form-save", category: "Excel", level: 2,
+        name: "Excelの申請書様式に転記して1件ずつ別名保存",
+        summary: "1枚ものの申請書（様式）の決まったセルにCSVの値を入れ、「申請番号_氏名.xlsx」の名前で1件ずつ保存します。",
+        useCase: "同じ様式を人数分つくるとき（交付決定通知の控え、調書、チェックシートなど）。",
+        prepare: ["様式のブックを開いておく", "保存先フォルダ C:\\RPA作業\\出力 を作っておく（無ければ「CSVの名前でフォルダを一括作成」テンプレートでも作れます）", "様式のどのセルに何を入れるかを確認し、TEXT「C4」などのセル番地を合わせる"],
+        customize: ["セル番地は「ジャンプ先」グループのTEXTで指定しています。様式に合わせて変えてください", "上書き確認が出る環境向けに IF「名前を付けて保存の確認」を入れています。出ない環境では何もしません"],
+        ideas: ["最後に KEY ^p（印刷）を足すと「転記→保存→印刷」まで自動化できます（印刷画面の操作は環境に合わせて調整）"],
+        targetWindow: "Excel", csvFile: "05_excel_form.csv",
+        csv: [
+            ["申請番号", "氏名", "住所", "申請日", "金額"],
+            ["R08-0001", "見本 太郎", "見本市中央1-1-1", "2026/10/01", "50000"],
+            ["R08-0002", "試験 花子", "見本市東町2-2-2", "2026/10/02", "30000"],
+            ["R08-0003", "練習 一郎", "見本市西町3-3-3", "2026/10/05", "45000"]
+        ],
+        steps: [
+            ["COMMENT", "様式のセル番地（C4・C5…）を自分の様式に合わせて変えてね"],
+            ["GROUP_START", "申請番号 → C4"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "C4"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["CSV", "1"], ["KEY", "{ENTER}"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "氏名 → C5"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "C5"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["CSV", "2"], ["KEY", "{ENTER}"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "住所 → C6"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "C6"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["CSV", "3"], ["KEY", "{ENTER}"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "申請日 → F4 ／ 金額 → F5"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "F4"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["CSV", "4"], ["KEY", "{ENTER}"],
+            ["CSV", "5"], ["KEY", "{ENTER}"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "別名で保存"],
+            ["KEY", "{F12}"],
+            ["WAIT_FOR", "名前を付けて保存,,10"],
+            ["TEXT", "C:\\RPA作業\\出力\\{{申請番号}}_{{氏名}}.xlsx"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "1500"],
+            ["IF", "名前を付けて保存の確認,%y,CONTINUE"],
+            ["WAIT", "1000"],
+            ["GROUP_END", ""]
+        ]
+    },
+    {
+        id: "excel-collect", category: "Excel", level: 2,
+        name: "たくさんのExcelファイルから同じセルの値を集める",
+        summary: "各課から集めた調査票（同じ様式のExcel）を1つずつ開き、決まったセル（例: D10の合計）をコピーして記録、閉じる…を繰り返します。結果は［↓ 実行結果CSV］で一覧になります。",
+        useCase: "照会・調査の回答集計。何十ファイルも開いてコピペする作業がなくなります。",
+        prepare: ["CSVに「ブック名（拡張子なし）」と「ファイルパス」を並べる（dir /b などで一覧を作ると速い）", "集めたいセル番地を確認する（見本は D10）"],
+        customize: ["セルを増やしたいときは「値を読む」グループを複製して、セル番地と項目名を変えます", "ファイルが保護ビューで開く場合は、信頼できる場所に置くか、先に保護ビューを解除する手順を足します"],
+        ideas: ["COPY_SAVEで記録した値は結果CSVの列になります。「提出された値の一覧表」がそのまま完成します"],
+        targetWindow: "", csvFile: "06_excel_collect.csv",
+        csv: [
+            ["ブック名", "ファイルパス"],
+            ["調査票_総務課", "C:\\RPA作業\\調査票\\調査票_総務課.xlsx"],
+            ["調査票_福祉課", "C:\\RPA作業\\調査票\\調査票_福祉課.xlsx"],
+            ["調査票_財政課", "C:\\RPA作業\\調査票\\調査票_財政課.xlsx"]
+        ],
+        steps: [
+            ["COMMENT", "ファイルを開く→セルの値をコピーして記録→閉じる、を繰り返すよ。結果は［↓ 実行結果CSV］で見てね"],
+            ["RUN", "\"{{ファイルパス}}\""],
+            ["WAIT_FOR", "{{ブック名}},,30"],
+            ["WAIT", "1500"],
+            ["GROUP_START", "値を読む（D10 → 合計）"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "D10"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["COPY_SAVE", "合計"],
+            ["KEY", "{ESC}"],
+            ["GROUP_END", ""],
+            ["KEY", "^w"],
+            ["WAIT", "1000"],
+            ["IF", "Microsoft Excel,n,CONTINUE"],
+            ["WAIT", "800"]
+        ]
+    },
+    {
+        id: "excel-to-system", category: "Excel", level: 3,
+        name: "Excelの表を読みながら別の画面へ転記（CSV不要）",
+        summary: "CSVを作らずに、開いているExcelの表から直接値をコピーして、別のアプリ（見本はメモ帳）へ貼り付けます。CSVには「読む行番号」だけを書きます。",
+        useCase: "CSVに書き出すのが面倒なExcel台帳を、そのままシステムへ入力したいとき。",
+        prepare: ["読み取り元のExcel（A列=氏名、B列=金額 の想定）を開いておく", "貼り付け先のアプリ（見本はメモ帳）を開いておく"],
+        customize: ["貼り付け先を社内システムにするときは SWITCH「メモ帳」をシステムのタイトルに変えます", "読む列を増やすときは「読む」グループのセル番地とCOPY_SAVEを増やし、貼り付け側で {{COPY:項目名}} を使います"],
+        ideas: ["{{COPY:項目名}} を使うと「コピーした値を別の画面に貼る」がどこでもできます", "CSVの行番号列を 2〜200 にすれば200行ぶん処理できます"],
+        targetWindow: "", csvFile: "07_excel_rows.csv",
+        csv: [["行番号"], ["2"], ["3"], ["4"], ["5"], ["6"]],
+        steps: [
+            ["COMMENT", "Excelの A{{行番号}}・B{{行番号}} を読んで、メモ帳に貼り付けるよ"],
+            ["SWITCH", "Excel"],
+            ["GROUP_START", "Excelから読む"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "A{{行番号}}"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["COPY_SAVE", "氏名"],
+            ["KEY", "{ESC}"],
+            ["KEY", "^g"], ["WAIT", "500"], ["TEXT", "B{{行番号}}"], ["KEY", "{ENTER}"], ["WAIT", "300"],
+            ["COPY_SAVE", "金額"],
+            ["KEY", "{ESC}"],
+            ["GROUP_END", ""],
+            ["SWITCH", "メモ帳"],
+            ["GROUP_START", "貼り付け先へ書く"],
+            ["TEXT", "{{COPY:氏名}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{COPY:金額}}"],
+            ["KEY", "{ENTER}"],
+            ["GROUP_END", ""]
+        ]
+    },
+    // ----------------------------------------------------------------- Word
+    {
+        id: "word-notice", category: "Word", level: 1,
+        name: "Wordで通知文を1件ずつ作成して保存",
+        summary: "Wordの新規文書に、差し込み入りの通知文を貼り付けて「宛名様_通知.docx」で保存し、閉じます。これを人数分くり返します。",
+        useCase: "差し込み印刷の設定をせずに、人数分の文書ファイルを作りたいとき。",
+        prepare: ["保存先フォルダ C:\\RPA作業\\通知文 を作っておく", "Wordが入っていること（最初の1行でWordを起動します）"],
+        customize: ["TEXTの文章を自分の通知文に書き換えます", "書式（フォント・余白）を整えたいときは「Wordの雛形の《差し込み枠》を置換」テンプレートを使います"],
+        ideas: ["保存名に {{TIMESTAMP}} を入れると同じ宛名でも上書きされません"],
+        targetWindow: "", csvFile: "08_word_notice.csv",
+        csv: [
+            ["宛名", "件名", "金額", "期限"],
+            ["見本 太郎", "手数料のお知らせ", "1,200円", "2026年10月31日"],
+            ["試験 花子", "手数料のお知らせ", "2,400円", "2026年10月31日"],
+            ["練習 一郎", "書類提出のお願い", "―", "2026年11月15日"]
+        ],
+        steps: [
+            ["GROUP_START", "準備：Wordを起動（最初の1行だけ）", { when: "first" }],
+            ["RUN", "winword.exe"],
+            ["WAIT", "6000"],
+            ["SWITCH", "Word"],
+            ["KEY", "{ESC}"],
+            ["WAIT", "1500"],
+            ["GROUP_END", ""],
+            ["SWITCH", "Word"],
+            ["KEY", "^n"],
+            ["WAIT", "2000"],
+            ["TEXT", "{{WAREKI}}\r\n\r\n{{宛名}} 様\r\n\r\n{{件名}}\r\n\r\n金額：{{金額}}\r\n期限：{{期限}}\r\n\r\nご不明な点は担当までお問い合わせください。\r\n"],
+            ["WAIT", "500"],
+            ["GROUP_START", "保存して閉じる"],
+            ["KEY", "{F12}"],
+            ["WAIT_FOR", "名前を付けて保存,,15"],
+            ["TEXT", "C:\\RPA作業\\通知文\\{{宛名}}様_通知.docx"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "2000"],
+            ["IF", "名前を付けて保存の確認,%y,CONTINUE"],
+            ["KEY", "^w"],
+            ["WAIT", "1500"],
+            ["GROUP_END", ""]
+        ]
+    },
+    {
+        id: "word-replace", category: "Word", level: 2,
+        name: "Wordの雛形の《差し込み枠》を置換して保存",
+        summary: "書式を整えた雛形（.dotx）から新しい文書を作り、《氏名》《住所》《金額》の目印を置換（Ctrl+H）でCSVの値に置き換えて保存します。",
+        useCase: "レイアウトの決まった通知書・証明書を、書式を崩さずに人数分つくるとき。",
+        prepare: ["Wordで雛形を作り、差し込む場所に《氏名》《住所》《金額》と書いておく", "雛形を「Wordテンプレート（*.dotx）」形式で C:\\RPA作業\\雛形\\通知雛形.dotx に保存する（.dotx を開くと新しい文書ができるので雛形が汚れません）", "保存先フォルダ C:\\RPA作業\\通知文 を作っておく"],
+        customize: ["置換ダイアログの「置換後の文字列」(Alt+I)・「すべて置換」(Alt+A) は日本語版Wordの表記です。版によって違うときは、ダイアログの下線付き文字に合わせて KEY を変えます", "差し込み枠を増やすときは「《氏名》を置換」グループを複製して目印と列名を変えます"],
+        ideas: ["置換はWordだけでなく、メモ帳（Ctrl+H）や多くのエディタでも同じ考え方で使えます"],
+        targetWindow: "", csvFile: "09_word_replace.csv",
+        csv: [
+            ["氏名", "住所", "金額"],
+            ["見本 太郎", "見本市中央1-1-1", "12,000円"],
+            ["試験 花子", "見本市東町2-2-2", "8,000円"],
+            ["練習 一郎", "見本市西町3-3-3", "15,000円"]
+        ],
+        steps: [
+            ["COMMENT", "雛形 C:\\RPA作業\\雛形\\通知雛形.dotx を用意してね（準備はテンプレートの説明を見てね）"],
+            ["RUN", "\"C:\\RPA作業\\雛形\\通知雛形.dotx\""],
+            ["WAIT", "5000"],
+            ["SWITCH", "Word"],
+            ["GROUP_START", "《氏名》を置換"],
+            ["KEY", "^h"], ["WAIT", "1000"], ["KEY", "^a"],
+            ["TEXT", "《氏名》"],
+            ["KEY", "%i"], ["KEY", "^a"],
+            ["TEXT", "{{氏名}}"],
+            ["KEY", "%a"], ["WAIT", "1000"],
+            ["IF", "Microsoft Word,{ENTER},CONTINUE"],
+            ["KEY", "{ESC}"], ["WAIT", "500"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "《住所》を置換"],
+            ["KEY", "^h"], ["WAIT", "1000"], ["KEY", "^a"],
+            ["TEXT", "《住所》"],
+            ["KEY", "%i"], ["KEY", "^a"],
+            ["TEXT", "{{住所}}"],
+            ["KEY", "%a"], ["WAIT", "1000"],
+            ["IF", "Microsoft Word,{ENTER},CONTINUE"],
+            ["KEY", "{ESC}"], ["WAIT", "500"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "《金額》を置換"],
+            ["KEY", "^h"], ["WAIT", "1000"], ["KEY", "^a"],
+            ["TEXT", "《金額》"],
+            ["KEY", "%i"], ["KEY", "^a"],
+            ["TEXT", "{{金額}}"],
+            ["KEY", "%a"], ["WAIT", "1000"],
+            ["IF", "Microsoft Word,{ENTER},CONTINUE"],
+            ["KEY", "{ESC}"], ["WAIT", "500"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "保存して閉じる"],
+            ["KEY", "{F12}"],
+            ["WAIT_FOR", "名前を付けて保存,,15"],
+            ["TEXT", "C:\\RPA作業\\通知文\\{{氏名}}様_通知書.docx"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "2000"],
+            ["IF", "名前を付けて保存の確認,%y,CONTINUE"],
+            ["KEY", "^w"],
+            ["WAIT", "1500"],
+            ["GROUP_END", ""]
+        ]
+    },
+    // ----------------------------------------------------------------- 文書起案システム
+    {
+        id: "kian-draft", category: "文書起案システム", level: 2,
+        name: "起案文書を一括作成して一時保存（確認つき）",
+        summary: "文書起案システムの新規起案画面で、件名・本文・文書分類などを入力し、人が確認してから「一時保存」します。起案（決裁に回す）ボタンは押しません。",
+        useCase: "定例の通知・照会文書を何件もまとめて起案するとき。最後の起案ボタンは人が押すので安心です。",
+        prepare: ["対象ウィンドウをシステムの画面タイトルに合わせる（🔍一覧 で選べます）", "「新規起案」「一時保存」ボタンの表示名を、自分のシステムの表記に合わせる", "件名欄から TAB で本文・分類…と移動できるか、手で確認しておく"],
+        customize: ["最初は「件名欄をクリック」の確認ポイント（CONFIRM）で手動クリックします。慣れたら無効化されている CLICK_POS を📍座標取得で合わせて有効化し、CONFIRMを無効化すると完全自動になります（⊘ 無効化 ボタン）", "TABの回数が違う欄は KEY {TAB 2} などに変えます"],
+        ideas: ["件名に {{WAREKI_YEAR}} や {{ROW}} を入れると、年度や連番つきの件名を自動で作れます"],
+        targetWindow: "文書管理", csvFile: "10_kian.csv",
+        csv: [
+            ["件名", "本文", "文書分類", "保存期間"],
+            ["令和8年度 研修会の開催について（通知）", "標記について、下記のとおり開催しますので通知します。\n\n記\n1 日時 令和8年11月10日 午後2時から\n2 場所 第1会議室", "通知", "5年"],
+            ["令和8年度 施設点検結果の報告について", "標記について、別添のとおり報告します。", "報告", "5年"],
+            ["各課の備品調査について（照会）", "標記について、別紙様式により11月20日までに回答願います。", "照会", "1年"]
+        ],
+        steps: [
+            ["COMMENT", "対象ウィンドウ名とボタン名（新規起案・一時保存）を自分のシステムに合わせてね"],
+            ["CLICK", "新規起案"],
+            ["WAIT", "3000"],
+            ["GROUP_START", "件名欄にカーソルを置く"],
+            ["CLICK_POS", "400,250", { disabled: true }],
+            ["CONFIRM", "件名の入力欄をクリックしてから［▶ 続行］を押してね。\n（件名：{{件名}}）"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "入力"],
+            ["KEY", "^a"],
+            ["TEXT", "{{件名}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{本文}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{文書分類}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{保存期間}}"],
+            ["GROUP_END", ""],
+            ["CONFIRM", "入力内容を確認してね。OKなら［▶ 続行］で「一時保存」するよ。\n件名：{{件名}}"],
+            ["CLICK", "一時保存"],
+            ["WAIT", "2000"],
+            ["IF", "エラー,{ENTER},SKIP"],
+            ["SCREENSHOT", "起案_{{ROW}}_{{件名}},WINDOW"]
+        ]
+    },
+    {
+        id: "kian-evidence", category: "文書起案システム", level: 1,
+        name: "文書番号で検索して決裁状況の画面を保存",
+        summary: "文書番号を1件ずつ検索欄に入れて検索し、結果の画面をPNGで保存します。入力はしない「見るだけ」のロボットなので安心して試せます。",
+        useCase: "決裁が終わったかの点検、監査用の画面記録、引き継ぎ資料づくり。",
+        prepare: ["文書検索の画面を開き、文書番号の欄にカーソルを置いておく", "検索後も文書番号欄にカーソルが残るシステム向けです（残らない場合はCONFIRMかCLICK_POSを足します）"],
+        customize: ["検索に時間がかかるときは WAIT を増やします", "検索ボタンがEnterで押せない場合は KEY {ENTER} を CLICK「検索」に変えます"],
+        ideas: ["照会だけのロボットは失敗しても害がないので、RPAの練習台に最適です"],
+        targetWindow: "文書管理", csvFile: "11_doc_numbers.csv",
+        csv: [["文書番号"], ["総第1001号"], ["総第1002号"], ["福第2001号"], ["財第3001号"]],
+        steps: [
+            ["COMMENT", "文書番号の欄にカーソルを置いてから▶実行してね"],
+            ["KEY", "^a"],
+            ["TEXT", "{{文書番号}}"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "3000"],
+            ["IF", "該当,{ENTER},SKIP"],
+            ["SCREENSHOT", "決裁状況_{{文書番号}},WINDOW"]
+        ]
+    },
+    // ----------------------------------------------------------------- 財務会計システム
+    {
+        id: "zaimu-voucher", category: "財務会計システム", level: 3,
+        name: "支出伝票の一括入力＋伝票番号の記録",
+        summary: "伝票日付・予算科目・債権者・金額・摘要を入力し、人の確認のあと登録します。エラーが出た行は飛ばして記録し、登録後に表示される伝票番号をコピーして結果CSVに残します。",
+        useCase: "毎月の定例支払（委託料・使用料など）の伝票をまとめて起票するとき。",
+        prepare: ["伝票入力画面を開き、対象ウィンドウをシステムのタイトルに合わせる", "伝票日付の欄から TAB で各欄に移れる順番を、手で確認しておく", "伝票番号がどの欄に表示されるかを確認し、無効化されている CLICK_POS の座標を📍で合わせる"],
+        customize: ["登録前の CONFIRM は、何件か試して問題なければ無効化（⊘）すると連続実行できます", "エラーの表示が別ウィンドウで出るシステムは IF「エラー」で検知できます。画面内に赤字で出るタイプは SCREENSHOT で証跡を残して、あとで確認します"],
+        ideas: ["結果CSVの「伝票番号」列と元データを並べれば、そのまま起票台帳になります", "金額の合計を Excel で検算すると入力ミスの発見に役立ちます"],
+        targetWindow: "財務会計", csvFile: "12_shishutsu.csv",
+        csv: [
+            ["伝票日付", "予算科目コード", "債権者コード", "金額", "摘要"],
+            ["2026/10/10", "01-02-03-13", "100001", "55000", "10月分 庁舎清掃委託料"],
+            ["2026/10/10", "01-02-03-14", "100002", "13200", "10月分 複合機使用料"],
+            ["2026/10/10", "03-01-01-11", "100003", "4400", "10月分 消耗品購入費"]
+        ],
+        steps: [
+            ["COMMENT", "伝票入力画面を開いて、伝票日付の欄にカーソルを置いてから▶実行してね"],
+            ["GROUP_START", "伝票の入力"],
+            ["KEY", "^a"], ["CSV", "1"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["CSV", "2"], ["KEY", "{TAB}"],
+            ["WAIT", "800"],
+            ["KEY", "^a"], ["CSV", "3"], ["KEY", "{TAB}"],
+            ["WAIT", "800"],
+            ["KEY", "^a"], ["CSV", "4"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["CSV", "5"],
+            ["GROUP_END", ""],
+            ["CONFIRM", "金額 {{金額}} 円・科目 {{予算科目コード}} で合っているか確認してね。\nOKなら［▶ 続行］で登録するよ"],
+            ["CLICK", "登録"],
+            ["WAIT", "2000"],
+            ["IF", "エラー,{ENTER},SKIP"],
+            ["WAIT_FOR", "確認,{ENTER},15"],
+            ["WAIT", "1500"],
+            ["GROUP_START", "伝票番号を記録（座標を合わせてから有効化）", { disabled: true }],
+            ["CLICK_POS", "600,180"],
+            ["KEY", "^a"],
+            ["COPY_SAVE", "伝票番号"],
+            ["GROUP_END", ""],
+            ["SCREENSHOT", "支出伝票_{{ROW}}_{{債権者コード}},WINDOW"],
+            ["CLICK", "新規"],
+            ["WAIT", "2000"]
+        ]
+    },
+    {
+        id: "zaimu-budget", category: "財務会計システム", level: 1,
+        name: "予算残額を科目ごとに照会して画面を保存",
+        summary: "予算科目コードを1件ずつ照会し、結果画面をPNGで保存します。入力・登録はしないので安全です。",
+        useCase: "月末の予算執行状況の確認、補正予算の検討資料づくり。",
+        prepare: ["予算照会の画面を開いておく", "最初は確認ポイント（CONFIRM）で科目コード欄を手でクリックします"],
+        customize: ["科目コード欄の座標を📍で取って CLICK_POS を有効化し、CONFIRM を無効化すると完全自動になります"],
+        ideas: ["撮った画像は evidence\\日付\\ にまとまるので、そのまま決裁の添付資料にできます"],
+        targetWindow: "財務会計", csvFile: "13_yosan.csv",
+        csv: [
+            ["予算科目コード", "科目名"],
+            ["01-02-03-13", "委託料"],
+            ["01-02-03-14", "使用料及び賃借料"],
+            ["03-01-01-11", "需用費"]
+        ],
+        steps: [
+            ["GROUP_START", "科目コード欄にカーソルを置く"],
+            ["CLICK_POS", "300,200", { disabled: true }],
+            ["CONFIRM", "予算科目コードの欄をクリックしてから［▶ 続行］を押してね（{{科目名}}）"],
+            ["GROUP_END", ""],
+            ["KEY", "^a"],
+            ["CSV", "1"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "3000"],
+            ["SCREENSHOT", "予算照会_{{予算科目コード}}_{{科目名}},WINDOW"]
+        ]
+    },
+    {
+        id: "zaimu-payee-check", category: "財務会計システム", level: 2,
+        name: "債権者（支払先）コードの登録チェック",
+        summary: "債権者コードを1件ずつ照会し、「該当なし」が出たコードを自動で飛ばして記録します。実行結果CSVの「スキップ」がそのまま未登録コードの一覧になります。",
+        useCase: "支払前に、支払先が債権者マスタに登録済みかをまとめて確かめたいとき。",
+        prepare: ["債権者照会の画面を開き、コード欄にカーソルを置いておく", "該当なしのときに出るメッセージのタイトル（「該当なし」「エラー」など）を確認して IF を合わせる"],
+        customize: ["該当なしのメッセージが別ウィンドウで出ないシステムでは、代わりに SCREENSHOT を撮ってあとで目視確認します"],
+        ideas: ["IFのSKIPは「エラーで止めずに記録だけする」使い方ができます。チェック業務全般に応用できます"],
+        targetWindow: "財務会計", csvFile: "14_saiken.csv",
+        csv: [
+            ["債権者コード", "債権者名"],
+            ["100001", "見本ビルメンテナンス株式会社"],
+            ["100002", "試験リース株式会社"],
+            ["999999", "未登録のはずの業者"],
+            ["100003", "練習文具店"]
+        ],
+        steps: [
+            ["COMMENT", "結果CSVで「スキップ」になった行が、該当なし（未登録）のコードだよ"],
+            ["KEY", "^a"],
+            ["CSV", "1"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "2000"],
+            ["IF", "該当なし,{ENTER},SKIP"],
+            ["IF", "エラー,{ENTER},SKIP"],
+            ["SCREENSHOT", "債権者_{{債権者コード}},WINDOW"]
+        ]
+    },
+    // ----------------------------------------------------------------- グループウェア
+    {
+        id: "gw-schedule", category: "グループウェア", level: 2,
+        name: "スケジュールの一括登録",
+        summary: "会議や行事の予定を、日付・時刻・件名・場所・メモの順に入力して登録します。",
+        useCase: "年間行事予定や定例会議をまとめてグループウェアに入れるとき。",
+        prepare: ["グループウェアの予定登録画面の開き方（ボタン名）を確認し、CLICK「予定を登録」を合わせる", "日付欄から TAB で各欄に移れる順番を、手で確認しておく"],
+        customize: ["時刻がプルダウンのシステムでは、TEXTの代わりに KEY で数字を打つか、{DOWN} で選びます", "繰り返し予定は、CSVに同じ行を日付違いで並べるのが簡単です"],
+        ideas: ["年度初めに「年間予定表（Excel）→CSV保存→このロボット」で、手入力ゼロになります"],
+        targetWindow: "グループウェア", csvFile: "15_schedule.csv",
+        csv: [
+            ["日付", "開始", "終了", "件名", "場所", "メモ"],
+            ["2026/10/05", "10:00", "11:00", "課内定例会議", "第1会議室", "資料は前日までに共有"],
+            ["2026/10/12", "10:00", "11:00", "課内定例会議", "第1会議室", ""],
+            ["2026/10/15", "14:00", "16:00", "防災訓練", "本庁舎全体", "避難経路を確認"],
+            ["2026/10/19", "10:00", "11:00", "課内定例会議", "第1会議室", ""]
+        ],
+        steps: [
+            ["CLICK", "予定を登録"],
+            ["WAIT", "3000"],
+            ["GROUP_START", "日付欄にカーソルを置く"],
+            ["CLICK_POS", "400,220", { disabled: true }],
+            ["CONFIRM", "日付の入力欄をクリックしてから［▶ 続行］を押してね（{{日付}} {{件名}}）"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "入力"],
+            ["KEY", "^a"], ["TEXT", "{{日付}}"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["TEXT", "{{開始}}"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["TEXT", "{{終了}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{件名}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{場所}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{メモ}}"],
+            ["GROUP_END", ""],
+            ["CLICK", "登録する"],
+            ["WAIT", "2500"],
+            ["IF", "エラー,{ENTER},SKIP"]
+        ]
+    },
+    {
+        id: "gw-board", category: "グループウェア", level: 1,
+        name: "掲示板・お知らせの定型投稿（日付は自動）",
+        summary: "タイトルと本文をCSVから読み、今日の日付（和暦）を入れて掲示板に投稿する直前まで進めます。投稿ボタンは確認のあと押します。",
+        useCase: "毎週・毎月の定型のお知らせ（会議室の予約状況、当番表など）。",
+        prepare: ["掲示板の新規投稿画面を開き、タイトル欄にカーソルを置いておく"],
+        customize: ["投稿ボタンの名前（「投稿」「書き込む」など）に CLICK を合わせます"],
+        ideas: ["CSVを1行だけにして、毎週同じ内容を投稿する「定型ボタン」として使うのもおすすめです"],
+        targetWindow: "グループウェア", csvFile: "16_board.csv",
+        csv: [
+            ["タイトル", "本文"],
+            ["【お知らせ】庁舎内の一斉清掃について", "下記のとおり一斉清掃を行います。\n日時：10月第3金曜日 午後4時から\nご協力をお願いします。"],
+            ["【お知らせ】会議室の予約方法の変更", "11月から会議室の予約は施設予約画面で行ってください。"]
+        ],
+        steps: [
+            ["KEY", "^a"],
+            ["TEXT", "{{タイトル}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{本文}}\n\n（{{WAREKI}} 掲載）"],
+            ["CONFIRM", "内容を確認してね。OKなら［▶ 続行］で投稿するよ。\n{{タイトル}}"],
+            ["CLICK", "投稿"],
+            ["WAIT", "2500"]
+        ]
+    },
+    {
+        id: "gw-mail-draft", category: "グループウェア", level: 2,
+        name: "定型メールを宛先ごとに下書き保存",
+        summary: "宛先・件名・本文（差し込み入り）を入力して「下書き保存」までを行います。送信はしないので、最後に人が見直して送れます。",
+        useCase: "照会文・督促・日程調整など、宛先ごとに少しずつ違うメールをたくさん作るとき。",
+        prepare: ["メールの新規作成ボタンの名前を確認し、CLICK「メール作成」を合わせる", "宛先欄にカーソルが来ることを確認する"],
+        customize: ["宛先欄が入力補完（候補表示）するシステムでは、宛先の後に WAIT と KEY {ENTER} を足します"],
+        ideas: ["送信まで自動にせず「下書き」で止めるのが事故を防ぐコツです"],
+        targetWindow: "グループウェア", csvFile: "17_mail.csv",
+        csv: [
+            ["宛先", "氏名", "締切"],
+            ["mihon.taro@example.jp", "見本 太郎", "10月20日"],
+            ["shiken.hanako@example.jp", "試験 花子", "10月20日"],
+            ["renshu.ichiro@example.jp", "練習 一郎", "10月27日"]
+        ],
+        steps: [
+            ["CLICK", "メール作成"],
+            ["WAIT", "3000"],
+            ["TEXT", "{{宛先}}"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "【ご依頼】調査票のご提出について（{{締切}}締切）"],
+            ["KEY", "{TAB}"],
+            ["TEXT", "{{氏名}} 様\n\nお疲れさまです。\n先日ご案内した調査票について、{{締切}}までにご提出をお願いします。\n\n（{{WAREKI}} 送信）"],
+            ["CLICK", "下書き保存"],
+            ["WAIT", "2000"]
+        ]
+    },
+    // ----------------------------------------------------------------- 福祉システム
+    {
+        id: "gprime-input", category: "福祉システム（GPRIME等）", level: 3,
+        name: "宛名番号で検索して申請内容を入力・登録",
+        summary: "宛名番号で対象者を検索し、見つからなければ飛ばして記録、見つかれば申請日・区分などを入力して登録します。登録後の確認ダイアログも自動で閉じます。",
+        useCase: "申請書の受付データ（CSV）を、福祉システムへ連続入力するとき。本ツールの本来の目的です。",
+        prepare: ["システムの検索画面を開き、宛名番号欄にカーソルを置いておく", "対象ウィンドウ名をシステムのタイトルに合わせる（🔍一覧）", "検索後に入力欄までTABを何回押すか（見本は3回）を手で数えておく"],
+        customize: ["IF「該当なし」「エラー」のタイトルは、実際に出るメッセージの題名に合わせます", "「戻る」ボタンの名前や、検索画面に戻るキー（F3等）はシステムに合わせます"],
+        ideas: ["最初は開始行・終了行を同じ番号にして1件だけ試し、画面の動きを確かめてから全件流しましょう", "エラー行はCSV保存して、直したあとに再実行できます"],
+        targetWindow: "GPRIME", csvFile: "18_gprime.csv",
+        csv: [
+            ["宛名番号", "申請日", "申請区分", "認定区分", "備考"],
+            ["0000001", "2026/10/01", "新規", "1", ""],
+            ["0000002", "2026/10/01", "更新", "2", "書類後日提出"],
+            ["9999999", "2026/10/02", "新規", "1", "存在しない番号の見本"],
+            ["0000003", "2026/10/03", "変更", "3", ""]
+        ],
+        steps: [
+            ["COMMENT", "宛名番号の欄にカーソルを置いてから▶実行してね。まずは1件だけで試そう"],
+            ["IF", "エラー,{ENTER},STOP"],
+            ["GROUP_START", "検索"],
+            ["KEY", "^a"],
+            ["CSV", "1"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "2000"],
+            ["IF", "該当なし,{ENTER},SKIP"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "申請内容の入力"],
+            ["KEY", "{TAB 3}"],
+            ["KEY", "^a"], ["CSV", "2"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["CSV", "3"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["CSV", "4"], ["KEY", "{TAB}"],
+            ["KEY", "^a"], ["CSV", "5"],
+            ["GROUP_END", ""],
+            ["GROUP_START", "登録"],
+            ["CLICK", "登録"],
+            ["WAIT_FOR", "確認,{ENTER},15"],
+            ["WAIT", "1500"],
+            ["IF", "エラー,{ENTER},SKIP"],
+            ["SCREENSHOT", "登録_{{宛名番号}},WINDOW"],
+            ["CLICK", "戻る"],
+            ["WAIT", "2000"],
+            ["GROUP_END", ""]
+        ]
+    },
+    {
+        id: "gprime-view", category: "福祉システム（GPRIME等）", level: 1,
+        name: "受給者の照会画面を連続で撮影（点検用）",
+        summary: "宛名番号を1件ずつ照会して、画面をPNGで保存します。見るだけなので、システムに慣れていなくても安心して動かせます。",
+        useCase: "年次の資格点検、ケース記録の確認、監査前の画面控え。",
+        prepare: ["照会画面を開き、宛名番号欄にカーソルを置いておく"],
+        customize: ["照会結果の画面が別タブにある場合は、SCREENSHOT の前に KEY（タブ移動）を足します"],
+        ideas: ["点検で気になった行だけ CSV に残して再実行、という使い方もできます"],
+        targetWindow: "GPRIME", csvFile: "19_gprime_view.csv",
+        csv: [["宛名番号"], ["0000001"], ["0000002"], ["0000003"]],
+        steps: [
+            ["KEY", "^a"],
+            ["CSV", "1"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "2500"],
+            ["IF", "該当なし,{ENTER},SKIP"],
+            ["SCREENSHOT", "照会_{{宛名番号}},WINDOW"]
+        ]
+    },
+    // ----------------------------------------------------------------- 発見！便利ワザ
+    {
+        id: "trick-folders", category: "発見！便利ワザ", level: 1,
+        name: "CSVの名前でフォルダを一括作成",
+        summary: "画面操作をせず、Windowsのコマンド（mkdir）を RUN で呼び出して、CSVに書いた名前のフォルダを一気に作ります。「2026年度\\01_申請書」のような階層もOK。",
+        useCase: "年度替わりのフォルダ準備、案件ごと・利用者ごとのフォルダ作成。",
+        prepare: ["作成先 C:\\RPA作業 を自分の場所に書き換える（ネットワークドライブも可）"],
+        customize: ["作成先は RUN の中の C:\\RPA作業\\ の部分です"],
+        ideas: ["RUN は「アプリ起動」だけでなく、Windowsのコマンドを何でも呼べます。ファイルのコピー（copy）や名前変更（ren）にも応用できます", "黒い画面が一瞬出ますが正常です"],
+        targetWindow: "", csvFile: "20_folders.csv",
+        csv: [
+            ["フォルダ名"],
+            ["2026年度\\01_申請書"],
+            ["2026年度\\02_決定通知"],
+            ["2026年度\\03_照会回答"],
+            ["2026年度\\04_証跡"],
+            ["出力"],
+            ["通知文"]
+        ],
+        steps: [
+            ["COMMENT", "画面は操作しないよ。RUNでWindowsのコマンドを呼ぶだけ！"],
+            ["RUN", "cmd /c mkdir \"C:\\RPA作業\\{{フォルダ名}}\""],
+            ["WAIT", "500"]
+        ]
+    },
+    {
+        id: "trick-rename", category: "発見！便利ワザ", level: 2,
+        name: "ファイル名を一覧どおりに一括変更",
+        summary: "「変更前」「変更後」の2列のCSVどおりに、ファイル名をまとめて変えます（ren コマンド）。スキャンした書類に氏名を付けるときなどに便利です。",
+        useCase: "スキャナーが付けた連番ファイル名を、意味のある名前に付け替えるとき。",
+        prepare: ["対象フォルダ C:\\RPA作業\\スキャン を自分の場所に書き換える", "念のため、フォルダのコピー（バックアップ）を取っておく"],
+        customize: ["フォルダは RUN の中の C:\\RPA作業\\スキャン\\ の部分です", "変更後の名前には「\\」を含められません（同じフォルダ内での名前変更です）"],
+        ideas: ["エクスプローラーで対象ファイルを選んで「パスのコピー」→Excelに貼る→CSV化、とすると一覧づくりが速いです"],
+        targetWindow: "", csvFile: "21_rename.csv",
+        csv: [
+            ["変更前", "変更後"],
+            ["scan0001.pdf", "見本太郎_申請書.pdf"],
+            ["scan0002.pdf", "試験花子_申請書.pdf"],
+            ["scan0003.pdf", "練習一郎_申請書.pdf"]
+        ],
+        steps: [
+            ["COMMENT", "念のためフォルダのバックアップを取ってから実行してね"],
+            ["RUN", "cmd /c ren \"C:\\RPA作業\\スキャン\\{{変更前}}\" \"{{変更後}}\""],
+            ["WAIT", "500"]
+        ]
+    },
+    {
+        id: "trick-calc", category: "発見！便利ワザ", level: 2,
+        name: "電卓で検算して結果を記録",
+        summary: "Windowsの電卓に「単価×数量」を入力し、答えをコピーして記録します。結果CSVで「台帳の金額」と「電卓の答え」を並べると、計算ミスが一目で見つかります。",
+        useCase: "手計算・手入力された台帳の金額が正しいかの点検。見本データには1件だけ間違いが入っています。探してみてください。",
+        prepare: ["特になし（最初の1行で電卓を起動します）"],
+        customize: ["足し算なら KEY「*」を KEY「{+}」に変えます（SendKeys では + は {+} と書きます）"],
+        ideas: ["COPY_SAVE は「画面の答えを持ち帰る」機能。電卓に限らず、システムの計算結果の記録にも使えます"],
+        targetWindow: "", csvFile: "22_calc.csv",
+        csv: [
+            ["品名", "単価", "数量", "台帳の金額"],
+            ["コピー用紙A4", "550", "20", "11000"],
+            ["ボールペン", "110", "36", "3960"],
+            ["クリアファイル", "33", "150", "4590"],
+            ["付箋", "198", "12", "2376"]
+        ],
+        steps: [
+            ["GROUP_START", "準備：電卓を起動（最初の1行だけ）", { when: "first" }],
+            ["RUN", "calc.exe"],
+            ["WAIT", "3000"],
+            ["GROUP_END", ""],
+            ["SWITCH", "電卓"],
+            ["KEY", "{ESC}"],
+            ["TEXT", "{{単価}}"],
+            ["KEY", "*"],
+            ["TEXT", "{{数量}}"],
+            ["KEY", "{ENTER}"],
+            ["WAIT", "300"],
+            ["COPY_SAVE", "電卓の答え"]
+        ]
+    },
+    {
+        id: "trick-interval", category: "発見！便利ワザ", level: 1,
+        name: "一定間隔で画面を記録（定点観測）",
+        summary: "CSVの行数ぶん「待つ→画面全体を撮る」を繰り返します。CSVの行数＝繰り返し回数として使うワザです。",
+        useCase: "夜間バッチや大量処理の進み具合を、席を外している間も記録しておきたいとき。",
+        prepare: ["特になし"],
+        customize: ["間隔は WAIT の値です（見本は10秒。1分なら60000）", "回数はCSVの行数です。10回なら10行にします"],
+        ideas: ["「CSVの行数＝回数」の考え方で、CSVがいらない作業も何回でも繰り返せます"],
+        targetWindow: "", csvFile: "23_interval.csv",
+        csv: [["回"], ["1"], ["2"], ["3"], ["4"], ["5"]],
+        steps: [
+            ["COMMENT", "CSVの行数ぶん繰り返すよ（見本は5回・10秒おき）"],
+            ["WAIT", "10000"],
+            ["SCREENSHOT", "定点_{{ROW}}_{{NOW}},FULL"]
+        ]
+    }
+];
+// @@TEMPLATE_DATA_END
+
+var TEMPLATE_LEVELS = { 1: "初級", 2: "中級", 3: "上級" };
+
+function templateCsvText(tpl) {
+    var lines = [];
+    for (var i = 0; i < tpl.csv.length; i++) {
+        lines.push(tpl.csv[i].map(toCsvField).join(","));
+    }
+    return lines.join("\r\n") + "\r\n";
+}
+
+function templateSteps(tpl) {
+    var out = [];
+    for (var i = 0; i < tpl.steps.length; i++) {
+        var item = tpl.steps[i];
+        var step = { cmd: item[0], val: item[1] == null ? "" : String(item[1]), label: "" };
+        var props = item[2] || {};
+        for (var k in props) {
+            if (props.hasOwnProperty(k)) {
+                step[k] = props[k];
+            }
+        }
+        if (!step.label) {
+            step.label = autoLabelFor(step);
+        }
+        out.push(step);
+    }
+    return out;
+}
+
+function showTemplateGallery() {
+    if (guardRunning()) {
+        return;
+    }
+    var html = '<div class="form-help">お手本マクロから始めよう♡ 「✨ 作る」を押すと新しいマクロとして追加されて、見本のCSVも samples フォルダに用意されるよ。' +
+        "中身の説明は docs\\templates.md にもあるキュン。</div>" +
+        '<div class="tpl-toolbar">分類: <select id="tplFilter" onchange="filterTemplates()"><option value="">すべて</option>';
+    var c;
+    var i;
+    for (c = 0; c < TEMPLATE_CATEGORIES.length; c++) {
+        html += '<option value="' + escapeHtml(TEMPLATE_CATEGORIES[c]) + '">' + escapeHtml(TEMPLATE_CATEGORIES[c]) + "</option>";
+    }
+    html += "</select></div>";
+    for (c = 0; c < TEMPLATE_CATEGORIES.length; c++) {
+        var cat = TEMPLATE_CATEGORIES[c];
+        html += '<div class="tpl-section" data-cat="' + escapeHtml(cat) + '"><div class="tpl-cat">' + escapeHtml(cat) + "</div>";
+        for (i = 0; i < TEMPLATES.length; i++) {
+            var t = TEMPLATES[i];
+            if (t.category !== cat) {
+                continue;
+            }
+            html += '<div class="tpl-card"><div class="tpl-head">' +
+                '<span class="tpl-level lv' + t.level + '">' + TEMPLATE_LEVELS[t.level] + "</span>" +
+                '<span class="tpl-name">' + escapeHtml(t.name) + "</span>" +
+                '<button class="btn btn-primary" onclick="createFromTemplate(' + i + ')">✨ 作る</button></div>' +
+                '<div class="tpl-desc">' + escapeHtml(t.summary) + "</div>" +
+                '<div class="tpl-desc">💡 こんな時に: ' + escapeHtml(t.useCase) + "</div>" +
+                '<div class="tpl-meta">準備: ' + escapeHtml(t.prepare.join(" ／ ")) + "</div>" +
+                '<div class="tpl-meta">対象ウィンドウ: ' + escapeHtml(t.targetWindow || "（なし・マクロの中で切替）") +
+                " ／ 見本CSV: " + escapeHtml(t.csvFile) + " ／ " + t.steps.length + "ステップ</div></div>";
+        }
+        html += "</div>";
+    }
+    openModal("📚 テンプレート（" + TEMPLATES.length + "種類）", html, [{ text: "閉じる", fn: null }], { wide: true });
+}
+
+function filterTemplates() {
+    var value = byId("tplFilter").value;
+    var sections = byId("modalBody").getElementsByTagName("div");
+    for (var i = 0; i < sections.length; i++) {
+        if (hasClass(sections[i], "tpl-section")) {
+            sections[i].style.display = value === "" || sections[i].getAttribute("data-cat") === value ? "" : "none";
+        }
+    }
+}
+
+// Writes samples\<csvFile> (keeps an existing file so user edits survive) and returns its path
+function writeTemplateCsv(tpl) {
+    if (!fso || !appDir || !tpl.csvFile) {
+        return "";
+    }
+    var folder = ensureFolder(appFilePath(SAMPLE_FOLDER_NAME));
+    var path = folder + "\\" + tpl.csvFile;
+    if (!fso.FileExists(path)) {
+        writeTextFile(path, templateCsvText(tpl), true);
+        log("📄 見本CSVを作ったキュン: " + path, "ok");
+    }
+    return path;
+}
+
+function createFromTemplate(index) {
+    var tpl = TEMPLATES[index];
+    if (!tpl || guardRunning()) {
+        return;
+    }
+    closeModal();
+    var name = tpl.name;
+    var n = 2;
+    var exists = function (nm) {
+        for (var j = 0; j < appData.macros.length; j++) {
+            if (appData.macros[j].name === nm) {
+                return true;
+            }
+        }
+        return false;
+    };
+    while (exists(name)) {
+        name = tpl.name + " (" + n + ")";
+        n++;
+    }
+    appData.macros.push({ id: uniqueMacroId(), name: name, targetWindow: tpl.targetWindow, steps: templateSteps(tpl) });
+    currentMacroIndex = appData.macros.length - 1;
+    selectedIndex = -1;
+    renderSteps();
+    byId("macroContainer").scrollTop = 0;
+    commitChange("テンプレートから作成: " + name);
+    log("✨ テンプレート「" + tpl.name + "」からマクロを作ったキュン♡", "ok");
+    try {
+        var csvPath = writeTemplateCsv(tpl);
+        if (csvPath) {
+            byId("csvPathInput").value = csvPath;
+            byId("csvHeaderCheck").checked = true;
+            loadCsvFromInput();
+        }
+    } catch (e) {
+        log("見本CSVを用意できなかったキュン…（" + errorText(e) + "）", "warn");
+    }
+    showMessage("✨ テンプレートから作成", "「" + name + "」を作ったよ♡\n\n【準備】\n・" + tpl.prepare.join("\n・") +
+        "\n\n【カスタマイズのポイント】\n・" + tpl.customize.join("\n・") +
+        "\n\n見本CSVも読み込んでおいたよ。まずは開始行・終了行を「1」にして1件だけ試してね！");
 }
 
 // =====================================================================
@@ -3600,7 +5378,7 @@ function onKeyDown(e) {
     }
     if (isModalOpen()) {
         if (key === 27) {
-            closeModal();
+            dismissModal();
             return preventEvent(e);
         }
         if (key === 13 && tag !== "TEXTAREA" && tag !== "BUTTON" && tag !== "SELECT") {
@@ -3634,6 +5412,10 @@ function onKeyDown(e) {
     }
     if (e.ctrlKey && key === 68) { // Ctrl+D
         duplicateSelected();
+        return preventEvent(e);
+    }
+    if (e.ctrlKey && (key === 191 || key === 111)) { // Ctrl+/
+        toggleDisabledSelected();
         return preventEvent(e);
     }
     if (key === 46 && selectedIndex >= 0) { // Delete
