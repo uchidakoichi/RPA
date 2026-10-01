@@ -597,6 +597,7 @@ var IMG_DEFAULT_THRESHOLD = 0.9;
 var IMG_COLOR_TOLERANCE = 24;   // per RGB channel (0-255)
 var IMG_SEARCH_RETRY = 3;       // screen captures per CLICK_IMG (1 second apart)
 var IMG_PS_TIMEOUT_SEC = 90;
+var IMG_SEARCH_DEADLINE_SEC = 60;
 var RESULT_FILE_NAME = "gprime_result.csv";
 var SAMPLE_FOLDER_NAME = "samples";
 var EVIDENCE_FOLDER_NAME = "evidence";
@@ -634,7 +635,12 @@ var alarmVoice = null;
 var modalDismissFn = null;
 var psPreferredLaunch = null;  // launch method confirmed to deliver a result this session
 var psLaunchBlocked = false;    // every launch method threw: fail fast until the next diagnostics
+var psLangRestricted = false;   // diagnostics found PowerShell in a restricted language mode
 var psLastFailed = false;       // the latest PowerShell call did not come back (alarm skips straight to fallbacks)
+var activePsJobs = {};          // base path -> job, for PowerShell calls whose files must not be cleaned up yet
+var runHeader = null;           // CSV header snapshot taken at run start (used by the result/error CSV exports)
+var SETTINGS_FILE_NAME = "fujikyun_settings.json";
+var STOP_HOLD_POLLS = 8;        // Esc held for 8 polls x 120 ms (about 1 s) stops a run from any window
 
 // =====================================================================
 //  Utilities
@@ -987,9 +993,23 @@ function deleteFileQuietly(path) {
     }
 }
 
+// Files of PowerShell calls still in flight are kept: deleting their .ps1 or .cancel would break them
+function isActivePsFile(path) {
+    for (var base in activePsJobs) {
+        if (activePsJobs.hasOwnProperty(base) && path.indexOf(base) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function cleanupTempFiles() {
     var remain = [];
     for (var i = 0; i < pendingTempFiles.length; i++) {
+        if (isActivePsFile(pendingTempFiles[i])) {
+            remain.push(pendingTempFiles[i]);
+            continue;
+        }
         deleteFileQuietly(pendingTempFiles[i]);
         if (fso && fso.FileExists(pendingTempFiles[i])) {
             remain.push(pendingTempFiles[i]);
@@ -1120,6 +1140,14 @@ function placeholderValue(key, rs) {
         var col = toInt(key, 0);
         return col >= 1 && col <= row.data.length ? String(row.data[col - 1]) : "";
     }
+    // An exact CSV header wins over the built-in names, so a column called "ROW" or "DAY" works as offered
+    if (csvState.header) {
+        for (i = 0; i < csvState.header.length; i++) {
+            if (trimText(csvState.header[i]) === key) {
+                return i < row.data.length ? String(row.data[i]) : "";
+            }
+        }
+    }
     if ((m = up.match(/^ROW\s*([+\-])\s*(\d+)$/))) {
         return String(row.no + (m[1] === "+" ? 1 : -1) * toInt(m[2], 0));
     }
@@ -1139,13 +1167,6 @@ function placeholderValue(key, rs) {
     case "YEAR": return String(d.getFullYear());
     case "MONTH": return String(d.getMonth() + 1);
     case "DAY": return String(d.getDate());
-    }
-    if (csvState.header) {
-        for (i = 0; i < csvState.header.length; i++) {
-            if (trimText(csvState.header[i]) === key) {
-                return i < row.data.length ? String(row.data[i]) : "";
-            }
-        }
     }
     return null;
 }
@@ -1168,7 +1189,9 @@ function placeholderChoices() {
     var i;
     for (i = 1; i <= cols; i++) {
         var name = csvHeaderName(i);
-        list.push([name ? "{{" + name + "}}" : "{{" + i + "}}", "CSV " + i + "列目" + (name ? "「" + name + "」" : "")]);
+        // An all-digit header would be read as a column number, and braces cannot be inside a placeholder
+        var byName = name && !/^\d+$/.test(name) && !/[{}]/.test(name);
+        list.push([byName ? "{{" + name + "}}" : "{{" + i + "}}", "CSV " + i + "列目" + (name ? "「" + name + "」" : "")]);
     }
     if (cols === 0) {
         list.push(["{{1}}", "CSV 1列目（{{2}}なら2列目…／見出し名 {{氏名}} でもOK）"]);
@@ -2734,8 +2757,20 @@ function buildPalette() {
 // =====================================================================
 //  CSV loading (UI)
 // =====================================================================
+// IE fires onchange only when the value changes and a file input's value is read-only,
+// so swap in a fresh copy (inline onchange attribute included) to allow picking the same file again
+function resetFileInput(input) {
+    try {
+        var fresh = input.cloneNode(false);
+        input.parentNode.replaceChild(fresh, input);
+    } catch (e) {
+        /* ignore */
+    }
+}
+
 function onCsvFileChosen(input) {
     var path = input.value || "";
+    resetFileInput(input);
     if (!path || /fakepath/i.test(path)) {
         log("ファイルのフルパスが取れなかったキュン…パス欄に直接入力して📥読込してね", "warn");
         return;
@@ -2828,6 +2863,10 @@ function showWindowList() {
         }
         lastWindowTitles = [];
         var lines = String(payload).split(/\r?\n/);
+        if (!canOpenAsyncDialog(-1)) {
+            log("🔍 ウィンドウ一覧は取れたけど、いま別の画面が開いているから表示しなかったキュン。閉じてからもう一度🔍を押してね", "warn");
+            return;
+        }
         for (var i = 0; i < lines.length; i++) {
             if (trimText(lines[i]) !== "") {
                 lastWindowTitles.push(trimText(lines[i]));
@@ -2863,6 +2902,7 @@ function captureCursorPosition() {
     if (status) {
         status.innerHTML = "マウスを目的の場所に置いて、そのまま待っててね…（約3〜5秒）";
     }
+    var token = modalToken;
     runPowerShellAsync([
         "Add-Type -TypeDefinition @\"",
         "using System;",
@@ -2879,6 +2919,11 @@ function captureCursorPosition() {
         "[void][FujiCursor]::GetCursorPos([ref]$pt)",
         "Set-FujiResult ('OK:' + $pt.X + ',' + $pt.Y)"
     ], PS_TIMEOUT_SEC, function (ok, payload) {
+        if (modalToken !== token) {
+            // The editor that asked was closed or replaced: never write into another dialog's fields
+            log(ok ? "📍 マウス位置は (" + payload + ") だったキュン（編集画面が閉じられたので入力はしなかったよ）" : "📍 マウス位置の取得に失敗…（" + payload + "）", ok ? "info" : "warn");
+            return;
+        }
         var st = byId("captureStatus");
         if (!ok) {
             if (st) { st.innerHTML = escapeHtml("取得失敗…" + payload); }
@@ -2935,7 +2980,12 @@ function captureImageAroundCursor() {
     if (status) {
         status.innerHTML = "対象の画面を前に出して、押したいボタンの真ん中にマウスを置いたまま待っててね…（5秒）";
     }
+    var token = modalToken;
     runPowerShellAsync(buildImageCaptureScript(folder + "\\" + name, w, h), PS_TIMEOUT_SEC, function (ok, payload) {
+        if (modalToken !== token) {
+            log(ok ? "📷 参照画像は " + relative + " に保存したキュン（編集画面が閉じられたので、パスは入れなかったよ）" : "📷 切り取りに失敗…（" + payload + "）", ok ? "ok" : "warn");
+            return;
+        }
         var st = byId("imgCaptureStatus");
         if (!ok) {
             if (st) { st.innerHTML = escapeHtml("切り取り失敗…" + payload); }
@@ -2946,7 +2996,11 @@ function captureImageAroundCursor() {
             updateImagePreview();
         }
         if (st) {
-            st.innerHTML = escapeHtml("切り取れたキュン♡ マウス位置(" + payload + ") の周り " + w + "×" + h + "px → " + relative);
+            var cap = String(payload).split(",");
+            var cw = toInt(cap[2], w);
+            var ch = toInt(cap[3], h);
+            st.innerHTML = escapeHtml("切り取れたキュン♡ マウス位置(" + cap[0] + "," + cap[1] + ") の周り " + cw + "×" + ch + "px → " + relative +
+                (cw < w - 1 || ch < h - 1 ? "（画面の端に近かったから小さめに切り取ったよ）" : ""));
         }
         log("📷 参照画像を保存したキュン: " + relative, "ok");
     });
@@ -3009,12 +3063,17 @@ function startProcessHidden(method, exe, args, markerPath) {
 // Some security products refuse WScript.Shell.Run of powershell.exe from mshta.exe (seen as
 // 0xFFFFFFFF) while still allowing other routes, so walk through them in order of how quietly
 // they run: hidden Run, hidden cmd.exe, Exec (console flashes), ShellExecute.
-function createPsLauncher(args, markerPath) {
+// silentOnly: background jobs (the Esc watcher) must never fall back to Exec, whose console
+// window would flash at run start
+function createPsLauncher(args, markerPath, silentOnly) {
     var exes = powershellCandidates();
     var attempts = [];
     var seen = {};
     var i;
     function add(method, exe) {
+        if (silentOnly && method !== "run" && method !== "cmd") {
+            return;
+        }
         if (!seen[method + "|" + exe]) {
             seen[method + "|" + exe] = true;
             attempts.push({ method: method, exe: exe });
@@ -3053,6 +3112,36 @@ function createPsLauncher(args, markerPath) {
     return launcher;
 }
 
+function loadSettings() {
+    try {
+        var path = appFilePath(SETTINGS_FILE_NAME);
+        if (fso && appDir && fso.FileExists(path)) {
+            var s = JSON.parse(readTextFile(path, "utf-8"));
+            if (s && s.psLaunch && LAUNCH_METHOD_NAMES[s.psLaunch.method] && s.psLaunch.exe) {
+                // The folder may have been copied to another PC: only trust a PowerShell that exists here
+                var exes = powershellCandidates();
+                for (var i = 0; i < exes.length; i++) {
+                    if (exes[i].toLowerCase() === String(s.psLaunch.exe).toLowerCase()) {
+                        psPreferredLaunch = { method: s.psLaunch.method, exe: exes[i] };
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        /* a broken settings file only means the launch routes are probed again */
+    }
+}
+
+function saveSettings() {
+    try {
+        if (fso && appDir) {
+            writeTextFile(appFilePath(SETTINGS_FILE_NAME), JSON.stringify({ psLaunch: psPreferredLaunch }, null, 2), false);
+        }
+    } catch (e) {
+        /* ignore */
+    }
+}
+
 function launchDescription(a) {
     return LAUNCH_METHOD_NAMES[a.method] + "（" + a.exe + "）";
 }
@@ -3088,15 +3177,61 @@ function openFolderSelect(path) {
 }
 
 // onDone(ok, payload): script must call  Set-FujiResult 'OK[:payload]'  or  'NG:message'
-function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
+// opts.forRun: the call is a step of the running macro, so its polling goes through the run's
+// single timer (stop/pause apply to it). Every other caller polls with its own setTimeout so it can
+// never replace the run's pending timer.
+// Returns a job whose cancel() creates a marker file the script checks before acting
+// (Test-FujiCancel), because stopping the HTA side does not kill powershell.exe.
+function runPowerShellAsync(bodyLines, timeoutSec, onDone, opts) {
+    opts = opts || {};
     psSeq++;
     var base = tempFolder() + "\\fujikyun_rpa_" + new Date().getTime() + "_" + psSeq;
     var ps1 = base + ".ps1";
     var resultPath = base + ".result";
-    var later = isRunning() ? schedule : function (fn, ms) { setTimeout(fn, ms); };
+    var cancelPath = base + ".cancel";
+    var startedPath = base + ".started";
+    // A detached run job (the run ended while it was in flight) keeps polling on its own timer
+    // only to clean up; its onDone is never called, so it cannot touch a later run.
+    function later(fn, ms) {
+        if (opts.forRun && !job.detached) {
+            schedule(fn, ms);
+        } else {
+            setTimeout(fn, ms);
+        }
+    }
+    var job = {
+        finished: false,
+        detached: false,
+        detach: function () {
+            if (job.finished || job.detached) {
+                return;
+            }
+            job.detached = true;
+            job.cancel();
+            if (job.poll) {
+                setTimeout(job.poll, 200);
+            }
+        },
+        cancel: function () {
+            if (job.finished) {
+                return;
+            }
+            try {
+                if (fso && !fso.FileExists(cancelPath)) {
+                    fso.CreateTextFile(cancelPath, true).Close();
+                }
+            } catch (e) {
+                /* ignore */
+            }
+        }
+    };
     var lines = [
         "$ErrorActionPreference = 'Stop'",
         "$fujiResultPath = " + psQuote(resultPath),
+        "$fujiCancelPath = " + psQuote(cancelPath),
+        "function Test-FujiCancel { return (Test-Path -LiteralPath $fujiCancelPath) }",
+        // Proof of life for long-running jobs: under restricted PowerShell this line fails and no file appears
+        opts.startTimeoutSec ? "try { [System.IO.File]::WriteAllText(" + psQuote(startedPath) + ", '1') } catch { }" : "",
         "function Set-FujiResult([string]$text) {",
         "    $tmp = $fujiResultPath + '.part'",
         "    [System.IO.File]::WriteAllText($tmp, $text, [System.Text.Encoding]::Unicode)",
@@ -3116,25 +3251,29 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
         onDone(false, "PowerShellスクリプトを書き出せなかった（" + errorText(e1) + "）");
         return;
     }
-    pendingTempFiles.push(ps1, resultPath, resultPath + ".part");
+    pendingTempFiles.push(ps1, resultPath, resultPath + ".part", cancelPath, startedPath);
     // iex reads the script text, so a restricted execution policy for .ps1 files does not block it
     if (psLaunchBlocked) {
+        job.finished = true;
         onDone(false, "この端末ではPowerShellを起動できないみたい（さっき全部の方法で失敗したよ。🩺環境チェックでもう一度確かめられるよ）");
-        return;
+        return job;
     }
     var args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"iex ([System.IO.File]::ReadAllText(" + psQuote(ps1) + "))\"";
     var markerPath = base + ".launchfail";
     pendingTempFiles.push(markerPath);
-    var launcher = createPsLauncher(args, markerPath);
+    var launcher = createPsLauncher(args, markerPath, !!opts.silentOnly);
     function giveUp() {
         psLaunchBlocked = true;
         psLastFailed = true;
+        job.finished = true;
+        delete activePsJobs[base];
         onDone(false, "PowerShellを起動できなかった（" + launcher.errors.join(" / ") + "）");
     }
     if (!launcher.next()) {
         giveUp();
-        return;
+        return job;
     }
+    activePsJobs[base] = job;
     var waited = 0;
     var limit = timeoutSec * 1000;
     function poll() {
@@ -3152,14 +3291,24 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
             if (text.charCodeAt(0) === 0xFEFF) {
                 text = text.substring(1);
             }
+            job.finished = true;
+            delete activePsJobs[base];
             deleteFileQuietly(ps1);
             deleteFileQuietly(resultPath);
             deleteFileQuietly(markerPath);
+            deleteFileQuietly(cancelPath);
+            deleteFileQuietly(startedPath);
             if (launcher.errors.length && (!psPreferredLaunch || psPreferredLaunch.method !== launcher.current.method || psPreferredLaunch.exe !== launcher.current.exe)) {
                 log("PowerShellは " + launchDescription(launcher.current) + " で起動できたキュン。この後もこの方法を使うね（使えなかった方法: " + launcher.errors.join(" / ") + "）", "warn");
             }
-            psPreferredLaunch = launcher.current;
+            if (!psPreferredLaunch || psPreferredLaunch.method !== launcher.current.method || psPreferredLaunch.exe !== launcher.current.exe) {
+                psPreferredLaunch = launcher.current;
+                saveSettings();
+            }
             psLastFailed = false;
+            if (job.detached) {
+                return;
+            }
             if (text.indexOf("OK") === 0) {
                 onDone(true, text.substring(3));
             } else {
@@ -3179,14 +3328,25 @@ function runPowerShellAsync(bodyLines, timeoutSec, onDone) {
             return;
         }
         waited += 200;
-        if (waited >= limit) {
+        var notStarted = opts.startTimeoutSec && !fso.FileExists(startedPath) && waited >= opts.startTimeoutSec * 1000;
+        if (waited >= limit || notStarted) {
             psLastFailed = true;
-            onDone(false, "PowerShellの応答が" + timeoutSec + "秒以内に返ってこなかった");
+            // The process may still be alive: make sure it will not act (click) after we gave up.
+            // The .cancel marker stays; the script itself is removed so a late start cannot run it.
+            job.cancel();
+            job.finished = true;
+            delete activePsJobs[base];
+            deleteFileQuietly(ps1);
+            if (!job.detached) {
+                onDone(false, notStarted ? "PowerShellが動き出さなかった（制限モードやセキュリティ設定の可能性）" : "PowerShellの応答が" + timeoutSec + "秒以内に返ってこなかった");
+            }
             return;
         }
         later(poll, 200);
     }
+    job.poll = poll;
     later(poll, 300);
+    return job;
 }
 
 function buildUiaClickScript(name, windowHint) {
@@ -3222,7 +3382,9 @@ function buildUiaClickScript(name, windowHint) {
         "    $el = $s.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)",
         "    if ($el -ne $null) { break }",
         "}",
-        "if ($el -eq $null) {",
+        "if (Test-FujiCancel) {",
+        "    Set-FujiResult 'NG:停止されたので押さなかった'",
+        "} elseif ($el -eq $null) {",
         "    Set-FujiResult ('NG:「' + $targetName + '」という名前のオブジェクトが見つからなかった')",
         "} else {",
         "    $p = $null",
@@ -3248,12 +3410,16 @@ function buildClickPosScript(x, y) {
         "}",
         "\"@",
         "[void][FujiMouse]::SetProcessDPIAware()",
-        "[void][FujiMouse]::SetCursorPos(" + x + ", " + y + ")",
-        "Start-Sleep -Milliseconds 80",
-        "[FujiMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)",
-        "Start-Sleep -Milliseconds 40",
-        "[FujiMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)",
-        "Set-FujiResult 'OK'"
+        "if (Test-FujiCancel) {",
+        "    Set-FujiResult 'NG:停止されたのでクリックしなかった'",
+        "} else {",
+        "    [void][FujiMouse]::SetCursorPos(" + x + ", " + y + ")",
+        "    Start-Sleep -Milliseconds 80",
+        "    [FujiMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)",
+        "    Start-Sleep -Milliseconds 40",
+        "    [FujiMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)",
+        "    Set-FujiResult 'OK'",
+        "}"
     ];
 }
 
@@ -3306,7 +3472,8 @@ function imageEngineScript() {
         "        return bmp;",
         "    }",
         // Returns "centerX,centerY,score(0-1000)" in screen coordinates, or "" when nothing reaches the threshold
-        "    public static string Find(string path, double threshold, int tol) {",
+        "    public static string Find(string path, double threshold, int tol, int maxMillis) {",
+        "        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();",
         "        int tw, th;",
         "        int[] tpx;",
         "        using (Bitmap src = new Bitmap(path)) {",
@@ -3343,10 +3510,11 @@ function imageEngineScript() {
         "            spx = ReadPixels(screen);",
         "        }",
         "        int sampleN = Math.Min(n, 64);",
-        "        int sampleAllowed = (int)Math.Floor((1.0 - threshold) * sampleN * 2.0 + 1e-9) + 1;",
+        "        int sampleAllowed = Math.Min(sampleN - 1, (int)Math.Floor((1.0 - threshold) * sampleN * 2.0 + 1e-9) + 1);",
         "        int allowed = (int)Math.Floor((1.0 - threshold) * n + 1e-9);",
         "        int bestMiss = allowed + 1, bestX = -1, bestY = -1;",
         "        for (int y = 0; y <= sh - th && bestMiss > 0; y++) {",
+        "            if (watch.ElapsedMilliseconds > maxMillis) { if (bestX >= 0) { break; } return \"TIMEOUT\"; }",
         "            int row = y * sw;",
         "            for (int x = 0; x <= sw - tw; x++) {",
         "                int b = row + x;",
@@ -3383,10 +3551,17 @@ function imageEngineScript() {
         "    public static string CaptureAroundCursor(string savePath, int w, int h) {",
         "        FujiImagePoint p;",
         "        GetCursorPos(out p);",
-        "        using (Bitmap bmp = CaptureRect(p.X - w / 2, p.Y - h / 2, w, h)) {",
+        // Keep the rectangle on the desktop (off-screen parts would be saved as black pixels that never
+        // match) and keep the cursor at its centre (CLICK_IMG clicks the centre of the match): near an
+        // edge the rectangle shrinks symmetrically instead of sliding away from the cursor
+        "        int left = GetSystemMetrics(76), top = GetSystemMetrics(77);",
+        "        int sw = GetSystemMetrics(78), sh = GetSystemMetrics(79);",
+        "        int hw = Math.Max(1, Math.Min(w / 2, Math.Min(p.X - left, left + sw - 1 - p.X)));",
+        "        int hh = Math.Max(1, Math.Min(h / 2, Math.Min(p.Y - top, top + sh - 1 - p.Y)));",
+        "        using (Bitmap bmp = CaptureRect(p.X - hw, p.Y - hh, hw * 2, hh * 2)) {",
         "            bmp.Save(savePath, ImageFormat.Png);",
         "        }",
-        "        return p.X + \",\" + p.Y;",
+        "        return p.X + \",\" + p.Y + \",\" + (hw * 2) + \",\" + (hh * 2);",
         "    }",
         "    public static string SaveScreenshot(string savePath, bool activeWindowOnly) {",
         "        int x = GetSystemMetrics(76), y = GetSystemMetrics(77);",
@@ -3414,13 +3589,22 @@ function buildClickImgScript(path, threshold) {
     return imageEngineScript().concat([
         "$imgPath = " + psQuote(path),
         "if (-not (Test-Path -LiteralPath $imgPath)) { throw ('参照画像が見つからない: ' + $imgPath) }",
+        // Own deadline (shorter than the HTA's timeout, which also leaves room for Add-Type)
+        "$deadline = (Get-Date).AddSeconds(" + IMG_SEARCH_DEADLINE_SEC + ")",
         "$found = ''",
         "for ($i = 0; $i -lt " + IMG_SEARCH_RETRY + "; $i++) {",
-        "    $found = [FujiImage]::Find($imgPath, " + threshold + ", " + IMG_COLOR_TOLERANCE + ")",
+        "    if (Test-FujiCancel) { break }",
+        "    $left = [int](($deadline - (Get-Date)).TotalMilliseconds)",
+        "    if ($left -le 0) { $found = 'TIMEOUT'; break }",
+        "    $found = [FujiImage]::Find($imgPath, " + threshold + ", " + IMG_COLOR_TOLERANCE + ", $left)",
         "    if ($found -ne '') { break }",
         "    Start-Sleep -Milliseconds 1000",
         "}",
-        "if ($found -eq '') {",
+        "if (Test-FujiCancel) {",
+        "    Set-FujiResult 'NG:停止されたのでクリックしなかった'",
+        "} elseif ($found -eq 'TIMEOUT') {",
+        "    Set-FujiResult 'NG:画像を探すのに時間がかかりすぎたから中止した（画像を小さく切り取り直すか、しきい値を上げてみてね）'",
+        "} elseif ($found -eq '') {",
         "    Set-FujiResult ('NG:画面内に一致率" + Math.round(threshold * 100) + "%以上の場所が見つからなかった（" + IMG_SEARCH_RETRY + "回探索）')",
         "} else {",
         "    $p = $found.Split(',')",
@@ -3572,7 +3756,12 @@ function runDiagnostics() {
         hints.push("PowerShellが使えない場合、アラームを鳴らす予備手段がないよ。画面のログで異常を確認してね。");
     }
     if (shell && fso) {
+        // Start from scratch: a remembered launch route may be stale (folder copied, policy changed)
         psLaunchBlocked = false;
+        psLastFailed = false;
+        psLangRestricted = false;
+        psPreferredLaunch = null;
+        saveSettings();
         var exes = powershellCandidates();
         add(exes.length > 1, "PowerShell本体", exes.join(" ／ "));
         add(true, "HTA（mshta.exe）の種類", fso.FolderExists(expandEnv("%SystemRoot%\\Sysnative")) ? "32ビット版で動作中" : "64ビット版で動作中");
@@ -3586,7 +3775,7 @@ function runDiagnostics() {
                 "→ RUN コマンドも ShellExecute で代わりに起動を試すよ。");
         }
     }
-    showDiagnostics(items, hints, "⏳ PowerShellで使える機能を確認中…（最大60秒）");
+    var pendingToken = showDiagnostics(items, hints, "⏳ PowerShellで使える機能を確認中…（最大80秒）");
     if (!shell || !fso) {
         showDiagnostics(items, hints, "");
         return;
@@ -3606,7 +3795,18 @@ function runDiagnostics() {
             hints.push("PowerShellが起動できない／結果を返せないよ。グループポリシーやAppLockerでPowerShellが止められている可能性があるキュン。\n" +
                 "→ 使えなくなる機能: CLICK・CLICK_POS・CLICK_IMG・SCREENSHOT・座標/画像の取得・ウィンドウ一覧・アラーム(PowerShell版)\n" +
                 "→ 使える機能: KEY・TEXT・CSV・WAIT・WAIT_FOR・IF・SWITCH・RUN・CONFIRM・COPY_SAVE（キーボード操作中心のマクロは大丈夫）");
-            showDiagnostics(items, hints, "");
+            // In ConstrainedLanguage the bootstrap itself ([System.IO.File]) is refused, so ask PowerShell
+            // for its language mode with cmdlets only
+            probeLanguageMode(function (mode) {
+                if (mode) {
+                    add(mode === "FullLanguage", "PowerShellの言語モード", mode);
+                    psLangRestricted = mode !== "FullLanguage";
+                    if (mode !== "FullLanguage") {
+                        hints.push("PowerShellが制限モード（" + mode + "）で動いているよ（組織の AppLocker / WDAC の設定）。このモードではふじキュンのPowerShell機能は動かないキュン。キーボード操作（KEY・TEXT・CSV）中心で組んでね。");
+                    }
+                }
+                finishDiagnostics(items, hints, pendingToken);
+            });
             return;
         }
         var map = {};
@@ -3623,6 +3823,7 @@ function runDiagnostics() {
             hints.push("PowerShellは Exec で起動しているので、実行のたびに黒い画面が一瞬出るよ。入力先のウィンドウがずれて見えたら、CLICK系の前に SWITCH を入れておくと安心だキュン。");
         }
         add(map.LANGMODE === "FullLanguage", "PowerShellの言語モード", map.LANGMODE || "?");
+        psLangRestricted = !!map.LANGMODE && map.LANGMODE !== "FullLanguage";
         if (map.LANGMODE && map.LANGMODE !== "FullLanguage") {
             hints.push("PowerShellが制限モード（" + map.LANGMODE + "）だよ。C#を使う CLICK_POS・CLICK_IMG・SCREENSHOT は動かない可能性が高いキュン。キーボード操作（KEY・TEXT・CSV）中心で組んでね。");
         }
@@ -3633,10 +3834,82 @@ function runDiagnostics() {
         if (String(map.CSHARP).indexOf("OK") !== 0) {
             hints.push("C#のコンパイルができないよ。CLICK_POS・CLICK_IMG・SCREENSHOT・座標/画像の取得が使えないキュン。");
         }
-        showDiagnostics(items, hints, "");
+        finishDiagnostics(items, hints, pendingToken);
     });
 }
 
+// An asynchronous result may only take over the dialog area when nobody else is using it
+// (never on top of a CONFIRM during a run, never over a dialog the user opened meanwhile)
+function canOpenAsyncDialog(ownToken) {
+    if (runState && runState.confirmOpen) {
+        return false;
+    }
+    return !isModalOpen() || modalToken === ownToken;
+}
+
+function logDiagnostics(items) {
+    for (var j = 0; j < items.length; j++) {
+        log("🩺 " + (items[j].ok ? "OK " : "NG ") + items[j].name + " … " + items[j].detail, items[j].ok ? "info" : "warn");
+    }
+}
+
+function finishDiagnostics(items, hints, pendingToken) {
+    if (canOpenAsyncDialog(pendingToken)) {
+        showDiagnostics(items, hints, "");
+    } else {
+        logDiagnostics(items);
+        log("🩺 環境チェックが終わったよ。別の画面が開いていたから、結果はログに出したキュン", "warn");
+    }
+}
+
+function probeLanguageMode(done) {
+    var base = tempFolder() + "\\fujikyun_lang_" + new Date().getTime();
+    var out = base + ".txt";
+    var marker = base + ".launchfail";
+    pendingTempFiles.push(out, marker);
+    var args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"$ExecutionContext.SessionState.LanguageMode | Out-File -FilePath " + psQuote(out) + " -Encoding unicode\"";
+    var launcher = createPsLauncher(args, marker);
+    if (!launcher.next()) {
+        done("");
+        return;
+    }
+    var waited = 0;
+    function poll() {
+        if (fso.FileExists(out)) {
+            var text = "";
+            try {
+                var ts = fso.OpenTextFile(out, 1, false, -1);
+                text = ts.AtEndOfStream ? "" : ts.ReadAll();
+                ts.Close();
+            } catch (e) {
+                text = "";
+            }
+            text = trimText(text.replace(/^﻿/, ""));
+            if (text !== "") {
+                deleteFileQuietly(out);
+                done(text);
+                return;
+            }
+        }
+        if (launcher.current.method === "cmd" && fso.FileExists(marker)) {
+            deleteFileQuietly(marker);
+            if (!launcher.next()) {
+                done("");
+                return;
+            }
+            waited = 0;
+        }
+        waited += 250;
+        if (waited > 20000) {
+            done("");
+            return;
+        }
+        setTimeout(poll, 250);
+    }
+    setTimeout(poll, 300);
+}
+
+// Returns the modal token so asynchronous updates can tell whether this dialog is still showing
 function showDiagnostics(items, hints, pending) {
     var html = '<div class="form-help">この端末でふじキュンが使える機能を調べたよ♡ ❌ がある機能はこの端末では動かないかも。</div><table class="diag-table">';
     for (var i = 0; i < items.length; i++) {
@@ -3652,12 +3925,11 @@ function showDiagnostics(items, hints, pending) {
     }
     openModal("🩺 環境チェック", html, [
         { text: "結果をログにコピー", fn: function () {
-            for (var j = 0; j < items.length; j++) {
-                log("🩺 " + (items[j].ok ? "OK " : "NG ") + items[j].name + " … " + items[j].detail, items[j].ok ? "info" : "warn");
-            }
+            logDiagnostics(items);
         } },
         { text: "閉じる", cls: "btn-primary", fn: null }
     ], { wide: true });
+    return modalToken;
 }
 
 // =====================================================================
@@ -3669,8 +3941,8 @@ function recordErrorRow(reason) {
         return;
     }
     var row = rs.rows[rs.rowPos];
-    if (row.no <= 0) {
-        return; // test run without CSV
+    if (row.no <= 0 || rs.finalOnly) {
+        return; // test run without CSV / the skipped last row was already recorded
     }
     errorRows.push({ no: row.no, data: row.data.slice(0), reason: reason, time: dateTimeText() });
     updateErrorButton();
@@ -3695,8 +3967,8 @@ function exportErrorRows() {
         maxCols = Math.max(maxCols, errorRows[i].data.length);
     }
     var lines = [];
-    if (csvState.header) {
-        var header = csvState.header.slice(0);
+    if (runHeader) {
+        var header = runHeader.slice(0);
         maxCols = Math.max(maxCols, header.length);
         while (header.length < maxCols) {
             header.push("");
@@ -3775,13 +4047,13 @@ function exportResultRows() {
         return;
     }
     var i;
-    var maxCols = csvState.header ? csvState.header.length : 0;
+    var maxCols = runHeader ? runHeader.length : 0;
     for (i = 0; i < resultRows.length; i++) {
         maxCols = Math.max(maxCols, resultRows[i].data.length);
     }
     var header = [];
     for (i = 0; i < maxCols; i++) {
-        header.push(csvState.header && i < csvState.header.length ? csvState.header[i] : "列" + (i + 1));
+        header.push(runHeader && i < runHeader.length ? runHeader[i] : "列" + (i + 1));
     }
     header = header.concat(resultColumns).concat(["実行結果", "備考", "元データ行No", "開始日時"]);
     var lines = [header.map(toCsvField).join(",")];
@@ -3823,7 +4095,11 @@ function exportMacro() {
     }
     try {
         var folder = ensureFolder(appFilePath(EXPORT_FOLDER_NAME));
-        var path = folder + "\\" + (safeFileName(macro.name) || "macro") + ".json";
+        var stem = folder + "\\" + (safeFileName(macro.name) || "macro");
+        var path = stem + ".json";
+        for (var n = 2; fso.FileExists(path); n++) {
+            path = stem + " (" + n + ").json";
+        }
         var json = JSON.stringify({ version: DATA_VERSION, macros: [macro] }, function (key, value) {
             return key === "collapsed" ? undefined : value;
         }, 2);
@@ -3842,6 +4118,7 @@ function exportMacro() {
 
 function importMacroFile(input) {
     var path = input.value || "";
+    resetFileInput(input);
     if (guardRunning()) {
         return;
     }
@@ -3990,11 +4267,22 @@ function startRun() {
             log("開始行と終了行の指定がおかしいキュン（" + start + "〜" + end + "）", "warn");
             return;
         }
+        var origCol = originalRowNoColumn();
+        var origUsed = 0;
         for (var r = start; r <= end; r++) {
-            list.push({ no: r, data: rows[r - 1] });
+            var origText = origCol >= 0 ? trimText(rows[r - 1][origCol]) : "";
+            var orig = /^[1-9]\d*$/.test(origText) ? toInt(origText, r) : r;
+            if (orig !== r || /^[1-9]\d*$/.test(origText)) {
+                origUsed++;
+            }
+            list.push({ no: orig, data: rows[r - 1] });
+        }
+        if (origUsed > 0) {
+            log("この CSV には「元データ行No」列があるから、{{ROW}} と行番号は元のCSVの番号を使うキュン（エラー行の再実行用）", "info");
         }
     }
     cleanupTempFiles();
+    runHeader = csvState.header ? csvState.header.slice(0) : null;
     errorRows = [];
     updateErrorButton();
     resultRows = [];
@@ -4022,6 +4310,7 @@ function startRun() {
         startTime: new Date()
     };
     setRunUi(true);
+    startStopWatcher(runState);
     log("▶ 実行開始するキュン♡ マクロ「" + macro.name + "」 対象 " + list.length + "行 / 間隔 " + runState.interval + "ms", "run");
     if (!macro.targetWindow) {
         log("対象ウィンドウが未設定だから3秒後に開始するよ。入力先の画面をクリックしておいてね♡（マクロの中でRUN・SWITCHしているならそのままでOK）", "warn");
@@ -4029,6 +4318,59 @@ function startRun() {
     } else {
         schedule(startRow, 100);
     }
+}
+
+// Error-row / result CSVs carry the original row number; re-running them keeps {{ROW}} pointing at the same rows
+function originalRowNoColumn() {
+    if (csvState.header) {
+        for (var i = 0; i < csvState.header.length; i++) {
+            if (trimText(csvState.header[i]) === "元データ行No") {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+// Esc only reaches the HTA while it has focus, but during a run the target app is in front.
+// A small PowerShell watcher reads the global key state: holding Esc ~1 s stops the run from any
+// window. A macro's own KEY {ESC} is a single instant press, so it never counts as "held".
+function startStopWatcher(rs) {
+    if (!shell || !fso || psLaunchBlocked || psLastFailed || psLangRestricted) {
+        // Keyboard-only macros must stay PowerShell-free on PCs where PowerShell does not work
+        log("（Esc長押しでの緊急停止はこの端末では使えないよ。止めるときは、ふじキュンの画面で Esc か ⏹ を押してね）", "info");
+        return;
+    }
+    rs.stopWatcher = runPowerShellAsync([
+        "Add-Type -TypeDefinition @\"",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public static class FujiKeys {",
+        "    [DllImport(\"user32.dll\")] public static extern short GetAsyncKeyState(int vKey);",
+        "}",
+        "\"@",
+        "$held = 0",
+        "$tick = 0",
+        "while ($true) {",
+        "    if (Test-FujiCancel) { Set-FujiResult 'OK:END'; break }",
+        "    $tick++",
+        "    if (($tick % 40) -eq 0 -and @(Get-Process -Name mshta -ErrorAction SilentlyContinue).Count -eq 0) { Set-FujiResult 'OK:END'; break }",
+        "    if (([FujiKeys]::GetAsyncKeyState(0x1B) -band 0x8000) -ne 0) { $held++ } else { $held = 0 }",
+        "    if ($held -ge " + STOP_HOLD_POLLS + ") { Set-FujiResult 'OK:STOP'; break }",
+        "    Start-Sleep -Milliseconds 120",
+        "}"
+    ], 7 * 24 * 3600, function (ok, payload) {
+        if (ok && payload === "STOP" && runState === rs && rs.running) {
+            stopRun("Esc長押し");
+            try {
+                shell.AppActivate(document.title);
+            } catch (e) {
+                /* ignore */
+            }
+        } else if (!ok && runState === rs && rs.running) {
+            log("（Esc長押しでの緊急停止は使えない状態だよ。止めるときは、ふじキュンの画面で Esc か ⏹ を押してね）", "warn");
+        }
+    }, { silentOnly: true, startTimeoutSec: PS_TIMEOUT_SEC });
 }
 
 function startRow() {
@@ -4055,12 +4397,43 @@ function startRow() {
     }
 }
 
+// skipFirstOnly: true when the current row is not the first one, so "first row only" groups are closed
+function nextFinalGroupIndex(steps, from, skipFirstOnly) {
+    for (var i = Math.max(0, from); i < steps.length; i++) {
+        if (steps[i].cmd !== "GROUP_START") {
+            continue;
+        }
+        if (steps[i].disabled || (skipFirstOnly && steps[i].when === "first")) {
+            // Never descend into a group that would not run: a "last" group inside it stays skipped
+            var end = findGroupEnd(steps, i);
+            if (end > i) {
+                i = end;
+            }
+            continue;
+        }
+        if (steps[i].when === "last") {
+            return i;
+        }
+    }
+    return -1;
+}
+
 function runCurrentStep() {
     var rs = runState;
+    if (rs.finalOnly && rs.stepIndex > rs.finalGroupEnd) {
+        // Only "last row only" groups run for a skipped last row
+        var g = nextFinalGroupIndex(rs.steps, rs.stepIndex, rs.rowPos !== 0);
+        rs.stepIndex = g >= 0 ? g : rs.steps.length;
+        rs.finalGroupEnd = g >= 0 ? findGroupEnd(rs.steps, g) : -1;
+    }
     if (rs.stepIndex >= rs.steps.length) {
-        rs.doneRows++;
-        setRowResult("完了");
-        log("✔ " + rowCaption(rs.rows[rs.rowPos]) + " 完了", "ok");
+        if (rs.finalOnly) {
+            rs.finalOnly = false;
+        } else {
+            rs.doneRows++;
+            setRowResult("完了");
+            log("✔ " + rowCaption(rs.rows[rs.rowPos]) + " 完了", "ok");
+        }
         nextRow();
         return;
     }
@@ -4072,8 +4445,26 @@ function runCurrentStep() {
             return;
         }
         if (action === "skipRow") {
+            if (rs.finalOnly) {
+                // A skip inside the final-only pass: the row was already counted and recorded
+                rs.finalOnly = false;
+                nextRow();
+                return;
+            }
             rs.skippedRows++;
             setRowResult("スキップ");
+            if (rs.rowPos === rs.rows.length - 1) {
+                // The last row was skipped: still run the "last row only" groups (save / clean-up)
+                var g = nextFinalGroupIndex(rs.steps, rs.stepIndex + 1, rs.rowPos !== 0);
+                if (g >= 0) {
+                    rs.finalOnly = true;
+                    rs.stepIndex = g;
+                    rs.finalGroupEnd = findGroupEnd(rs.steps, g);
+                    log("最後の行はスキップしたけど、「最後の1行だけ」のグループは実行するキュン", "info");
+                    schedule(runCurrentStep, rs.interval);
+                    return;
+                }
+            }
             nextRow();
             return;
         }
@@ -4282,14 +4673,14 @@ function executeStep(step, next) {
     case "CLICK":
         ensureInputTarget(function () {
             log("👆 「" + val + "」をUIAutomationで探してるキュン…", "info");
-            runPowerShellAsync(buildUiaClickScript(val, rs.activeTitle), PS_TIMEOUT_SEC, function (ok, payload) {
+            rs.psJob = runPowerShellAsync(buildUiaClickScript(val, rs.activeTitle), PS_TIMEOUT_SEC, function (ok, payload) {
                 if (ok) {
                     log("👆 「" + val + "」をクリック（" + payload + "）", "info");
                     next("next");
                 } else {
                     stopWithError("🚨 CLICK失敗: " + payload, true);
                 }
-            });
+            }, { forRun: true });
         });
         return;
     case "CLICK_POS":
@@ -4297,14 +4688,14 @@ function executeStep(step, next) {
         var x = toInt(xy[0], 0);
         var y = toInt(xy[1], 0);
         ensureInputTarget(function () {
-            runPowerShellAsync(buildClickPosScript(x, y), PS_TIMEOUT_SEC, function (ok, payload) {
+            rs.psJob = runPowerShellAsync(buildClickPosScript(x, y), PS_TIMEOUT_SEC, function (ok, payload) {
                 if (ok) {
                     log("🎯 座標(" + x + ", " + y + ")をクリック", "info");
                     next("next");
                 } else {
                     stopWithError("🚨 座標クリック失敗: " + payload, true);
                 }
-            });
+            }, { forRun: true });
         });
         return;
     case "CLICK_IMG":
@@ -4317,7 +4708,7 @@ function executeStep(step, next) {
         }
         ensureInputTarget(function () {
             log("🖼 画像「" + fileNameOf(imgPath) + "」を画面から探してるキュン…（一致" + Math.round(threshold * 100) + "%以上）", "info");
-            runPowerShellAsync(buildClickImgScript(imgPath, threshold), IMG_PS_TIMEOUT_SEC, function (ok, payload) {
+            rs.psJob = runPowerShellAsync(buildClickImgScript(imgPath, threshold), IMG_PS_TIMEOUT_SEC, function (ok, payload) {
                 if (ok) {
                     var r = String(payload).split(",");
                     log("🖼 見つけたキュン♡ 一致率 " + (toInt(r[2], 0) / 10) + "% → 座標(" + r[0] + ", " + r[1] + ")をクリック", "info");
@@ -4325,7 +4716,7 @@ function executeStep(step, next) {
                 } else {
                     stopWithError("🚨 画像認識クリック失敗: " + payload, true);
                 }
-            });
+            }, { forRun: true });
         });
         return;
     case "CONFIRM":
@@ -4538,7 +4929,7 @@ function saveScreenshot(val, next) {
         stopWithError("🚨 証跡フォルダを作れなかったキュン…（" + errorText(e) + "）", true);
         return;
     }
-    runPowerShellAsync(buildScreenshotScript(path, full), PS_TIMEOUT_SEC, function (ok, payload) {
+    runState.psJob = runPowerShellAsync(buildScreenshotScript(path, full), PS_TIMEOUT_SEC, function (ok, payload) {
         if (ok) {
             log("📸 画面を保存したキュン（" + payload + "）: " + path, "info");
             addResultValue("証跡ファイル", path);
@@ -4546,7 +4937,7 @@ function saveScreenshot(val, next) {
         } else {
             stopWithError("🚨 画面の撮影に失敗: " + payload, true);
         }
-    });
+    }, { forRun: true });
 }
 
 function stopWithError(message, recordRow) {
@@ -4623,6 +5014,13 @@ function endRun(status) {
     if (rs.timer) {
         clearTimeout(rs.timer);
         rs.timer = null;
+    }
+    // powershell.exe keeps running after the HTA stops polling: tell it not to click
+    if (rs.psJob) {
+        rs.psJob.detach();
+    }
+    if (rs.stopWatcher) {
+        rs.stopWatcher.cancel();
     }
     if (rs.confirmOpen) {
         rs.confirmOpen = false;
@@ -5187,8 +5585,8 @@ var TEMPLATES = [
         name: "掲示板・お知らせの定型投稿（日付は自動）",
         summary: "タイトルと本文をCSVから読み、今日の日付（和暦）を入れて掲示板に投稿する直前まで進めます。投稿ボタンは確認のあと押します。",
         useCase: "毎週・毎月の定型のお知らせ（会議室の予約状況、当番表など）。",
-        prepare: ["掲示板の新規投稿画面を開き、タイトル欄にカーソルを置いておく"],
-        customize: ["投稿ボタンの名前（「投稿」「書き込む」など）に CLICK を合わせます"],
+        prepare: ["掲示板の一覧画面を開いておく", "「新規投稿」「投稿」ボタンの表示名を確認して、CLICK を合わせる"],
+        customize: ["最初は確認ポイントでタイトル欄を手でクリックします。慣れたら無効化されている CLICK_POS を📍で合わせて有効化し、CONFIRM を無効化します", "投稿ボタンの名前（「投稿」「書き込む」など）に CLICK を合わせます"],
         ideas: ["CSVを1行だけにして、毎週同じ内容を投稿する「定型ボタン」として使うのもおすすめです"],
         targetWindow: "グループウェア", csvFile: "16_board.csv",
         csv: [
@@ -5197,6 +5595,12 @@ var TEMPLATES = [
             ["【お知らせ】会議室の予約方法の変更", "11月から会議室の予約は施設予約画面で行ってください。"]
         ],
         steps: [
+            ["CLICK", "新規投稿"],
+            ["WAIT", "3000"],
+            ["GROUP_START", "タイトル欄にカーソルを置く"],
+            ["CLICK_POS", "400,200", { disabled: true }],
+            ["CONFIRM", "タイトルの入力欄をクリックしてから［▶ 続行］を押してね（{{タイトル}}）"],
+            ["GROUP_END", ""],
             ["KEY", "^a"],
             ["TEXT", "{{タイトル}}"],
             ["KEY", "{TAB}"],
@@ -5514,7 +5918,9 @@ function createFromTemplate(index) {
         if (csvPath) {
             byId("csvPathInput").value = csvPath;
             byId("csvHeaderCheck").checked = true;
+            byId("csvEncodingSelect").value = "auto";
             loadCsvFromInput();
+            log("（見本CSVに合わせて「1行目は見出し」をON・文字コードを自動判定にしたよ）", "info");
         }
     } catch (e) {
         log("見本CSVを用意できなかったキュン…（" + errorText(e) + "）", "warn");
@@ -5632,6 +6038,7 @@ window.onload = function () {
     var ok = initActiveX();
     if (ok) {
         appDir = resolveAppDir();
+        loadSettings();
         log("📁 作業フォルダ: " + appDir, "info");
     } else {
         log("⚠ ActiveXが使えない環境だキュン（ブラウザで開いてる？）。今はお試し表示モードだよ。.hta をダブルクリックして起動してね", "error");
@@ -5643,6 +6050,18 @@ window.onload = function () {
     updateSaveState();
     updateErrorButton();
     log("ふじキュン♡のRPAマクロビルダーへようこそキュン♡ 今日もいっしょにがんばろうね！", "ok");
+};
+
+// Cancelling here would be irreversible even if the user chooses to stay, so it waits for onunload
+window.onunload = function () {
+    if (runState && runState.running) {
+        if (runState.psJob) {
+            runState.psJob.cancel();
+        }
+        if (runState.stopWatcher) {
+            runState.stopWatcher.cancel();
+        }
+    }
 };
 
 window.onbeforeunload = function () {
