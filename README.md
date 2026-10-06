@@ -42,6 +42,7 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 | `samples/` | テンプレート用の見本CSV（すべて架空のデータ） |
 | `docs/` | ドキュメント |
 | `tools/build_templates.js` | 保守用: HTA 内のテンプレートから `samples/` と `docs/templates.md` を再生成（Node.js が必要。利用者には不要） |
+| `tools/check_templates.js` | 保守用: HTA のスクリプトと全テンプレートの検証（コマンドの値・グループの対応・差し込み・CSV） |
 | `RPA.md` | 要件定義書 |
 
 ## ライセンス
