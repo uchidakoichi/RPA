@@ -4,7 +4,7 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 
 - インストール不要: `fujikyun_rpa_builder.hta` をダブルクリックするだけ
 - 外部ソフト不要: Windows 標準の機能（HTA・WScript・PowerShell）だけで動作
-- 初心者向け: 23種類のテンプレートと見本CSVを内蔵
+- 初心者向け: 43種類のテンプレートと見本CSVを内蔵（Excel・Word・文書起案・財務会計・グループウェア・福祉・Cokas-i の国保／介護保険／税務／住民情報／住民基本台帳／収納管理／滞納管理 など）
 
 ## ダウンロードと起動
 
@@ -37,6 +37,7 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 | `samples/` | テンプレート用の見本CSV（すべて架空のデータ） |
 | `docs/` | ドキュメント |
 | `tools/build_templates.js` | 保守用: HTA 内のテンプレートから `samples/` と `docs/templates.md` を再生成（Node.js が必要。利用者には不要） |
+| `tools/check_templates.js` | 保守用: HTA のスクリプトと全テンプレートの検証（コマンドの値・グループの対応・差し込み・CSV） |
 | `RPA.md` | 要件定義書 |
 
 ## ライセンス
