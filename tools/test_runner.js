@@ -28,6 +28,12 @@ function makeCtx() {
       const iv = setInterval(() => { if (files[cancel] !== undefined) { clearInterval(iv); put('OK:END'); } else if (ctx.__escHeld) { clearInterval(iv); put('OK:STOP'); } }, 30);
     } else if (/mouse_event\(0x0002/.test(script) && /FujiMouse/.test(script)) {   // CLICK_POS
       setTimeout(() => { if (files[cancel] !== undefined) put('NG:停止されたのでクリックしなかった'); else { clicks.push('pos'); put('OK'); } }, ctx.__psDelay || 400);
+    } else if (/Read-FujiScreen/.test(script)) {          // OCR
+      ctx.__ocrScripts = (ctx.__ocrScripts || []).concat([script]);
+      setTimeout(() => put(/\$target = /.test(script) ? 'OK:120,240' : 'OK:申請番号 R08-0001\r\n金額 12,000円'), 100);
+    } else if (/SmtpClient/.test(script)) {                // SMTP mail
+      ctx.__smtpScripts = (ctx.__smtpScripts || []).concat([script]);
+      setTimeout(() => put('OK'), 100);
     } else if (/SoundPlayer \$wav/.test(script)) {      // alarm
       setTimeout(() => put('OK'), 100);
     } else {
@@ -500,6 +506,124 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     assert.strictEqual(r.results[0].values['結果'], 'OK');
     assert.ok(/^失敗：/.test(r.results[1].values['結果']));
     console.log('ok 26: teaching templates run end to end');
+  }
+  // 27) subroutines: call and return, RETURN in the middle, errors caught by the caller, depth limit
+  {
+    const { R, ctx } = makeCtx();
+    const J = o => JSON.stringify(o);
+    R(`appData = normalizeData({ version: 26, macros: [
+        { id: 'main', name: '本体', steps: [
+          { cmd: 'TEXT', val: 'a' },
+          { cmd: 'CALL_MACRO', val: '{"id":"sub","name":"部品"}' },
+          { cmd: 'TEXT', val: 'b{{$戻り値}}' },
+          { cmd: 'TRY_START', val: 't' },
+          { cmd: 'CALL_MACRO', val: '{"id":"bad","name":"失敗する部品"}' },
+          { cmd: 'CATCH' },
+          { cmd: 'TEXT', val: 'caught' },
+          { cmd: 'TRY_END' },
+          { cmd: 'TEXT', val: 'c' } ] },
+        { id: 'sub', name: '部品', steps: [
+          { cmd: 'SET_VAR', val: '{"name":"戻り値","value":"42","mode":"TEXT"}' },
+          { cmd: 'TEXT', val: 'in-sub' },
+          { cmd: 'RETURN' },
+          { cmd: 'TEXT', val: 'never' } ] },
+        { id: 'bad', name: '失敗する部品', steps: [ { cmd: 'SWITCH', val: '存在しない画面' }, { cmd: 'TEXT', val: 'never2' } ] }
+      ] }); currentMacroIndex = 0;
+      csvState = { path: '', encoding: '', records: [], header: null, rows: [] };
+      byId('stepIntervalInput').value = '0'; byId('alarmCheck').checked = false; byId('notifyCheck').checked = false; byId('modalOverlay').style.display = 'none';
+      var __p27 = []; window.clipboardData.setData = function (t, v) { __p27.push(v); return true; };`);
+    ctx.__activate = t => !/存在しない/.test(t);
+    R('startRun()');
+    await until(() => !R('isRunning()'), 20000);
+    assert.deepStrictEqual(JSON.parse(R('JSON.stringify(__p27)')), ['a', 'in-sub', 'b42', 'caught', 'c']);
+    R(`appData.macros[1].steps = [{ cmd: 'CALL_MACRO', val: '{"id":"sub","name":"部品"}', label: 'x' }, { cmd: 'TEXT', val: 'x', label: 'x' }]; currentMacroIndex = 1;`);
+    R('startRun()');
+    await until(() => !R('isRunning()'), 10000);
+    assert.strictEqual(R('resultRows[0].status'), 'エラー');
+    console.log('ok 27: subroutines (call / return / caught error / depth limit)');
+  }
+  // 28) recording payload -> steps
+  {
+    const { R } = makeCtx();
+    const payload = ['S\t無題 - メモ帳', 'N\t登録\t10\t20', 'W\t2300', 'C\t100\t200\tDOUBLE', 'K\t{TAB}', 'K\t{TAB}', 'K\t{TAB}', 'T\tabc', 'J', 'K\t^s', 'C\t5\t6\tRIGHT', 'W\t1500'].join('\n');
+    const steps = JSON.parse(R('JSON.stringify(recordedToSteps(' + JSON.stringify(payload) + '))'));
+    assert.deepStrictEqual(steps.map(s => s.cmd + ':' + s.val), ['SWITCH:メモ帳', 'CLICK:登録', 'WAIT:2300', 'CLICK_POS:100,200,DOUBLE', 'KEY:{TAB 3}', 'TEXT:abc',
+      'COMMENT:⏺ ここで日本語を入力（変換）していたよ。TEXT か CSV に置き換えてね', 'KEY:^s', 'CLICK_POS:5,6,RIGHT']);
+    assert.ok(/ダブルクリック/.test(R(`autoLabelFor({ cmd: 'CLICK_POS', val: '1,2,DOUBLE' })`)));
+    const script = R('buildClickPosScript(1, 2, "RIGHT").join("\\n")');
+    assert.ok(script.includes('mouse_event(0x0008') && script.includes('mouse_event(0x0010'));
+    console.log('ok 28: recording conversion and click kinds');
+  }
+  // 29) OCR read / find-and-click through the simulated PowerShell
+  {
+    const { R, ctx } = makeCtx();
+    const J = o => JSON.stringify(o);
+    macro(R, [
+      { cmd: 'OCR_READ', val: J({ area: 'RECT', x: '10', y: '20', w: '300', h: '40', name: '読んだ' }) },
+      { cmd: 'OCR_CLICK', val: J({ text: '登録', area: 'WINDOW', nth: '1' }) },
+      { cmd: 'STR_OP', val: J({ name: '番号', src: '{{$読んだ}}', op: 'REGEX_EXTRACT', a: 'R\\d{2}-\\d{4}', b: '' }) },
+      { cmd: 'RECORD', val: J({ name: '番号', value: '{{$番号}}' }) }
+    ], [['x', '1']]);
+    R('startRun()');
+    await until(() => !R('isRunning()'), 10000);
+    assert.strictEqual(R('resultRows[0].values["番号"]'), 'R08-0001');
+    assert.ok(ctx.__ocrScripts.length === 2 && /'10,20,300,40'/.test(ctx.__ocrScripts[0]) && /\$target = Get-FujiNorm '登録'/.test(ctx.__ocrScripts[1]));
+    console.log('ok 29: OCR read and click');
+  }
+  // 30) mail: Outlook draft, SMTP and mailto
+  {
+    const { R, ctx, files } = makeCtx();
+    const J = o => JSON.stringify(o);
+    files['C:\\RPA\\通知.pdf'] = 'pdf';
+    ctx.__items = []; ctx.__shellExec = [];
+    R(`ActiveXObject = function (p) {
+         if (p === 'Outlook.Application') { return { CreateItem: function () { var it = { Attachments: { list: [], Add: function (a) { this.list.push(a); } }, Save: function () { it.saved = true; }, Send: function () { it.sent = true; }, Display: function () { it.shown = true; } }; __items.push(it); return it; } }; }
+         if (p === 'Shell.Application') { return { ShellExecute: function (u) { __shellExec.push(u); } }; }
+         throw new Error('no ' + p);
+       };`);
+    macro(R, [
+      { cmd: 'MAIL', val: J({ method: 'OUTLOOK', mode: 'DRAFT', to: '{{2}}', cc: '', subject: '{{氏名}}様へのお知らせ', body: '本文{{ROW}}', attach: 'C:\\RPA\\通知.pdf', server: '', port: '25', from: '', ssl: 'NO' }) },
+      { cmd: 'MAIL', val: J({ method: 'SMTP', mode: 'DRAFT', to: '{{2}}; x@example.jp', cc: '', subject: '件名', body: "It's 本文", attach: '', server: 'mail.example.lg.jp', port: '25', from: 'me@example.lg.jp', ssl: 'NO' }) },
+      { cmd: 'MAIL', val: J({ method: 'MAILTO', mode: 'DRAFT', to: '{{2}}', cc: '', subject: '件 名', body: 'a&b', attach: '', server: '', port: '25', from: '', ssl: 'NO' }) }
+    ], [['見本', 'a@example.jp']]);
+    R(`csvState.header = ['氏名', 'メール'];`);
+    R('startRun()');
+    await until(() => !R('isRunning()'), 15000);
+    assert.strictEqual(R('resultRows[0].status'), '完了');
+    const it = ctx.__items[0];
+    assert.strictEqual(it.To, 'a@example.jp'); assert.strictEqual(it.Subject, '見本様へのお知らせ'); assert.strictEqual(it.saved, true); assert.ok(!it.sent);
+    assert.deepStrictEqual(Array.from(it.Attachments.list), ['C:\\RPA\\通知.pdf']);
+    assert.ok(/\$msg\.To\.Add\('a@example\.jp'\)/.test(ctx.__smtpScripts[0]) && /\$msg\.To\.Add\('x@example\.jp'\)/.test(ctx.__smtpScripts[0]) && /'It''s 本文'/.test(ctx.__smtpScripts[0]) && /UseDefaultCredentials = \$true/.test(ctx.__smtpScripts[0]));
+    assert.strictEqual(ctx.__shellExec[0], 'mailto:a@example.jp?subject=%E4%BB%B6%20%E5%90%8D&body=a%26b');
+    console.log('ok 30: mail via Outlook, SMTP and mailto');
+  }
+  // 31) schedules: due logic, unattended run, Windows task command line
+  {
+    const { R, ctx } = makeCtx();
+    R(`appData = normalizeData({ version: 26, macros: [{ id: 'm1', name: '日次', steps: [{ cmd: 'TEXT', val: 'scheduled' }] }] }); currentMacroIndex = 0;`);
+    const due = (time, repeat, now, lastRun, date) => R(`scheduleDue({ enabled: true, time: '${time}', repeat: '${repeat}', date: '${date || ''}', lastRun: '${lastRun || ''}' }, new Date(${now}))`);
+    assert.strictEqual(due('18:30', 'DAILY', '2026,9,7,18,31'), true);
+    assert.strictEqual(due('18:30', 'DAILY', '2026,9,7,18,45'), false);
+    assert.strictEqual(due('18:30', 'DAILY', '2026,9,7,18,31', '2026/10/07'), false);
+    assert.strictEqual(due('09:00', 'WEEKDAYS', '2026,9,10,9,1'), false);
+    assert.strictEqual(due('09:00', 'WEEKDAYS', '2026,9,9,9,1'), true);
+    assert.strictEqual(due('09:00', 'ONCE', '2026,9,9,9,1', '', '2026/10/09'), true);
+    R(`byId('stepIntervalInput').value = '0'; byId('alarmCheck').checked = false; byId('notifyCheck').checked = false; byId('modalOverlay').style.display = 'none';
+       var __p31 = []; window.clipboardData.setData = function (t, v) { __p31.push(v); return true; };
+       schedules = [{ id: 'abc123', macroId: 'm1', macroName: '日次', csvPath: '', header: true, time: '18:30', repeat: 'DAILY', date: '', enabled: true, lastRun: '' }];
+       runSchedule(schedules[0]);`);
+    await until(() => !R('isRunning()'), 8000);
+    assert.deepStrictEqual(JSON.parse(R('JSON.stringify(__p31)')), ['scheduled']);
+    assert.ok(/^\d{4}\/\d{2}\/\d{2}$/.test(R('schedules[0].lastRun')));
+    ctx.__cmds = [];
+    R(`runCommand = function (c) { __cmds.push(c); return 'run'; }; htaFilePath = function () { return 'C:\\\\RPA\\\\ふじキュン.hta'; }; registerScheduleTask(0);`);
+    assert.ok(ctx.__cmds[0].includes('schtasks /Create /F /TN "FujikyunRPA_abc123" /SC DAILY /ST 18:30 /TR "\\"C:\\Windows\\System32\\mshta.exe\\" \\"C:\\RPA\\ふじキュン.hta\\" /fujikyun-auto:abc123"'), ctx.__cmds[0]);
+    // unattended runs never ask questions
+    let asked = false;
+    ctx.confirm = () => { asked = true; return true; };
+    R(`appData.macros[0].steps = [{ cmd: 'CSV', val: '1', label: 'x' }]; csvState = { path: '', encoding: '', records: [], header: null, rows: [] }; startRun({ unattended: true });`);
+    assert.strictEqual(asked, false); assert.strictEqual(R('isRunning()'), false);
+    console.log('ok 31: schedules');
   }
   console.log('ALL RUN TESTS PASSED');
   process.exit(0);
