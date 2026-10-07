@@ -1,22 +1,15 @@
-// Generates samples/*.csv and docs/src/templates.md from the template data embedded in
+// Generates samples/*.csv and docs/src/templates.md from the templates and command definitions in
 // fujikyun_rpa_builder.hta, so the HTA, the sample CSVs and the docs never drift apart.
 // Usage (maintainers only, needs Node.js):  node tools/build_templates.js
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const { loadHta } = require("./hta_context");
 
 const root = path.join(__dirname, "..");
-const hta = fs.readFileSync(path.join(root, "fujikyun_rpa_builder.hta"), "utf8").replace(/^﻿/, "");
-const m = hta.match(/\/\/ @@TEMPLATE_DATA_BEGIN([\s\S]*?)\/\/ @@TEMPLATE_DATA_END/);
-if (!m) {
-    throw new Error("template data markers not found");
-}
-const ctx = {};
-vm.createContext(ctx);
-vm.runInContext(m[1] + "\nthis.TEMPLATES = TEMPLATES; this.TEMPLATE_CATEGORIES = TEMPLATE_CATEGORIES;", ctx);
-const TEMPLATES = JSON.parse(JSON.stringify(ctx.TEMPLATES));
-const CATEGORIES = JSON.parse(JSON.stringify(ctx.TEMPLATE_CATEGORIES));
+const R = loadHta();
+const TEMPLATES = JSON.parse(R("JSON.stringify(TEMPLATES)"));
+const CATEGORIES = JSON.parse(R("JSON.stringify(TEMPLATE_CATEGORIES)"));
 const LEVELS = { 1: "初級", 2: "中級", 3: "上級" };
 
 // Same rules as toCsvField() in the HTA; UTF-8 with BOM + CRLF so Excel opens it cleanly
@@ -30,11 +23,10 @@ for (const t of TEMPLATES) {
 
 const md = s => String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, "⏎");
 const PROP_NOTE = s => [s.when === "first" ? "最初の1行だけ" : s.when === "last" ? "最後の1行だけ" : "", s.disabled ? "無効（調整してから有効化）" : ""].filter(Boolean).join("・");
-const CMD_NAMES = {
-    KEY: "キー送信", TEXT: "文字列貼付", CSV: "CSV列を貼付", COPY_SAVE: "値をコピーして記録", WAIT: "待機", WAIT_FOR: "ウィンドウ出現待ち",
-    IF: "条件分岐", CONFIRM: "確認ポイント", SWITCH: "ウィンドウ切替", RUN: "アプリ起動", CLICK: "オブジェクト認識クリック",
-    CLICK_POS: "座標認識クリック", CLICK_IMG: "画像認識クリック", SCREENSHOT: "画面を撮影", GROUP_START: "グループ開始", GROUP_END: "グループ終了", COMMENT: "コメント"
-};
+// Command names and the readable form of each setting come from the HTA's COMMAND_DEFS
+const cmdTitle = cmd => R(`COMMAND_DEFS[${JSON.stringify(cmd)}].title`);
+const stepSetting = s => R(`(function () { var d = COMMAND_DEFS[${JSON.stringify(s[0])}], v = ${JSON.stringify(s[1] == null ? "" : String(s[1]))};
+    return d.marker ? "" : d.hideVal ? d.autoLabel(v) : v; })()`);
 
 const out = [];
 out.push("# テンプレート解説");
@@ -78,11 +70,12 @@ for (const c of CATEGORIES) {
         out.push("");
         out.push("**ステップ**");
         out.push("");
-        out.push("| # | コマンド | 値（val） | 補足 |");
+        out.push("| # | コマンド | 設定 | 補足 |");
         out.push("| --- | --- | --- | --- |");
         t.steps.forEach((s, i) => {
             const props = s[2] || {};
-            out.push("| " + (i + 1) + " | `" + s[0] + "` " + (CMD_NAMES[s[0]] || "") + " | " + (s[1] === "" ? "" : "`" + md(s[1]) + "`") + " | " + PROP_NOTE(props) + " |");
+            const setting = stepSetting(s);
+            out.push("| " + (i + 1) + " | `" + s[0] + "` " + cmdTitle(s[0]) + " | " + (setting === "" ? "" : "`" + md(setting) + "`") + " | " + PROP_NOTE(props) + " |");
         });
         out.push("");
         out.push("**カスタマイズのポイント**");

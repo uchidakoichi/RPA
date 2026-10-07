@@ -5,14 +5,11 @@
 // - groups are balanced, CSV columns exist, and every {{placeholder}} resolves against the sample CSV
 // - every sample CSV survives the HTA's own CSV writer/parser round trip
 "use strict";
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
 const assert = require("assert");
+const vm = require("vm");
+const { htaScript, loadHta } = require("./hta_context");
 
-const root = path.join(__dirname, "..");
-const hta = fs.readFileSync(path.join(root, "fujikyun_rpa_builder.hta"), "utf8").replace(/^﻿/, "");
-const script = hta.match(/<script type="text\/javascript">([\s\S]*)<\/script>/)[1];
+const script = htaScript();
 
 let es5 = "skipped (npm i acorn to enable)";
 try {
@@ -25,17 +22,7 @@ try {
     new vm.Script(script); // at least a syntax check
 }
 
-// Minimal DOM so the script's top level can run (no ActiveX: the HTA falls back to preview mode)
-function el() {
-    return { style: {}, className: "", innerHTML: "", value: "", options: { length: 0, add() {} }, children: [], childNodes: [],
-        appendChild() {}, removeChild() {}, getElementsByTagName() { return []; }, setAttribute() {}, getAttribute() { return null; } };
-}
-const els = {};
-const ctx = { window: {}, location: { href: "" }, screen: {}, setTimeout, clearTimeout,
-    document: { getElementById: id => (els[id] = els[id] || el()), createElement: el, createTextNode: () => ({}), title: "t" } };
-vm.createContext(ctx);
-vm.runInContext(script, ctx);
-const R = code => vm.runInContext(code, ctx);
+const R = loadHta(script);
 
 const BUILTIN = ["ROW", "TODAY", "TODAY_JP", "WAREKI", "WAREKI_YEAR", "YYYYMMDD", "NOW", "TIMESTAMP", "YEAR", "MONTH", "DAY"];
 const count = R("TEMPLATES.length");
@@ -55,7 +42,6 @@ for (let i = 0; i < count; i++) {
     assert.ok(categories.includes(t.category), where + " unknown category " + t.category);
     const steps = JSON.parse(R(`JSON.stringify(templateSteps(TEMPLATES[${i}]))`));
     const header = t.csv[0];
-    const copies = steps.filter(s => s.cmd === "COPY_SAVE").map(s => s.val);
     const vars = JSON.parse(R(`JSON.stringify(definedVarNames(templateSteps(TEMPLATES[${i}])))`));
     let depth = 0;
     for (const s of steps) {
@@ -65,15 +51,14 @@ for (let i = 0; i < count; i++) {
         assert.ok(s.label, where + " label");
         if (R(`isBlockStart(${JSON.stringify(s.cmd)})`)) { depth++; }
         if (R(`isBlockEnd(${JSON.stringify(s.cmd)})`)) { depth--; }
-        assert.ok(depth >= 0, where + " GROUP_END without GROUP_START");
+        assert.ok(depth >= 0, where + " block end without its start");
         if (s.cmd === "CSV") {
             assert.ok(+s.val >= 1 && +s.val <= header.length, `${where} CSV column ${s.val} out of range`);
         }
         for (const m of s.val.match(/\{\{([^{}]+)\}\}/g) || []) {
             const k = m.slice(2, -2).trim();
             const ok = /^\d+$/.test(k) || /^ROW\s*[+-]\s*\d+$/i.test(k) || BUILTIN.includes(k.toUpperCase()) ||
-                header.includes(k) || (k.startsWith("COPY:") && copies.includes(k.slice(5))) ||
-                (k.startsWith("$") && vars.includes(k.slice(1).trim()));
+                header.includes(k) || (k.startsWith("$") && vars.includes(k.slice(1).trim()));
             assert.ok(ok, `${where} unresolved placeholder ${m}`);
         }
     }
