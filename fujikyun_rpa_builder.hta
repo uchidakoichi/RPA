@@ -309,7 +309,34 @@ input[type="text"], select, textarea {
     font-weight: bold;
     color: #6a1b9a;
 }
+.bottom-split {
+    display: -ms-flexbox;
+    display: flex;
+}
+.var-panel {
+    -ms-flex: 0 0 320px;
+    flex: 0 0 320px;
+    height: 140px;
+    overflow: auto;
+    padding: 4px 6px;
+    border-left: 1px solid #4a4052;
+    background: #fbf7fd;
+    font-size: 11px;
+}
+.var-title { margin: 3px 0 1px 0; font-weight: bold; color: #6a1b9a; }
+.var-empty { color: #8a7d85; }
+.var-table { width: 100%; border-collapse: collapse; }
+.var-table th, .var-table td { padding: 1px 4px; border-bottom: 1px solid #eadde4; text-align: left; vertical-align: top; }
+.var-table th { width: 40%; color: #4a2340; font-weight: normal; white-space: nowrap; }
+.palette-group { display: inline-block; margin: 0 8px 2px 0; padding: 1px 4px; border-radius: 4px; background: #fbf0f6; }
+.palette-label { margin-right: 4px; font-size: 11px; color: #8e3b66; }
+.palette-group .btn-cmd { margin: 1px 2px 1px 0; padding: 1px 6px; font-size: 11px; }
+.cat-var { border-left-color: #3949ab; }
+.block.cat-var { border-left-color: #3949ab; }
+.cat-var .badge { background: #3949ab; }
 .log-area {
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
     height: 140px;
     overflow-y: auto;
     padding: 4px 8px;
@@ -558,10 +585,14 @@ input[type="text"], select, textarea {
             <button class="btn" id="exportErrorBtn" onclick="exportErrorRows()">↓ エラー行をCSV保存 (0)</button>
             <button class="btn" id="exportResultBtn" onclick="exportResultRows()" title="各行の実行結果と、COPY_SAVEで記録した値をCSVに保存します">↓ 実行結果CSV (0)</button>
             <button class="btn" onclick="runDiagnostics()" title="PowerShell・音・クリップボードなど、この端末で使える機能を調べます">🩺 環境チェック</button>
+            <button class="btn" onclick="toggleVarPanel()" title="変数・この行のCSVの値・コピーした値をリアルタイムで表示します">🔎 変数</button>
             <span class="spacer"></span>
             <span class="progress" id="progressText">待機中キュン♡</span>
         </div>
-        <div class="log-area" id="logArea"></div>
+        <div class="bottom-split">
+            <div class="log-area" id="logArea"></div>
+            <div class="var-panel" id="varPanel"></div>
+        </div>
     </div>
 </div>
 
@@ -580,7 +611,7 @@ input[type="text"], select, textarea {
 // =====================================================================
 
 // ----- Constants -----
-var DATA_VERSION = 24;
+var DATA_VERSION = 25;  // 25: loops, if/else, try/catch, variables, Excel
 var MACRO_FILE_NAME = "gprime_macros.json";
 var TEMP_FILE_NAME = "gprime_macros_temp.json";
 var DISCARDED_TEMP_PREFIX = "gprime_macros_temp_discarded";   // + "_<timestamp>.json", one per discard
@@ -1170,6 +1201,7 @@ function csvHeaderName(col) {
 // =====================================================================
 var PLACEHOLDER_HELP = [
     ["{{ROW}}", "CSVの行番号（1始まり）"],
+    ["{{$回数}}", "繰り返しの何回目か（変数）"],
     ["{{ROW+1}}", "行番号＋1（Excelの見出し行ぶんずらす時に）"],
     ["{{TODAY}}", "今日 2026/09/30 形式"],
     ["{{TODAY_JP}}", "今日 2026年9月30日 形式"],
@@ -1204,6 +1236,14 @@ function placeholderValue(key, rs) {
                 return i < row.data.length ? String(row.data[i]) : "";
             }
         }
+    }
+    if (key.charAt(0) === "$") {
+        var vn = trimText(key.substring(1));
+        if (rs && rs.vars && rs.vars.hasOwnProperty(vn)) {
+            return String(rs.vars[vn]);
+        }
+        log("（変数 $" + vn + " にはまだ値が入っていないから、空っぽとして使うね）", "info");
+        return "";
     }
     if ((m = up.match(/^ROW\s*([+\-])\s*(\d+)$/))) {
         return String(row.no + (m[1] === "+" ? 1 : -1) * toInt(m[2], 0));
@@ -1261,6 +1301,10 @@ function placeholderChoices() {
         list.push(["{{1}}", "CSV 1列目（{{2}}なら2列目…／見出し名 {{氏名}} でもOK）"]);
     }
     var steps = currentSteps();
+    var vars = definedVarNames(steps);
+    for (i = 0; i < vars.length; i++) {
+        list.push(["{{$" + vars[i] + "}}", "変数「" + vars[i] + "」"]);
+    }
     var seen = {};
     for (i = 0; i < steps.length; i++) {
         if (steps[i].cmd === "COPY_SAVE" && !seen[steps[i].val]) {
@@ -1324,6 +1368,385 @@ function keyDisplayName(key) {
         }
     }
     return String(key);
+}
+
+// =====================================================================
+//  Blocks, conditions, variables and string operations
+// =====================================================================
+// Every block is START ... [MIDDLE] ... END; the editor keeps them balanced and the runner jumps
+// between the markers (the step list itself stays flat)
+var BLOCK_PAIRS = { GROUP_START: "GROUP_END", LOOP_START: "LOOP_END", IF_START: "IF_END", TRY_START: "TRY_END" };
+var BLOCK_ENDS = { GROUP_END: "GROUP_START", LOOP_END: "LOOP_START", IF_END: "IF_START", TRY_END: "TRY_START" };
+var BLOCK_MIDDLES = { ELSE: "IF_START", CATCH: "TRY_START" };
+
+function isBlockStart(cmd) {
+    return BLOCK_PAIRS.hasOwnProperty(cmd);
+}
+
+function isBlockEnd(cmd) {
+    return BLOCK_ENDS.hasOwnProperty(cmd);
+}
+
+function isBlockMiddle(cmd) {
+    return BLOCK_MIDDLES.hasOwnProperty(cmd);
+}
+
+// Definition for markers without settings (block ends, ELSE, CATCH, BREAK, CONTINUE)
+function blockMarkerDef(title, icon, category, help) {
+    return {
+        title: title, icon: icon, category: category, defaultVal: "", help: help, fields: [], marker: true,
+        parse: function () { return {}; },
+        compose: function () { return ""; },
+        validate: function () { return ""; },
+        autoLabel: function () { return title; }
+    };
+}
+
+function jsonVal(val, defaults) {
+    var obj = {};
+    try {
+        obj = JSON.parse(String(val || "{}")) || {};
+    } catch (e) {
+        obj = {};
+    }
+    var out = {};
+    for (var k in defaults) {
+        if (defaults.hasOwnProperty(k)) {
+            out[k] = obj.hasOwnProperty(k) && obj[k] != null ? String(obj[k]) : defaults[k];
+        }
+    }
+    return out;
+}
+
+function jsonCompose(v, keys) {
+    var obj = {};
+    for (var i = 0; i < keys.length; i++) {
+        obj[keys[i]] = v[keys[i]] == null ? "" : String(v[keys[i]]);
+    }
+    return JSON.stringify(obj);
+}
+
+function varNameError(name) {
+    name = trimText(name);
+    if (name === "") {
+        return "名前を入れてね♡";
+    }
+    return /[\s{}:,$]/.test(name) ? "名前に 空白 { } : , $ は使えないキュン" : "";
+}
+
+var COND_OPS = [
+    ["EQ", "と等しい"], ["NE", "と違う"], ["CONTAINS", "を含む"], ["NOT_CONTAINS", "を含まない"],
+    ["EMPTY", "が空っぽ（くらべる相手は使わない）"], ["NOT_EMPTY", "が空っぽでない（くらべる相手は使わない）"],
+    ["GT", "より大きい（数）"], ["GE", "以上（数）"], ["LT", "より小さい（数）"], ["LE", "以下（数）"],
+    ["REGEX", "が正規表現に一致する"],
+    ["WINDOW", "というウィンドウがある（調べる値にタイトル）"], ["NO_WINDOW", "というウィンドウがない"],
+    ["FILE", "というファイルがある（調べる値にパス）"], ["NO_FILE", "というファイルがない"]
+];
+var COND_UNARY = { EMPTY: "が空っぽ", NOT_EMPTY: "が空っぽでない", WINDOW: "というウィンドウがある", NO_WINDOW: "というウィンドウがない", FILE: "というファイルがある", NO_FILE: "というファイルがない" };
+var COND_BINARY = { EQ: "と等しい", NE: "と違う", CONTAINS: "を含む", NOT_CONTAINS: "を含まない", GT: "より大きい", GE: "以上", LT: "より小さい", LE: "以下", REGEX: "の正規表現に一致する" };
+
+function conditionNeedsLeft(op) {
+    return op !== "EMPTY" && op !== "NOT_EMPTY";
+}
+
+function describeCondition(c) {
+    var left = "「" + truncateText(c.left, 20) + "」";
+    if (COND_UNARY[c.op]) {
+        return left + COND_UNARY[c.op];
+    }
+    return left + "が「" + truncateText(c.right, 20) + "」" + (COND_BINARY[c.op] || "と等しい");
+}
+
+// "1,234" "１２３" " 45 " -> number; anything else -> null
+function toNumberOrNull(s) {
+    var t = toHalfWidthDigits(trimText(s)).replace(/,/g, "");
+    return /^[+\-]?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : null;
+}
+
+function evalCondition(c, rs) {
+    var l = expandPlaceholders(c.left, rs);
+    var r = expandPlaceholders(c.right, rs);
+    var ln = toNumberOrNull(l);
+    var rn = toNumberOrNull(r);
+    var numeric = ln !== null && rn !== null;
+    switch (c.op) {
+    case "EQ": return numeric ? ln === rn : l === r;
+    case "NE": return numeric ? ln !== rn : l !== r;
+    case "CONTAINS": return l.indexOf(r) >= 0;
+    case "NOT_CONTAINS": return l.indexOf(r) < 0;
+    case "EMPTY": return trimText(l) === "";
+    case "NOT_EMPTY": return trimText(l) !== "";
+    case "GT": return numeric ? ln > rn : l > r;
+    case "GE": return numeric ? ln >= rn : l >= r;
+    case "LT": return numeric ? ln < rn : l < r;
+    case "LE": return numeric ? ln <= rn : l <= r;
+    case "REGEX": return new RegExp(r).test(l);
+    case "FILE": return !!(fso && fso.FileExists(l));
+    case "NO_FILE": return !(fso && fso.FileExists(l));
+    case "WINDOW":
+    case "NO_WINDOW":
+        var found = false;
+        try {
+            found = shell.AppActivate(l);
+        } catch (e) {
+            found = false;
+        }
+        // Checking activates the window: give the focus back to the input target
+        if (found && rs && rs.activeTitle) {
+            try { shell.AppActivate(rs.activeTitle); } catch (e2) { /* ignore */ }
+        }
+        return c.op === "WINDOW" ? found : !found;
+    }
+    return false;
+}
+
+// Safe arithmetic (no eval): numbers, + - * / %, parentheses; full-width and commas are accepted
+function calcExpression(text) {
+    var s = toHalfWidthDigits(String(text == null ? "" : text))
+        .replace(/[,，]/g, "").replace(/＋/g, "+").replace(/[－−]/g, "-").replace(/[＊×]/g, "*")
+        .replace(/[／÷]/g, "/").replace(/％/g, "%").replace(/（/g, "(").replace(/）/g, ")").replace(/．/g, ".")
+        .replace(/\s+/g, "");
+    var pos = 0;
+    function peek() {
+        return s.charAt(pos);
+    }
+    function number() {
+        var m = /^\d+(\.\d+)?/.exec(s.substring(pos));
+        if (!m) {
+            throw new Error("計算できない文字があるよ: " + (s.substring(pos) || "（式が途中で終わっている）"));
+        }
+        pos += m[0].length;
+        return parseFloat(m[0]);
+    }
+    function factor() {
+        var c = peek();
+        if (c === "+") { pos++; return factor(); }
+        if (c === "-") { pos++; return -factor(); }
+        if (c === "(") {
+            pos++;
+            var v = expr();
+            if (peek() !== ")") {
+                throw new Error("かっこが閉じていないよ");
+            }
+            pos++;
+            return v;
+        }
+        return number();
+    }
+    function term() {
+        var v = factor();
+        while (peek() === "*" || peek() === "/" || peek() === "%") {
+            var op = s.charAt(pos++);
+            var r = factor();
+            if (op === "*") {
+                v *= r;
+            } else {
+                if (r === 0) {
+                    throw new Error("0で割り算しようとしたよ");
+                }
+                v = op === "/" ? v / r : v % r;
+            }
+        }
+        return v;
+    }
+    function expr() {
+        var v = term();
+        while (peek() === "+" || peek() === "-") {
+            var op = s.charAt(pos++);
+            var r = term();
+            v = op === "+" ? v + r : v - r;
+        }
+        return v;
+    }
+    if (s === "") {
+        throw new Error("計算式が空っぽだよ");
+    }
+    var result = expr();
+    if (pos < s.length) {
+        throw new Error("計算できない文字があるよ: " + s.substring(pos));
+    }
+    return String(Math.round(result * 1e10) / 1e10);
+}
+
+var STR_OPS = [
+    ["REPLACE", "置換：A を B に置きかえる"],
+    ["REGEX_REPLACE", "正規表現で置換：パターンA を B に（$1 などOK）"],
+    ["REGEX_EXTRACT", "正規表現で取り出す：パターンA の一致部分（B＝かっこの番号）"],
+    ["SUBSTR", "切り出し：A 文字目から B 文字（Bが空なら最後まで）"],
+    ["SPLIT", "区切って取り出す：区切り文字A で分けた B 番目"],
+    ["TRIM", "前後の空白（全角も）を消す"],
+    ["ZEN2HAN", "全角の英数字・記号を半角にする"],
+    ["HAN2ZEN", "半角の英数字・記号を全角にする"],
+    ["PAD", "ゼロ埋め：A 桁にそろえる（Bで埋める文字、空なら0）"],
+    ["WAREKI", "日付を和暦にする（令和8年10月1日）"],
+    ["DATE_ADD", "日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）"],
+    ["COMMA", "数字に3桁区切りのカンマを付ける"],
+    ["UNCOMMA", "カンマを消す"],
+    ["LENGTH", "文字数を数える"]
+];
+
+function strOpName(op) {
+    for (var i = 0; i < STR_OPS.length; i++) {
+        if (STR_OPS[i][0] === op) {
+            return STR_OPS[i][1].split("：")[0];
+        }
+    }
+    return op;
+}
+
+// "2026/10/1" "2026-10-01" "20261001" "令和8年10月1日" "２０２６年１０月１日" -> Date (or null)
+function parseDateText(s) {
+    var t = toHalfWidthDigits(trimText(s));
+    var m = /(令和|平成|昭和)(\d+|元)年(\d{1,2})月(\d{1,2})日/.exec(t);
+    if (m) {
+        var base = m[1] === "令和" ? 2018 : m[1] === "平成" ? 1988 : 1925;
+        return new Date(base + (m[2] === "元" ? 1 : parseInt(m[2], 10)), parseInt(m[3], 10) - 1, parseInt(m[4], 10));
+    }
+    m = /^(\d{4})(\d{2})(\d{2})$/.exec(t) || /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(t);
+    if (!m) {
+        return null;
+    }
+    var d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return d.getMonth() === parseInt(m[2], 10) - 1 ? d : null;
+}
+
+function formatDate(d) {
+    return d.getFullYear() + "/" + pad2(d.getMonth() + 1) + "/" + pad2(d.getDate());
+}
+
+function strOp(op, s, a, b) {
+    var i;
+    var d;
+    switch (op) {
+    case "REPLACE":
+        return a === "" ? s : s.split(a).join(b);
+    case "REGEX_REPLACE":
+        return s.replace(new RegExp(a, "g"), b);
+    case "REGEX_EXTRACT":
+        var m = new RegExp(a).exec(s);
+        var g = b === "" ? 0 : toInt(toHalfWidthDigits(b), 0);
+        return m && m[g] != null ? m[g] : "";
+    case "SUBSTR":
+        var start = Math.max(1, toInt(toHalfWidthDigits(a), 1));
+        return b === "" ? s.substring(start - 1) : s.substr(start - 1, Math.max(0, toInt(toHalfWidthDigits(b), 0)));
+    case "SPLIT":
+        var parts = s.split(a === "" ? "," : a);
+        var idx = toInt(toHalfWidthDigits(b), 1);
+        return idx >= 1 && idx <= parts.length ? parts[idx - 1] : "";
+    case "TRIM":
+        return s.replace(/^[\s　]+|[\s　]+$/g, "");
+    case "ZEN2HAN":
+        return s.replace(/[！-～]/g, function (ch) {
+            return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+        }).replace(/　/g, " ");
+    case "HAN2ZEN":
+        return s.replace(/[!-~]/g, function (ch) {
+            return String.fromCharCode(ch.charCodeAt(0) + 0xFEE0);
+        }).replace(/ /g, "　");
+    case "PAD":
+        var len = toInt(toHalfWidthDigits(a), 0);
+        var fill = b === "" ? "0" : b.charAt(0);
+        for (i = s.length; i < len; i++) {
+            s = fill + s;
+        }
+        return s;
+    case "WAREKI":
+        d = parseDateText(s);
+        if (!d) {
+            throw new Error("日付として読めなかったよ: " + s);
+        }
+        return warekiOf(d) + (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    case "DATE_ADD":
+        d = parseDateText(s);
+        if (!d) {
+            throw new Error("日付として読めなかったよ: " + s);
+        }
+        d.setDate(d.getDate() + toInt(toHalfWidthDigits(a), 0));
+        return formatDate(d);
+    case "COMMA":
+        var n = toHalfWidthDigits(s).replace(/,/g, "");
+        var parts2 = n.split(".");
+        parts2[0] = parts2[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts2.join(".");
+    case "UNCOMMA":
+        return s.replace(/[,，]/g, "");
+    case "LENGTH":
+        return String(s.length);
+    }
+    return s;
+}
+
+// Index of the first given middle marker (ELSE / CATCH) that belongs to the block starting at startIndex
+function findMiddle(steps, startIndex, cmd) {
+    var depth = 0;
+    for (var i = startIndex + 1; i < steps.length; i++) {
+        if (isBlockStart(steps[i].cmd)) {
+            depth++;
+        } else if (isBlockEnd(steps[i].cmd)) {
+            if (depth === 0) {
+                return -1;
+            }
+            depth--;
+        } else if (depth === 0 && steps[i].cmd === cmd) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Start index of the block that a middle marker / any step directly belongs to
+function findBlockOwner(steps, index) {
+    var depth = 0;
+    for (var i = index - 1; i >= 0; i--) {
+        if (isBlockEnd(steps[i].cmd)) {
+            depth++;
+        } else if (isBlockStart(steps[i].cmd)) {
+            if (depth === 0) {
+                return i;
+            }
+            depth--;
+        }
+    }
+    return -1;
+}
+
+// Middle markers that belong to the block [start, end]
+function blockMiddles(steps, start, end) {
+    var list = [];
+    var depth = 0;
+    for (var i = start + 1; i < end; i++) {
+        if (isBlockStart(steps[i].cmd)) {
+            depth++;
+        } else if (isBlockEnd(steps[i].cmd)) {
+            depth--;
+        } else if (depth === 0 && isBlockMiddle(steps[i].cmd)) {
+            list.push(i);
+        }
+    }
+    return list;
+}
+
+// Variable names a macro defines (for the placeholder helper and the template checker)
+function definedVarNames(steps) {
+    var names = { "エラー内容": true };
+    for (var i = 0; i < steps.length; i++) {
+        var s = steps[i];
+        var def = COMMAND_DEFS[s.cmd];
+        if (s.cmd === "COPY_SAVE") {
+            names[s.val] = true;
+        } else if (def && (s.cmd === "SET_VAR" || s.cmd === "STR_OP" || s.cmd === "ASK" || s.cmd === "EXCEL_READ")) {
+            names[def.parse(s.val).name] = true;
+        } else if (s.cmd === "LOOP_START") {
+            names[def.parse(s.val).counter || "回数"] = true;
+        }
+    }
+    var out = [];
+    for (var k in names) {
+        if (names.hasOwnProperty(k) && k !== "") {
+            out.push(k);
+        }
+    }
+    return out;
 }
 
 var COMMAND_ORDER = ["KEY", "TEXT", "CSV", "COPY_SAVE", "WAIT", "WAIT_FOR", "IF", "CONFIRM", "SWITCH", "RUN", "CLICK", "CLICK_POS", "CLICK_IMG", "SCREENSHOT", "GROUP_START", "COMMENT"];
@@ -1520,6 +1943,164 @@ var COMMAND_DEFS = {
         validate: function () { return ""; },
         autoLabel: function () { return "グループ終了"; }
     },
+    // ------------------------------------------------------------- control flow
+    LOOP_START: {
+        title: "繰り返し", icon: "🔁", category: "flow", hideVal: true,
+        defaultVal: '{"mode":"COUNT","count":"3","left":"","op":"NOT_EMPTY","right":"","counter":"回数","max":"1000"}',
+        help: "中のコマンドをくり返すキュン。「決めた回数」なら回数を（{{列名}} などの差し込みもOK）、「条件のあいだ」なら条件を決めてね。何回目かは {{$回数}} で使えるよ。途中で抜けるには「繰り返しを抜ける（BREAK）」を使ってね。終わらない繰り返しにならないよう、上限回数で必ず止まるよ。",
+        fields: [
+            { id: "mode", label: "くり返し方", type: "select", options: [["COUNT", "決めた回数くり返す（for）"], ["WHILE", "条件を満たすあいだくり返す（while）"]] },
+            { id: "count", label: "回数（「決めた回数」のとき・差し込み可）", type: "text", placeholder: "例: 5 / {{ページ数}}", placeholders: true },
+            { id: "left", label: "条件：調べる値（「条件のあいだ」のとき・差し込み可）", type: "text", placeholder: "例: {{$件名}}", placeholders: true },
+            { id: "op", label: "条件：くらべ方", type: "select", options: null },
+            { id: "right", label: "条件：くらべる相手（差し込み可）", type: "text", placeholders: true },
+            { id: "counter", label: "何回目かを入れる変数名", type: "text", placeholder: "回数" },
+            { id: "max", label: "上限回数（これを超えたら止める）", type: "text", placeholder: "1000" }
+        ],
+        parse: function (val) { return jsonVal(val, { mode: "COUNT", count: "3", left: "", op: "NOT_EMPTY", right: "", counter: "回数", max: "1000" }); },
+        compose: function (v) { return jsonCompose(v, ["mode", "count", "left", "op", "right", "counter", "max"]); },
+        validate: function (v) {
+            if (v.mode === "COUNT" && trimText(v.count) === "") { return "回数を入れてね♡"; }
+            if (v.mode === "WHILE" && conditionNeedsLeft(v.op) && trimText(v.left) === "") { return "調べる値を入れてね♡"; }
+            if (!/^\d+$/.test(toHalfWidthDigits(trimText(v.max))) || toInt(toHalfWidthDigits(v.max), 0) < 1) { return "上限回数は1以上の数字で入れてね♡"; }
+            return varNameError(v.counter);
+        },
+        autoLabel: function (val) {
+            var p = this.parse(val);
+            return p.mode === "WHILE" ? "🔁 " + describeCondition(p) + " あいだくり返す" : "🔁 " + p.count + " 回くり返す";
+        }
+    },
+    LOOP_END: blockMarkerDef("繰り返しここまで", "└", "flow", "繰り返しの終わりの目印だよ。ここまで来ると「繰り返し」の先頭に戻るキュン。"),
+    BREAK: blockMarkerDef("繰り返しを抜ける", "⤴", "flow", "いちばん内側の繰り返しを途中で終わらせて、「繰り返しここまで」の次へ進むキュン（break）。「もし〜なら」と組み合わせて使ってね。"),
+    CONTINUE: blockMarkerDef("次の繰り返しへ", "↪", "flow", "残りのコマンドを飛ばして、次の回の繰り返しに進むキュン（continue）。"),
+    IF_START: {
+        title: "もし〜なら", icon: "❓", category: "flow", hideVal: true,
+        defaultVal: '{"left":"","op":"EQ","right":""}',
+        help: "条件が合うときだけ中のコマンドを実行するキュン（if）。合わないときの手順は「そうでなければ（ELSE）」の後ろに書いてね。値は {{列名}} {{$変数}} {{COPY:項目}} などで差し込めるよ。数の比較は全角数字やカンマがあってもOK。",
+        fields: [
+            { id: "left", label: "調べる値（差し込み可）", type: "text", placeholder: "例: {{金額}}", placeholders: true },
+            { id: "op", label: "くらべ方", type: "select", options: null },
+            { id: "right", label: "くらべる相手（差し込み可）", type: "text", placeholder: "例: 100000", placeholders: true }
+        ],
+        parse: function (val) { return jsonVal(val, { left: "", op: "EQ", right: "" }); },
+        compose: function (v) { return jsonCompose(v, ["left", "op", "right"]); },
+        validate: function (v) { return conditionNeedsLeft(v.op) && trimText(v.left) === "" ? "調べる値を入れてね♡" : ""; },
+        autoLabel: function (val) { return "❓ もし " + describeCondition(this.parse(val)) + " なら"; }
+    },
+    ELSE: blockMarkerDef("そうでなければ", "↔", "flow", "「もし〜なら」の条件が合わなかったときに、ここから下を実行するキュン（else）。「もし〜なら」の中に1つだけ置けるよ。"),
+    IF_END: blockMarkerDef("もし〜ならここまで", "└", "flow", "「もし〜なら」の終わりの目印だよ。"),
+    TRY_START: {
+        title: "エラー時の処理", icon: "🧯", category: "flow", hideVal: true, defaultVal: "エラーが出ても止めずに記録する",
+        help: "この中でエラーが起きても止めずに、「エラーのとき（CATCH）」から下を実行するキュン（try-catch）。エラーの内容は {{$エラー内容}} で使えるよ。IF の STOP（緊急停止）と ⏹ 停止は受け止めないよ。",
+        fields: [{ id: "name", label: "表示名", type: "text", placeholder: "例: 登録でエラーが出たら記録して次へ" }],
+        parse: function (val) { return { name: val }; },
+        compose: function (v) { return v.name; },
+        validate: function (v) { return v.name === "" ? "表示名を入れてね♡" : ""; },
+        autoLabel: function (val) { return "🧯 " + val; }
+    },
+    CATCH: blockMarkerDef("エラーのとき", "⚠", "flow", "「エラー時の処理」の中でエラーが起きたら、ここから下を実行するキュン。エラーの内容は {{$エラー内容}} だよ。"),
+    TRY_END: blockMarkerDef("エラー時の処理ここまで", "└", "flow", "「エラー時の処理」の終わりの目印だよ。"),
+    // ------------------------------------------------------------- variables & data
+    SET_VAR: {
+        title: "変数に値を入れる", icon: "📦", category: "var", hideVal: true,
+        defaultVal: '{"name":"","value":"","mode":"TEXT"}',
+        help: "変数に値を入れるキュン。入れた値は {{$変数名}} でどこでも差し込めるし、実行中は右下の「🔎 変数」に表示されるよ。「計算する」にすると + - * / % とかっこで計算できるよ（例: {{単価}}*{{数量}}）。",
+        fields: [
+            { id: "name", label: "変数名", type: "text", placeholder: "例: 合計" },
+            { id: "value", label: "入れる値（差し込み可）", type: "text", placeholder: "例: {{単価}}*{{数量}}", placeholders: true },
+            { id: "mode", label: "入れ方", type: "select", options: [["TEXT", "文字としてそのまま入れる"], ["CALC", "計算して入れる（+ - * / % かっこ）"]] }
+        ],
+        parse: function (val) { return jsonVal(val, { name: "", value: "", mode: "TEXT" }); },
+        compose: function (v) { return jsonCompose(v, ["name", "value", "mode"]); },
+        validate: function (v) { return varNameError(v.name); },
+        autoLabel: function (val) {
+            var p = this.parse(val);
+            return "📦 $" + p.name + " ← " + truncateText(p.value, 30) + (p.mode === "CALC" ? "（計算）" : "");
+        }
+    },
+    STR_OP: {
+        title: "文字を加工する", icon: "✂", category: "var", hideVal: true,
+        defaultVal: '{"name":"","src":"","op":"REPLACE","a":"","b":""}',
+        help: "文字を加工して変数に入れるキュン。置換・正規表現・切り出し・全角半角・ゼロ埋め・和暦・日付の計算などができるよ。結果は {{$変数名}} で使えるよ。",
+        fields: [
+            { id: "name", label: "結果を入れる変数名", type: "text", placeholder: "例: 番号7桁" },
+            { id: "src", label: "元の文字（差し込み可）", type: "text", placeholder: "例: {{宛名番号}}", placeholders: true },
+            { id: "op", label: "加工のしかた", type: "select", options: null },
+            { id: "a", label: "設定A（加工のしかたの説明を見てね・差し込み可）", type: "text", placeholders: true },
+            { id: "b", label: "設定B（加工のしかたの説明を見てね・差し込み可）", type: "text", placeholders: true }
+        ],
+        parse: function (val) { return jsonVal(val, { name: "", src: "", op: "REPLACE", a: "", b: "" }); },
+        compose: function (v) { return jsonCompose(v, ["name", "src", "op", "a", "b"]); },
+        validate: function (v) {
+            var e = varNameError(v.name);
+            if (e) { return e; }
+            if ((v.op === "REGEX_REPLACE" || v.op === "REGEX_EXTRACT") && v.a !== "" && !/\{\{/.test(v.a)) {
+                try { new RegExp(v.a); } catch (ex) { return "正規表現の書き方が正しくないみたい: " + errorText(ex); }
+            }
+            return "";
+        },
+        autoLabel: function (val) {
+            var p = this.parse(val);
+            return "✂ $" + p.name + " ← " + truncateText(p.src, 20) + " を" + strOpName(p.op);
+        }
+    },
+    ASK: {
+        title: "値を入力してもらう", icon: "✍", category: "var", hideVal: true,
+        defaultVal: '{"name":"","message":"値を入力してね","defaultValue":""}',
+        help: "実行中に入力欄を出して、入力した値を変数に入れるキュン。処理日や担当者名など、実行のたびに変わる値に便利だよ。「最初の1行だけ」グループに入れれば、最初に1回だけ聞けるよ。",
+        fields: [
+            { id: "name", label: "入れる変数名", type: "text", placeholder: "例: 処理日" },
+            { id: "message", label: "表示するメッセージ（差し込み可）", type: "text", placeholders: true },
+            { id: "defaultValue", label: "最初から入っている値（差し込み可）", type: "text", placeholder: "例: {{TODAY}}", placeholders: true }
+        ],
+        parse: function (val) { return jsonVal(val, { name: "", message: "", defaultValue: "" }); },
+        compose: function (v) { return jsonCompose(v, ["name", "message", "defaultValue"]); },
+        validate: function (v) { return varNameError(v.name); },
+        autoLabel: function (val) { var p = this.parse(val); return "✍ 入力してもらう → $" + p.name; }
+    },
+    RECORD: {
+        title: "結果に記録する", icon: "📝", category: "var", hideVal: true,
+        defaultVal: '{"name":"","value":""}',
+        help: "値を［↓ 実行結果CSV］の列として記録するキュン。計算した値やチェックの結果を残すのに使ってね。",
+        fields: [
+            { id: "name", label: "列名", type: "text", placeholder: "例: 判定" },
+            { id: "value", label: "記録する値（差し込み可）", type: "text", placeholder: "例: {{$合計}}", placeholders: true }
+        ],
+        parse: function (val) { return jsonVal(val, { name: "", value: "" }); },
+        compose: function (v) { return jsonCompose(v, ["name", "value"]); },
+        validate: function (v) { return varNameError(v.name); },
+        autoLabel: function (val) { var p = this.parse(val); return "📝 結果の「" + p.name + "」に " + truncateText(p.value, 30); }
+    },
+    EXCEL_READ: {
+        title: "Excelのセルを読む", icon: "📗", category: "var", hideVal: true,
+        defaultVal: '{"path":"","sheet":"1","cell":"A1","name":""}',
+        help: "Excelの画面を開かずに、ブックのセルの値を読んで変数に入れるキュン（Excelが入っているPCで使えるよ）。セル番地には A{{ROW+1}} のような差し込みもOK。シートは名前か番号（1＝1枚目）で指定してね。",
+        fields: [
+            { id: "path", label: "ブックのパス（差し込み可）", type: "text", placeholder: "例: C:\\RPA作業\\台帳.xlsx", placeholders: true },
+            { id: "sheet", label: "シート（名前か番号・差し込み可）", type: "text", placeholder: "1", placeholders: true },
+            { id: "cell", label: "セル番地（差し込み可）", type: "text", placeholder: "例: B{{ROW+1}}", placeholders: true },
+            { id: "name", label: "入れる変数名", type: "text", placeholder: "例: 金額" }
+        ],
+        parse: function (val) { return jsonVal(val, { path: "", sheet: "1", cell: "A1", name: "" }); },
+        compose: function (v) { return jsonCompose(v, ["path", "sheet", "cell", "name"]); },
+        validate: function (v) { return trimText(v.path) === "" ? "ブックのパスを入れてね♡" : trimText(v.cell) === "" ? "セル番地を入れてね♡" : varNameError(v.name); },
+        autoLabel: function (val) { var p = this.parse(val); return "📗 " + fileNameOf(p.path) + " の " + p.cell + " を読む → $" + p.name; }
+    },
+    EXCEL_WRITE: {
+        title: "Excelのセルに書く", icon: "📗", category: "var", hideVal: true,
+        defaultVal: '{"path":"","sheet":"1","cell":"A1","value":""}',
+        help: "Excelの画面を開かずに、ブックのセルに値を書き込んで保存するキュン。書き込むブックは閉じておいてね（ほかで開いていると書き込めないよ）。",
+        fields: [
+            { id: "path", label: "ブックのパス（差し込み可）", type: "text", placeholder: "例: C:\\RPA作業\\台帳.xlsx", placeholders: true },
+            { id: "sheet", label: "シート（名前か番号・差し込み可）", type: "text", placeholder: "1", placeholders: true },
+            { id: "cell", label: "セル番地（差し込み可）", type: "text", placeholder: "例: D{{ROW+1}}", placeholders: true },
+            { id: "value", label: "書き込む値（差し込み可）", type: "text", placeholder: "例: {{$結果}}", placeholders: true }
+        ],
+        parse: function (val) { return jsonVal(val, { path: "", sheet: "1", cell: "A1", value: "" }); },
+        compose: function (v) { return jsonCompose(v, ["path", "sheet", "cell", "value"]); },
+        validate: function (v) { return trimText(v.path) === "" ? "ブックのパスを入れてね♡" : trimText(v.cell) === "" ? "セル番地を入れてね♡" : ""; },
+        autoLabel: function (val) { var p = this.parse(val); return "📗 " + fileNameOf(p.path) + " の " + p.cell + " に " + truncateText(p.value, 20) + " を書く"; }
+    },
     COMMENT: {
         title: "コメント", icon: "💬", category: "note", defaultVal: "",
         help: "実行時は無視されるメモだよ。手順の説明を書いておくと後で助かるキュン♡",
@@ -1531,13 +2112,27 @@ var COMMAND_DEFS = {
     }
 };
 
+COMMAND_DEFS.LOOP_START.fields[3].options = COND_OPS;
+COMMAND_DEFS.IF_START.fields[1].options = COND_OPS;
+COMMAND_DEFS.STR_OP.fields[2].options = STR_OPS;
+
+// Palette rows: [label, commands]
+var PALETTE_GROUPS = [
+    ["入力", ["KEY", "TEXT", "CSV", "COPY_SAVE"]],
+    ["待つ・確かめる", ["WAIT", "WAIT_FOR", "IF", "CONFIRM"]],
+    ["流れ", ["LOOP_START", "BREAK", "CONTINUE", "IF_START", "ELSE", "TRY_START"]],
+    ["変数・データ", ["SET_VAR", "STR_OP", "ASK", "RECORD", "EXCEL_READ", "EXCEL_WRITE"]],
+    ["画面・アプリ", ["SWITCH", "RUN", "CLICK", "CLICK_POS", "CLICK_IMG", "SCREENSHOT"]],
+    ["整理", ["GROUP_START", "COMMENT"]]
+];
+
 function autoLabelFor(step) {
     var def = COMMAND_DEFS[step.cmd];
     return def ? def.autoLabel(step.val == null ? "" : String(step.val)) : String(step.val);
 }
 
 function isExecutableStep(step) {
-    return !step.disabled && step.cmd !== "COMMENT" && step.cmd !== "GROUP_START" && step.cmd !== "GROUP_END";
+    return !step.disabled && step.cmd !== "COMMENT" && !isBlockStart(step.cmd) && !isBlockEnd(step.cmd) && !isBlockMiddle(step.cmd);
 }
 
 function normalizeIfMode(mode) {
@@ -1996,16 +2591,19 @@ function deleteMacro() {
 // =====================================================================
 //  Group helpers
 // =====================================================================
+// Indent of every step: block contents one level in; ELSE / CATCH at the level of their block
 function computeDepths(steps) {
     var depths = [];
     var depth = 0;
     for (var i = 0; i < steps.length; i++) {
-        if (steps[i].cmd === "GROUP_END") {
+        if (isBlockEnd(steps[i].cmd)) {
             depth = Math.max(0, depth - 1);
             depths.push(depth);
+        } else if (isBlockMiddle(steps[i].cmd)) {
+            depths.push(Math.max(0, depth - 1));
         } else {
             depths.push(depth);
-            if (steps[i].cmd === "GROUP_START") {
+            if (isBlockStart(steps[i].cmd)) {
                 depth++;
             }
         }
@@ -2013,12 +2611,13 @@ function computeDepths(steps) {
     return depths;
 }
 
+// Matching end of the block that starts at startIndex (any block type; blocks are kept balanced)
 function findGroupEnd(steps, startIndex) {
     var depth = 0;
     for (var i = startIndex; i < steps.length; i++) {
-        if (steps[i].cmd === "GROUP_START") {
+        if (isBlockStart(steps[i].cmd)) {
             depth++;
-        } else if (steps[i].cmd === "GROUP_END") {
+        } else if (isBlockEnd(steps[i].cmd)) {
             depth--;
             if (depth === 0) {
                 return i;
@@ -2031,9 +2630,9 @@ function findGroupEnd(steps, startIndex) {
 function findGroupStart(steps, endIndex) {
     var depth = 0;
     for (var i = endIndex; i >= 0; i--) {
-        if (steps[i].cmd === "GROUP_END") {
+        if (isBlockEnd(steps[i].cmd)) {
             depth++;
-        } else if (steps[i].cmd === "GROUP_START") {
+        } else if (isBlockStart(steps[i].cmd)) {
             depth--;
             if (depth === 0) {
                 return i;
@@ -2043,10 +2642,10 @@ function findGroupStart(steps, endIndex) {
     return -1;
 }
 
-// Range [from, to] that moves together (a GROUP_START carries its whole group)
+// Range [from, to] that moves together (a block start carries its whole block)
 function blockRange(steps, index) {
     var to = index;
-    if (steps[index] && steps[index].cmd === "GROUP_START") {
+    if (steps[index] && isBlockStart(steps[index].cmd)) {
         var end = findGroupEnd(steps, index);
         if (end > index) {
             to = end;
@@ -2059,9 +2658,9 @@ function blockRange(steps, index) {
 function expandAncestors(steps, index) {
     var stack = [];
     for (var i = 0; i < index && i < steps.length; i++) {
-        if (steps[i].cmd === "GROUP_START") {
+        if (isBlockStart(steps[i].cmd)) {
             stack.push(i);
-        } else if (steps[i].cmd === "GROUP_END" && stack.length) {
+        } else if (isBlockEnd(steps[i].cmd) && stack.length) {
             stack.pop();
         }
     }
@@ -2073,7 +2672,7 @@ function expandAncestors(steps, index) {
 function toggleGroup(index) {
     var steps = currentSteps();
     var step = steps[index];
-    if (!step || step.cmd !== "GROUP_START") {
+    if (!step || !isBlockStart(step.cmd)) {
         return;
     }
     step.collapsed = !step.collapsed;
@@ -2089,7 +2688,7 @@ function toggleGroup(index) {
 function setAllCollapsed(collapsed) {
     var steps = currentSteps();
     for (var i = 0; i < steps.length; i++) {
-        if (steps[i].cmd === "GROUP_START") {
+        if (isBlockStart(steps[i].cmd)) {
             steps[i].collapsed = collapsed;
         }
     }
@@ -2108,7 +2707,7 @@ function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
     var whenTag = step.when === "first" ? '<span class="when-tag">最初の1行だけ</span>' :
         step.when === "last" ? '<span class="when-tag">最後の1行だけ</span>' : "";
     var offTag = step.disabled ? '<span class="off-tag">無効</span>' : "";
-    var toggle = step.cmd === "GROUP_START" ?
+    var toggle = isBlockStart(step.cmd) ?
         '<span class="toggle" data-act="toggle" title="折りたたみ／展開">' + (step.collapsed ? "▶" : "▼") + "</span>" :
         '<span class="toggle-space"></span>';
     var main;
@@ -2117,8 +2716,13 @@ function buildBlockHtml(step, index, depth, hidden, hiddenCount) {
     } else if (step.cmd === "GROUP_START") {
         main = '<span class="group-name">📁 ' + escapeHtml(step.val) + "</span>" + whenTag +
             (step.collapsed ? '<span class="collapsed-count">（' + hiddenCount + "件を折りたたみ中）</span>" : "");
-    } else if (step.cmd === "GROUP_END") {
-        main = '<span class="group-end-text">└ グループ終了</span>';
+    } else if (isBlockEnd(step.cmd)) {
+        main = '<span class="group-end-text">└ ' + escapeHtml(def.title) + "</span>";
+    } else if (isBlockMiddle(step.cmd)) {
+        main = '<span class="group-name">' + def.icon + " " + escapeHtml(def.title) + "</span>";
+    } else if (isBlockStart(step.cmd) || def.hideVal) {
+        main = '<span class="step-label">' + escapeHtml(step.label || autoLabelFor(step)) + "</span>" +
+            (step.collapsed ? '<span class="collapsed-count">（' + hiddenCount + "件を折りたたみ中）</span>" : "");
     } else {
         main = '<span class="step-label">' + escapeHtml(step.label || autoLabelFor(step)) + "</span>" +
             '<span class="step-val">' + escapeHtml(truncateText(step.val, 60)) + "</span>";
@@ -2154,7 +2758,7 @@ function renderSteps() {
         var hidden = i <= hideUntil;
         hiddenAt.push(hidden);
         var hiddenCount = 0;
-        if (!hidden && steps[i].cmd === "GROUP_START" && steps[i].collapsed) {
+        if (!hidden && isBlockStart(steps[i].cmd) && steps[i].collapsed) {
             var end = findGroupEnd(steps, i);
             hideUntil = end < 0 ? steps.length - 1 : end;
             hiddenCount = Math.max(0, (end < 0 ? steps.length : end) - i - 1);
@@ -2473,16 +3077,28 @@ function guardRunning() {
     return false;
 }
 
+// Every block closed by its own kind of end; ELSE only directly inside an if-block, CATCH only
+// directly inside a try-block, at most one each
 function groupsBalanced(steps) {
-    var depth = 0;
+    var stack = [];
     for (var i = 0; i < steps.length; i++) {
-        if (steps[i].cmd === "GROUP_START") {
-            depth++;
-        } else if (steps[i].cmd === "GROUP_END" && --depth < 0) {
-            return false;
+        var c = steps[i].cmd;
+        if (isBlockStart(c)) {
+            stack.push({ cmd: c, middles: {} });
+        } else if (isBlockEnd(c)) {
+            if (!stack.length || stack[stack.length - 1].cmd !== BLOCK_ENDS[c]) {
+                return false;
+            }
+            stack.pop();
+        } else if (isBlockMiddle(c)) {
+            var top = stack[stack.length - 1];
+            if (!top || top.cmd !== BLOCK_MIDDLES[c] || top.middles[c]) {
+                return false;
+            }
+            top.middles[c] = true;
         }
     }
-    return depth === 0;
+    return stack.length === 0;
 }
 
 function moveSteps(from, to, insertAt, desc) {
@@ -2539,10 +3155,20 @@ function addCommand(cmd) {
     openStepEditor(cmd, null, function (step) {
         var steps = currentSteps();
         var at = insertionIndex();
-        if (cmd === "GROUP_START") {
-            steps.splice(at, 0, step, { cmd: "GROUP_END", val: "", label: "グループ終了" });
-        } else {
-            steps.splice(at, 0, step);
+        var pieces = [step];
+        if (cmd === "TRY_START") {
+            pieces.push({ cmd: "CATCH", val: "", label: COMMAND_DEFS.CATCH.title });
+        }
+        if (isBlockStart(cmd)) {
+            pieces.push({ cmd: BLOCK_PAIRS[cmd], val: "", label: COMMAND_DEFS[BLOCK_PAIRS[cmd]].title });
+        }
+        var trial = steps.slice(0, at).concat(pieces).concat(steps.slice(at));
+        if (isBlockMiddle(cmd) && !groupsBalanced(trial)) {
+            log("「" + def.title + "」は「" + COMMAND_DEFS[BLOCK_MIDDLES[cmd]].title + "」の中（1つのブロックに1つだけ）に入れてね。入れたい場所のすぐ上のブロックを選んでから追加してね", "warn");
+            return;
+        }
+        for (var k = pieces.length - 1; k >= 0; k--) {
+            steps.splice(at, 0, pieces[k]);
         }
         expandAncestors(steps, at);
         selectedIndex = at;
@@ -2560,8 +3186,9 @@ function editStep(index) {
     if (!step) {
         return;
     }
-    if (step.cmd === "GROUP_END") {
-        showMessage("└ グループ終了", "グループ終了タグには設定する項目がないキュン♡\nグループ名は「📁 グループ開始」の方で編集してね。");
+    if (COMMAND_DEFS[step.cmd] && COMMAND_DEFS[step.cmd].marker) {
+        showMessage(COMMAND_DEFS[step.cmd].icon + " " + COMMAND_DEFS[step.cmd].title, "このコマンドには設定する項目がないキュン♡" +
+            (isBlockEnd(step.cmd) || isBlockMiddle(step.cmd) ? "\n設定はブロックの最初の行の方で編集してね。" : ""));
         return;
     }
     openStepEditor(step.cmd, step, function (updated) {
@@ -2598,24 +3225,28 @@ function deleteStep(index) {
     }
     var start = -1;
     var end = -1;
-    if (step.cmd === "GROUP_START") {
+    if (isBlockStart(step.cmd)) {
         start = index;
         end = findGroupEnd(steps, index);
-    } else if (step.cmd === "GROUP_END") {
+    } else if (isBlockEnd(step.cmd)) {
         end = index;
         start = findGroupStart(steps, index);
     }
     if (start >= 0 && end >= 0) {
-        var name = steps[start].val;
-        showChoice("🗑 グループの削除", "グループ「" + name + "」をどうする？", [
+        var name = steps[start].label || autoLabelFor(steps[start]);
+        var kind = COMMAND_DEFS[steps[start].cmd].title;
+        showChoice("🗑 " + kind + "の削除", kind + "「" + name + "」をどうする？", [
             { text: "🗑 中身ごと削除", cls: "btn-danger", fn: function () {
                 steps.splice(start, end - start + 1);
-                afterDelete(start, "グループ削除(中身ごと): " + name);
+                afterDelete(start, kind + "削除(中身ごと): " + name);
             } },
             { text: "📤 枠だけ解除", fn: function () {
-                steps.splice(end, 1);
-                steps.splice(start, 1);
-                afterDelete(start, "グループ解除: " + name);
+                // The block's own ELSE / CATCH go with the frame
+                var remove = [start, end].concat(blockMiddles(steps, start, end)).sort(function (a, b) { return b - a; });
+                for (var r = 0; r < remove.length; r++) {
+                    steps.splice(remove[r], 1);
+                }
+                afterDelete(start, kind + "解除: " + name);
             } },
             { text: "キャンセル", fn: null }
         ]);
@@ -2631,8 +3262,12 @@ function duplicateSelected() {
         return;
     }
     var range = blockRange(steps, selectedIndex);
-    if (steps[selectedIndex].cmd === "GROUP_END") {
-        // A lone group end would close the enclosing group early: copy the whole group instead
+    if (isBlockMiddle(steps[selectedIndex].cmd)) {
+        log("「" + COMMAND_DEFS[steps[selectedIndex].cmd].title + "」は1つのブロックに1つだけだから、複製できないキュン", "warn");
+        return;
+    }
+    if (isBlockEnd(steps[selectedIndex].cmd)) {
+        // A lone block end would close the enclosing block early: copy the whole block instead
         var start = findGroupStart(steps, selectedIndex);
         if (start < 0) {
             return;
@@ -2656,8 +3291,8 @@ function toggleDisabledSelected() {
         return;
     }
     var step = steps[selectedIndex];
-    if (step.cmd === "GROUP_END") {
-        log("グループ終了タグは無効化できないキュン。📁グループ開始の方を無効化すると、グループまるごと止まるよ", "warn");
+    if (isBlockEnd(step.cmd) || isBlockMiddle(step.cmd)) {
+        log("「" + COMMAND_DEFS[step.cmd].title + "」は無効化できないキュン。ブロックの最初の行を無効化すると、ブロックまるごと止まるよ", "warn");
         return;
     }
     if (step.disabled) {
@@ -2904,11 +3539,15 @@ function openStepEditor(cmd, step, onSave) {
 
 function buildPalette() {
     var html = [];
-    for (var i = 0; i < COMMAND_ORDER.length; i++) {
-        var cmd = COMMAND_ORDER[i];
-        var def = COMMAND_DEFS[cmd];
-        html.push('<button class="btn btn-cmd cat-' + def.category + '" onclick="addCommand(\'' + cmd + '\')" title="' +
-            escapeHtml(def.title + "：" + def.help) + '">' + def.icon + " " + (cmd === "GROUP_START" ? "GROUP" : cmd) + "</button> ");
+    for (var g = 0; g < PALETTE_GROUPS.length; g++) {
+        html.push('<span class="palette-group"><span class="palette-label">' + escapeHtml(PALETTE_GROUPS[g][0]) + "</span>");
+        for (var i = 0; i < PALETTE_GROUPS[g][1].length; i++) {
+            var cmd = PALETTE_GROUPS[g][1][i];
+            var def = COMMAND_DEFS[cmd];
+            html.push('<button class="btn btn-cmd cat-' + def.category + '" onclick="addCommand(\'' + cmd + '\')" title="' +
+                escapeHtml(cmd + "：" + def.help) + '">' + def.icon + " " + escapeHtml(def.title) + "</button>");
+        }
+        html.push("</span>");
     }
     byId("paletteButtons").innerHTML = html.join("");
 }
@@ -3943,6 +4582,14 @@ function runDiagnostics() {
     add(!!(fso && fso.FileExists(ALARM_WAV_PATH)), "アラーム音ファイル", ALARM_WAV_PATH);
     var wmpOk = tryActiveX("WMPlayer.OCX", "Windows Media Player部品（音の予備手段）");
     var sapiOk = tryActiveX("SAPI.SpVoice", "音声合成（音の予備手段）");
+    try {
+        // Starting Excel launches EXCEL.EXE: quit it right away
+        var xl = new ActiveXObject("Excel.Application");
+        add(true, "Excel（EXCEL_READ・EXCEL_WRITE）", "Excel.Application " + xl.Version);
+        xl.Quit();
+    } catch (eXl) {
+        add(false, "Excel（EXCEL_READ・EXCEL_WRITE）", "Excel.Application … " + errorText(eXl));
+    }
     if (!wmpOk && !sapiOk) {
         hints.push("PowerShellが使えない場合、アラームを鳴らす予備手段がないよ。画面のログで異常を確認してね。");
     }
@@ -4524,6 +5171,10 @@ function startRun() {
         highlightEl: null,
         doneRows: 0,
         skippedRows: 0,
+        vars: {},
+        loopStack: [],
+        tryStack: [],
+        excel: null,
         captured: {},
         currentResult: null,
         confirmOpen: false,
@@ -4555,6 +5206,410 @@ function originalRowNoColumn() {
 // Esc only reaches the HTA while it has focus, but during a run the target app is in front.
 // A small PowerShell watcher reads the global key state: holding Esc ~1 s stops the run from any
 // window. A macro's own KEY {ESC} is a single instant press, so it never counts as "held".
+// =====================================================================
+//  Control flow at run time (loops, if/else, try/catch) and variable commands
+// =====================================================================
+// Loop / try frames outside the current position are dropped (left by a jump, a skip or BREAK)
+function pruneFrames(rs) {
+    var i = rs.stepIndex;
+    rs.loopStack = (rs.loopStack || []).filter(function (f) { return i >= f.start && i <= f.end; });
+    rs.tryStack = (rs.tryStack || []).filter(function (f) { return i >= f.start && i <= f.end; });
+}
+
+// Moves to `index` so that the runner's next() continues right after it
+function jumpTo(rs, index) {
+    rs.stepIndex = index;
+}
+
+function runLoopStart(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.LOOP_START.parse(step.val);
+    var top = rs.loopStack.length ? rs.loopStack[rs.loopStack.length - 1] : null;
+    var frame = top && top.start === rs.stepIndex ? top : null;
+    if (!frame) {
+        var end = findGroupEnd(rs.steps, rs.stepIndex);
+        if (end < 0) {
+            stopWithError("🚨 「繰り返しここまで」が見つからないキュン", true);
+            return;
+        }
+        frame = { start: rs.stepIndex, end: end, iter: 0, count: -1, max: toInt(toHalfWidthDigits(p.max), 1000), counter: trimText(p.counter) || "回数" };
+        if (p.mode === "COUNT") {
+            var countText = toHalfWidthDigits(trimText(expandPlaceholders(p.count, rs)));
+            if (!/^\d+$/.test(countText)) {
+                stopWithError("🚨 繰り返しの回数「" + countText + "」が数字じゃないキュン", true);
+                return;
+            }
+            frame.count = parseInt(countText, 10);
+        }
+        rs.loopStack.push(frame);
+    }
+    var go;
+    try {
+        go = p.mode === "COUNT" ? frame.iter < frame.count : evalCondition(p, rs);
+    } catch (e) {
+        stopWithError("🚨 繰り返しの条件を調べられなかったキュン（" + errorText(e) + "）", true);
+        return;
+    }
+    if (go && frame.iter >= frame.max) {
+        stopWithError("🚨 繰り返しが上限の " + frame.max + " 回に達したから止めたキュン（終わらない繰り返しの防止）。条件か上限回数を見直してね", true);
+        return;
+    }
+    if (go) {
+        frame.iter++;
+        rs.vars[frame.counter] = String(frame.iter);
+        log("🔁 繰り返し " + frame.iter + " 回目", "info");
+        next("next", 0);
+        return;
+    }
+    rs.loopStack.pop();
+    log("🔁 繰り返しおわり（" + frame.iter + " 回）", "info");
+    jumpTo(rs, frame.end);
+    next("next", 0);
+}
+
+function innermostLoop(rs) {
+    return rs.loopStack.length ? rs.loopStack[rs.loopStack.length - 1] : null;
+}
+
+function runLoopEnd(next) {
+    var rs = runState;
+    var frame = innermostLoop(rs);
+    if (frame && frame.end === rs.stepIndex) {
+        jumpTo(rs, frame.start - 1); // next() lands on LOOP_START, which decides whether to go round again
+    }
+    next("next", 0);
+}
+
+function runBreakOrContinue(cmd, next) {
+    var rs = runState;
+    var frame = innermostLoop(rs);
+    if (!frame) {
+        log("⚠ 「" + COMMAND_DEFS[cmd].title + "」が繰り返しの外にあるから、何もしないで進むね", "warn");
+        next("next", 0);
+        return;
+    }
+    if (cmd === "BREAK") {
+        rs.loopStack.pop();
+        log("⤴ 繰り返しを抜けるよ", "info");
+        jumpTo(rs, frame.end);
+    } else {
+        log("↪ 次の繰り返しへ", "info");
+        jumpTo(rs, frame.end - 1);
+    }
+    next("next", 0);
+}
+
+function runIfStart(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.IF_START.parse(step.val);
+    var ok;
+    try {
+        ok = evalCondition(p, rs);
+    } catch (e) {
+        stopWithError("🚨 「もし〜なら」の条件を調べられなかったキュン（" + errorText(e) + "）", true);
+        return;
+    }
+    log("❓ もし " + describeCondition(p) + " → " + (ok ? "はい" : "いいえ"), "info");
+    if (!ok) {
+        var elseIndex = findMiddle(rs.steps, rs.stepIndex, "ELSE");
+        jumpTo(rs, elseIndex >= 0 ? elseIndex : findGroupEnd(rs.steps, rs.stepIndex));
+    }
+    next("next", 0);
+}
+
+// ELSE / CATCH reached by finishing the previous section: skip to the end of the block
+function runMiddleReached(next) {
+    var rs = runState;
+    var owner = findBlockOwner(rs.steps, rs.stepIndex);
+    var end = owner >= 0 ? findGroupEnd(rs.steps, owner) : -1;
+    if (rs.steps[rs.stepIndex].cmd === "CATCH") {
+        rs.tryStack = rs.tryStack.filter(function (f) { return f.start !== owner; });
+    }
+    if (end >= 0) {
+        jumpTo(rs, end);
+    }
+    next("next", 0);
+}
+
+function runTryStart(next) {
+    var rs = runState;
+    var end = findGroupEnd(rs.steps, rs.stepIndex);
+    rs.tryStack.push({ start: rs.stepIndex, end: end, catchIndex: findMiddle(rs.steps, rs.stepIndex, "CATCH") });
+    next("next", 0);
+}
+
+function runTryEnd(next) {
+    var rs = runState;
+    var idx = rs.stepIndex;
+    rs.tryStack = rs.tryStack.filter(function (f) { return f.end !== idx; });
+    next("next", 0);
+}
+
+// Called by stopWithError: an error inside "エラー時の処理" goes to its CATCH section instead of
+// stopping the run. Returns true when the error was handled.
+function catchRunError(message) {
+    var rs = runState;
+    if (!rs || !rs.running || !rs.tryStack) {
+        return false;
+    }
+    pruneFrames(rs);
+    while (rs.tryStack.length) {
+        var f = rs.tryStack[rs.tryStack.length - 1];
+        if (f.catchIndex >= 0 && rs.stepIndex > f.catchIndex) {
+            rs.tryStack.pop(); // the error happened inside the CATCH section itself: pass it outward
+            continue;
+        }
+        rs.vars["エラー内容"] = String(message).replace(/^🚨\s*/, "");
+        log("🧯 エラーを受け止めたキュン: " + rs.vars["エラー内容"] + (f.catchIndex >= 0 ? "（「エラーのとき」へ進むよ）" : ""), "warn");
+        if (rs.confirmOpen) {
+            rs.confirmOpen = false;
+            closeModal();
+        }
+        if (f.catchIndex >= 0) {
+            rs.stepIndex = f.catchIndex + 1;
+        } else {
+            rs.tryStack.pop();
+            rs.stepIndex = f.end + 1;
+        }
+        updateVarPanel();
+        schedule(runCurrentStep, rs.interval);
+        return true;
+    }
+    return false;
+}
+
+function runSetVar(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.SET_VAR.parse(step.val);
+    var value = expandPlaceholders(p.value, rs);
+    if (p.mode === "CALC") {
+        try {
+            value = calcExpression(value);
+        } catch (e) {
+            stopWithError("🚨 計算できなかったキュン: " + value + "（" + errorText(e) + "）", true);
+            return;
+        }
+    }
+    rs.vars[trimText(p.name)] = value;
+    log("📦 $" + p.name + " = " + truncateText(value, 40), "info");
+    updateVarPanel();
+    next("next", 0);
+}
+
+function runStrOp(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.STR_OP.parse(step.val);
+    var result;
+    try {
+        result = strOp(p.op, expandPlaceholders(p.src, rs), expandPlaceholders(p.a, rs), expandPlaceholders(p.b, rs));
+    } catch (e) {
+        stopWithError("🚨 文字の加工（" + strOpName(p.op) + "）ができなかったキュン（" + errorText(e) + "）", true);
+        return;
+    }
+    rs.vars[trimText(p.name)] = result;
+    log("✂ $" + p.name + " = " + truncateText(result, 40), "info");
+    updateVarPanel();
+    next("next", 0);
+}
+
+function runRecord(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.RECORD.parse(step.val);
+    var value = expandPlaceholders(p.value, rs);
+    addResultValue(trimText(p.name), value);
+    log("📝 結果の「" + p.name + "」に記録: " + truncateText(value, 40), "info");
+    next("next", 0);
+}
+
+function runAsk(step, next) {
+    var rs = runState;
+    var p = COMMAND_DEFS.ASK.parse(step.val);
+    var name = trimText(p.name);
+    var message = expandPlaceholders(p.message, rs);
+    var initial = expandPlaceholders(p.defaultValue, rs);
+    try {
+        shell.AppActivate(document.title);
+    } catch (e) {
+        /* ignore */
+    }
+    rs.confirmOpen = true;
+    updateProgress("（✍ 入力待ち）");
+    log("✍ 「" + name + "」の入力を待ってるキュン", "warn");
+    openModal("✍ 入力してね（" + rowCaption(rs.rows[rs.rowPos]) + "）",
+        '<div class="modal-message">' + escapeHtml(message) + '</div><div class="form-row"><input type="text" id="askInput" class="form-input" value="' + escapeHtml(initial) + '"></div>', [
+            { text: "▶ 続行", cls: "btn-run", fn: function () {
+                var value = byId("askInput") ? byId("askInput").value : initial;
+                rs.confirmOpen = false;
+                if (runState !== rs || !rs.running) {
+                    return true;
+                }
+                rs.vars[name] = value;
+                log("✍ $" + name + " = " + truncateText(value, 40), "info");
+                updateVarPanel();
+                resumeAfterDialog(rs, next);
+                return true;
+            } },
+            { text: "⏭ この行をスキップ", fn: function () {
+                rs.confirmOpen = false;
+                if (runState === rs && rs.running) {
+                    setRowResult("スキップ", "入力でスキップ");
+                    next("skipRow");
+                }
+                return true;
+            } },
+            { text: "⏹ 停止", cls: "btn-danger", fn: function () {
+                rs.confirmOpen = false;
+                stopRun("入力で停止");
+                return true;
+            } }
+        ], { onDismiss: function () {
+            rs.confirmOpen = false;
+            stopRun("入力でEsc");
+        } });
+}
+
+// After a dialog the HTA has the focus: give it back to the input target before continuing
+function resumeAfterDialog(rs, next) {
+    if (rs.activeTitle) {
+        activateWithRetry(rs.activeTitle, function () {
+            next("next", 300);
+        }, function () {
+            stopWithError("🚨 入力のあと「" + rs.activeTitle + "」に戻れなかったキュン…", true);
+        });
+    } else {
+        log("対象ウィンドウ未設定だから1.5秒後に続けるよ。入力先をクリックしておいてね", "warn");
+        schedule(function () {
+            next("next", 0);
+        }, 1500);
+    }
+}
+
+// ----- Excel (no GUI): one hidden Excel per run, books stay open until the run ends -----
+function excelSheet(rs, path, sheet, forWrite) {
+    if (!rs.excel) {
+        var app = new ActiveXObject("Excel.Application");
+        app.Visible = false;
+        app.DisplayAlerts = false;
+        rs.excel = { app: app, books: {} };
+    }
+    var key = path.toLowerCase();
+    var wb = rs.excel.books[key];
+    if (!wb) {
+        if (!fso.FileExists(path)) {
+            throw new Error("ブックが見つからない: " + path);
+        }
+        wb = rs.excel.app.Workbooks.Open(path, 0, false);
+        rs.excel.books[key] = wb;
+    }
+    if (forWrite && wb.ReadOnly) {
+        throw new Error("ほかで開かれているから書き込めない（ブックを閉じてからもう一度）: " + path);
+    }
+    var s = trimText(sheet) === "" ? "1" : toHalfWidthDigits(trimText(sheet));
+    return wb.Worksheets.Item(/^\d+$/.test(s) ? parseInt(s, 10) : s);
+}
+
+function closeExcel(rs) {
+    if (!rs || !rs.excel) {
+        return;
+    }
+    try {
+        for (var k in rs.excel.books) {
+            if (rs.excel.books.hasOwnProperty(k)) {
+                try { rs.excel.books[k].Close(false); } catch (e1) { /* ignore */ }
+            }
+        }
+        rs.excel.app.Quit();
+    } catch (e2) {
+        /* ignore */
+    }
+    rs.excel = null;
+}
+
+function runExcel(step, next) {
+    var rs = runState;
+    var write = step.cmd === "EXCEL_WRITE";
+    var p = COMMAND_DEFS[step.cmd].parse(step.val);
+    var path = trimText(expandPlaceholders(p.path, rs)).replace(/^"+|"+$/g, "");
+    var cell = trimText(expandPlaceholders(p.cell, rs));
+    try {
+        var sh = excelSheet(rs, path, expandPlaceholders(p.sheet, rs), write);
+        if (write) {
+            var value = expandPlaceholders(p.value, rs);
+            sh.Range(cell).Value = value;
+            sh.Parent.Save();
+            log("📗 " + fileNameOf(path) + " の " + cell + " に「" + truncateText(value, 30) + "」を書いて保存したよ", "info");
+        } else {
+            var text = String(sh.Range(cell).Text);
+            rs.vars[trimText(p.name)] = text;
+            log("📗 " + fileNameOf(path) + " の " + cell + " = " + truncateText(text, 40), "info");
+            updateVarPanel();
+        }
+    } catch (e) {
+        stopWithError("🚨 Excelの" + (write ? "書き込み" : "読み取り") + "に失敗したキュン（" + errorText(e) + "）", true);
+        return;
+    }
+    next("next", 0);
+}
+
+// =====================================================================
+//  Variable watch panel
+// =====================================================================
+function toggleVarPanel() {
+    var panel = byId("varPanel");
+    panel.style.display = panel.style.display === "none" ? "" : "none";
+    updateVarPanel();
+}
+
+function varTableHtml(title, rows) {
+    var html = '<div class="var-title">' + escapeHtml(title) + "</div>";
+    if (!rows.length) {
+        return html + '<div class="var-empty">（なし）</div>';
+    }
+    html += '<table class="var-table">';
+    for (var i = 0; i < rows.length; i++) {
+        html += "<tr><th>" + escapeHtml(rows[i][0]) + "</th><td>" + escapeHtml(truncateText(rows[i][1], 60)) + "</td></tr>";
+    }
+    return html + "</table>";
+}
+
+function updateVarPanel() {
+    var panel = byId("varPanel");
+    if (!panel || panel.style.display === "none") {
+        return;
+    }
+    var rs = runState;
+    if (!rs) {
+        panel.innerHTML = '<div class="var-empty">▶ 実行すると、ここに変数・この行のCSVの値・コピーした値がリアルタイムで表示されるよ</div>';
+        return;
+    }
+    var vars = [];
+    for (var k in rs.vars) {
+        if (rs.vars.hasOwnProperty(k)) {
+            vars.push(["$" + k, rs.vars[k]]);
+        }
+    }
+    var csvRows = [];
+    var row = rs.rows[Math.min(rs.rowPos, rs.rows.length - 1)];
+    if (row && row.no > 0) {
+        csvRows.push(["ROW", String(row.no)]);
+        for (var i = 0; i < row.data.length && i < 30; i++) {
+            csvRows.push([(runHeader && runHeader[i]) ? runHeader[i] : String(i + 1), row.data[i]]);
+        }
+    }
+    var copies = [];
+    for (var c in rs.captured) {
+        if (rs.captured.hasOwnProperty(c)) {
+            copies.push(["COPY:" + c, rs.captured[c]]);
+        }
+    }
+    var loops = [];
+    for (var j = 0; j < (rs.loopStack || []).length; j++) {
+        loops.push(["繰り返し" + (j + 1), rs.loopStack[j].iter + " 回目" + (rs.loopStack[j].count >= 0 ? " / " + rs.loopStack[j].count : "")]);
+    }
+    panel.innerHTML = varTableHtml("変数 {{$名前}}", vars) + (loops.length ? varTableHtml("繰り返し", loops) : "") +
+        varTableHtml("この行のCSV", csvRows) + varTableHtml("コピーした値", copies);
+}
+
 function startStopWatcher(rs) {
     if (!shell || !fso || psLaunchBlocked || psLastFailed || psLangRestricted) {
         // Keyboard-only macros must stay PowerShell-free on PCs where PowerShell does not work
@@ -4603,6 +5658,8 @@ function startRow() {
     rs.stepIndex = 0;
     rs.activeTitle = rs.targetWindow;
     rs.captured = {};
+    rs.loopStack = [];
+    rs.tryStack = [];
     rs.currentResult = beginResultRow(row);
     updateProgress();
     log("── " + rowCaption(row) + " 開始（" + (rs.rowPos + 1) + "/" + rs.rows.length + "件目）", "run");
@@ -4620,7 +5677,7 @@ function startRow() {
 // skipFirstOnly: true when the current row is not the first one, so "first row only" groups are closed
 function nextFinalGroupIndex(steps, from, skipFirstOnly) {
     for (var i = Math.max(0, from); i < steps.length; i++) {
-        if (steps[i].cmd !== "GROUP_START") {
+        if (!isBlockStart(steps[i].cmd)) {
             continue;
         }
         if (steps[i].disabled || (skipFirstOnly && steps[i].when === "first")) {
@@ -4657,9 +5714,11 @@ function runCurrentStep() {
         nextRow();
         return;
     }
+    pruneFrames(rs);
     var step = rs.steps[rs.stepIndex];
     highlightRunning(rs.stepIndex);
     updateProgress();
+    updateVarPanel();
     executeStep(step, function (action, delay) {
         if (runState !== rs || !rs.running) {
             return;
@@ -4818,8 +5877,8 @@ function executeStep(step, next) {
     var rs = runState;
     var val = step.val == null ? "" : String(step.val);
     if (step.disabled) {
-        if (step.cmd === "GROUP_START") {
-            skipGroupBody(rs, "（無効化されたグループ「" + val + "」は飛ばすよ）");
+        if (isBlockStart(step.cmd)) {
+            skipGroupBody(rs, "（無効化された「" + (step.label || autoLabelFor(step)) + "」は飛ばすよ）");
         }
         next("next", 0);
         return;
@@ -4839,7 +5898,47 @@ function executeStep(step, next) {
         return;
     case "COMMENT":
     case "GROUP_END":
+    case "IF_END":
         next("next", 0);
+        return;
+    case "LOOP_START":
+        runLoopStart(step, next);
+        return;
+    case "LOOP_END":
+        runLoopEnd(next);
+        return;
+    case "BREAK":
+    case "CONTINUE":
+        runBreakOrContinue(step.cmd, next);
+        return;
+    case "IF_START":
+        runIfStart(step, next);
+        return;
+    case "ELSE":
+    case "CATCH":
+        runMiddleReached(next);
+        return;
+    case "TRY_START":
+        runTryStart(next);
+        return;
+    case "TRY_END":
+        runTryEnd(next);
+        return;
+    case "SET_VAR":
+        runSetVar(step, next);
+        return;
+    case "STR_OP":
+        runStrOp(step, next);
+        return;
+    case "ASK":
+        runAsk(step, next);
+        return;
+    case "RECORD":
+        runRecord(step, next);
+        return;
+    case "EXCEL_READ":
+    case "EXCEL_WRITE":
+        runExcel(step, next);
         return;
     case "KEY":
         ensureInputTarget(function () {
@@ -5050,7 +6149,7 @@ function runIf(val, next) {
                 next("skipRow");
             }, 500);
         } else {
-            stopWithError("🚨 IF検知(STOP): 「" + title + "」が出たから緊急停止したキュン！", true);
+            stopWithError("🚨 IF検知(STOP): 「" + title + "」が出たから緊急停止したキュン！", true, true);
         }
     }, 300);
 }
@@ -5138,6 +6237,7 @@ function copyAndSave(name, next) {
         }
         text = String(text).replace(/(\r\n|\n|\r)+$/, "");
         rs.captured[name] = text;
+        rs.vars[name] = text;
         addResultValue(name, text);
         if (text === "") {
             log("⚠ 「" + name + "」は空っぽだったキュン（文字が選択されていなかったかも。直前に KEY ^a を入れてみてね）", "warn");
@@ -5171,8 +6271,16 @@ function saveScreenshot(val, next) {
     }, { forRun: true });
 }
 
-function stopWithError(message, recordRow) {
+// uncatchable: an intentional emergency stop (IF ... STOP) that "エラー時の処理" must not swallow
+function stopWithError(message, recordRow, uncatchable) {
     if (!isRunning()) {
+        return;
+    }
+    if (!uncatchable && catchRunError(message)) {
+        var held = runState.currentResult;
+        if (held) {
+            held.note = (held.note ? held.note + " / " : "") + "受け止めたエラー: " + String(message).replace(/^🚨\s*/, "");
+        }
         return;
     }
     log(message, "error");
@@ -5247,6 +6355,7 @@ function endRun(status) {
         return;
     }
     rs.running = false;
+    closeExcel(rs);
     if (rs.timer) {
         clearTimeout(rs.timer);
         rs.timer = null;
@@ -6032,7 +7141,7 @@ var TEMPLATES = [
     }
 ];
 
-// ----------------------------------------------------------------- Cokas-i（基幹系）
+// ----------------------------------------------------------------- 基幹系業務システム（国保・介護・税・住民記録・収納・滞納）
 // Screen labels (menus, buttons, field order) are examples: every site customises its screens,
 // so each template starts semi-automatic (CONFIRM: the clerk clicks the field) and carries
 // disabled CLICK_POS / read groups to switch to full automation after calibration.
@@ -6068,39 +7177,39 @@ function tplSearch(csvCol, notFoundMode) {
     ];
 }
 
-var COKAS_PREPARE = [
-    "対象ウィンドウ「Cokas」を、🔍一覧で実際の画面タイトルに合わせる",
+var KIKAN_PREPARE = [
+    "対象ウィンドウ「基幹系」を、🔍一覧で実際の画面タイトルに合わせる",
     "メニュー名・ボタン名・欄の並び（TABの回数）は架空の例。自分の画面の表記に合わせる",
     "最初は開始行・終了行を「1」にして1件だけ試す"
 ];
 
-var COKAS_CUSTOMIZE = [
+var KIKAN_CUSTOMIZE = [
     "最初は確認ポイント（✋）で入力欄を手でクリックします。慣れたら、無効化されている CLICK_POS を📍で合わせて有効化（⊘ 無効化 ボタン）し、確認ポイントを無効化すると完全自動になります",
     "「〜を読み取る」グループは、📍で読み取りたい欄の座標を合わせてからグループごと有効化します。読み取った値は［↓ 実行結果CSV］の列になります"
 ];
 
 TEMPLATE_CATEGORIES = TEMPLATE_CATEGORIES.concat([
-    "Cokas-i：国保",
-    "Cokas-i：介護保険",
-    "Cokas-i：税務",
-    "Cokas-i：住民情報（宛名）",
-    "Cokas-i：住民基本台帳",
-    "Cokas-i：収納管理",
-    "Cokas-i：滞納管理",
-    "Cokas-i：横断活用"
+    "基幹系：国保",
+    "基幹系：介護保険",
+    "基幹系：税務",
+    "基幹系：住民情報（宛名）",
+    "基幹系：住民基本台帳",
+    "基幹系：収納管理",
+    "基幹系：滞納管理",
+    "基幹系：横断活用"
 ]);
 
 TEMPLATES = TEMPLATES.concat([
     // ------------------------------------------------------------- 国保
     {
-        id: "cokas-kokuho-shikaku", category: "Cokas-i：国保", level: 1,
+        id: "kikan-kokuho-shikaku", category: "基幹系：国保", level: 1,
         name: "被保険者の資格状況を連続照会して記録",
         summary: "被保険者記号番号を1件ずつ資格照会し、画面を証跡として保存します。読み取りグループを有効化すると「資格状態」「資格喪失日」も実行結果CSVに一覧で残せます。入力・登録はしない見るだけのロボットです。",
         useCase: "国保の資格点検、他制度への加入確認、保険証（資格確認書）の発行前チェック。",
-        prepare: COKAS_PREPARE.concat(["資格照会の画面を開いておく"]),
-        customize: COKAS_CUSTOMIZE.concat(["照会後に検索画面へ戻るボタンがある場合は、無効化されている CLICK「戻る」をボタン名に合わせて有効化します"]),
-        ideas: ["結果CSVを Excel で「資格状態」でフィルターすれば、喪失者だけの一覧がすぐできます", "照会だけのロボットは失敗しても害がないので、Cokas-i で RPA を始める最初の1本に最適です"],
-        targetWindow: "Cokas", csvFile: "24_kokuho_shikaku.csv",
+        prepare: KIKAN_PREPARE.concat(["資格照会の画面を開いておく"]),
+        customize: KIKAN_CUSTOMIZE.concat(["照会後に検索画面へ戻るボタンがある場合は、無効化されている CLICK「戻る」をボタン名に合わせて有効化します"]),
+        ideas: ["結果CSVを Excel で「資格状態」でフィルターすれば、喪失者だけの一覧がすぐできます", "照会だけのロボットは失敗しても害がないので、基幹系システムで RPA を始める最初の1本に最適です"],
+        targetWindow: "基幹系", csvFile: "24_kokuho_shikaku.csv",
         csv: [
             ["被保険者記号番号", "氏名カナ"],
             ["0000001", "ミホン タロウ"],
@@ -6120,14 +7229,14 @@ TEMPLATES = TEMPLATES.concat([
             ])
     },
     {
-        id: "cokas-kokuho-kogaku", category: "Cokas-i：国保", level: 2,
+        id: "kikan-kokuho-kogaku", category: "基幹系：国保", level: 2,
         name: "高額療養費の支給申請を一括入力",
         summary: "受け付けた高額療養費の申請書（診療年月・医療機関・自己負担額・申請日）を、確認ポイントをはさみながら1件ずつ入力して登録します。登録後の受付番号も読み取れます。",
         useCase: "月初にまとまって届く申請書の入力。紙の申請書を Excel に打ち込んで CSV 保存してから流すと、入力ミスの確認も Excel 側でできます。",
-        prepare: COKAS_PREPARE.concat(["高額療養費の申請入力画面の開き方（ボタン名）を確認し、CLICK「新規申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["金額欄が「円」区切りの入力を受け付けない場合は、CSVの金額をカンマなしの数字にします"]),
+        prepare: KIKAN_PREPARE.concat(["高額療養費の申請入力画面の開き方（ボタン名）を確認し、CLICK「新規申請」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["金額欄が「円」区切りの入力を受け付けない場合は、CSVの金額をカンマなしの数字にします"]),
         ideas: ["登録前の確認ポイントに {{自己負担額}} を表示しているので、紙の申請書と見比べながら進められます", "結果CSVの「受付番号」を受付簿にそのまま貼り付ければ、受付簿づくりも同時に終わります"],
-        targetWindow: "Cokas", csvFile: "25_kokuho_kogaku.csv",
+        targetWindow: "基幹系", csvFile: "25_kokuho_kogaku.csv",
         csv: [
             ["被保険者記号番号", "診療年月", "医療機関名", "自己負担額", "申請日"],
             ["0000001", "令和8年7月", "見本市民病院", "98000", "2026/10/01"],
@@ -6155,14 +7264,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "高額療養費_{{被保険者記号番号}}_{{診療年月}},WINDOW"]])
     },
     {
-        id: "cokas-kokuho-shisan", category: "Cokas-i：国保", level: 2,
+        id: "kikan-kokuho-shisan", category: "基幹系：国保", level: 2,
         name: "国保税（料）の試算を連続で行い、税額を一覧化",
         summary: "世帯人数・所得などの条件を試算画面に入れて計算し、年税額を読み取ります。条件を変えたパターンをCSVに並べれば、比較表が自動でできあがります。",
         useCase: "窓口や電話での「国保税はいくらになる？」への事前準備、税率改定の影響試算、説明資料づくり。",
-        prepare: COKAS_PREPARE.concat(["国保税（料）の試算画面を開いておく", "読み取りグループ「年税額」を📍で合わせて有効化する（これが一覧の答えになります）"]),
-        customize: COKAS_CUSTOMIZE.concat(["試算画面の入力項目が違う場合は、CSVの列とTEXTを増減します"]),
+        prepare: KIKAN_PREPARE.concat(["国保税（料）の試算画面を開いておく", "読み取りグループ「年税額」を📍で合わせて有効化する（これが一覧の答えになります）"]),
+        customize: KIKAN_CUSTOMIZE.concat(["試算画面の入力項目が違う場合は、CSVの列とTEXTを増減します"]),
         ideas: ["「所得を10万円刻みで並べたCSV」を流すと、所得と税額の早見表ができます", "試算ボタンを押すだけで登録しないので、本番データに影響しません"],
-        targetWindow: "Cokas", csvFile: "26_kokuho_shisan.csv",
+        targetWindow: "基幹系", csvFile: "26_kokuho_shisan.csv",
         csv: [
             ["パターン", "世帯人数", "総所得金額", "介護分対象人数"],
             ["単身・所得100万", "1", "1000000", "0"],
@@ -6183,14 +7292,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 介護保険
     {
-        id: "cokas-kaigo-nintei", category: "Cokas-i：介護保険", level: 2,
+        id: "kikan-kaigo-nintei", category: "基幹系：介護保険", level: 2,
         name: "要介護認定申請の受付入力",
         summary: "新規・更新・区分変更の認定申請を、申請日・申請区分・主治医・医療機関の順に入力して受付登録します。登録前に人の確認をはさみます。",
         useCase: "窓口・郵送でまとまって届いた認定申請書の入力。",
-        prepare: COKAS_PREPARE.concat(["認定申請の受付画面の開き方を確認し、CLICK「申請受付」を合わせる", "申請区分がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直す"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["認定申請の受付画面の開き方を確認し、CLICK「申請受付」を合わせる", "申請区分がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直す"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["申請区分ごとにCSVを分けて流すと、確認ポイントでの見落としが減ります", "受付番号を読み取れば、調査員の割り振り表の元データになります"],
-        targetWindow: "Cokas", csvFile: "27_kaigo_nintei.csv",
+        targetWindow: "基幹系", csvFile: "27_kaigo_nintei.csv",
         csv: [
             ["被保険者番号", "申請日", "申請区分", "主治医", "医療機関"],
             ["0000101", "2026/10/01", "新規", "見本 一郎", "見本市民病院"],
@@ -6218,14 +7327,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "認定申請_{{被保険者番号}},WINDOW"]])
     },
     {
-        id: "cokas-kaigo-yuko", category: "Cokas-i：介護保険", level: 1,
+        id: "kikan-kaigo-yuko", category: "基幹系：介護保険", level: 1,
         name: "認定の有効期間を照会して更新案内リストを作る",
         summary: "被保険者番号を1件ずつ照会し、要介護度と有効期間の終了日を読み取ります。結果CSVを終了日で並べ替えれば、更新申請の案内を出す相手の一覧になります。",
         useCase: "更新勧奨の対象者抽出、ケアマネからの問い合わせ対応の準備。",
-        prepare: COKAS_PREPARE.concat(["認定情報の照会画面を開いておく", "読み取りグループ「要介護度」「有効期間終了日」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["認定情報の照会画面を開いておく", "読み取りグループ「要介護度」「有効期間終了日」を📍で合わせて有効化する"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["結果CSVを Excel で開き、有効期間終了日が60日以内の行だけをフィルターすれば、そのまま案内文の差し込み元になります（Word テンプレートと組み合わせ）"],
-        targetWindow: "Cokas", csvFile: "28_kaigo_yuko.csv",
+        targetWindow: "基幹系", csvFile: "28_kaigo_yuko.csv",
         csv: [
             ["被保険者番号", "氏名カナ"],
             ["0000101", "ミホン タロウ"],
@@ -6239,14 +7348,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "認定照会_{{被保険者番号}},WINDOW"]])
     },
     {
-        id: "cokas-kaigo-futan", category: "Cokas-i：介護保険", level: 2,
+        id: "kikan-kaigo-futan", category: "基幹系：介護保険", level: 2,
         name: "負担限度額認定の更新申請を一括入力",
         summary: "毎年夏に集中する負担限度額認定（食費・居住費の軽減）の更新申請を、申請日・預貯金額・認定段階の順に入力して登録します。",
         useCase: "更新時期の大量入力。預貯金額の確認が要るので、登録前の確認ポイントで通帳の写しと見比べられるようにしています。",
-        prepare: COKAS_PREPARE.concat(["負担限度額認定の申請入力画面の開き方を確認し、CLICK「新規申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["認定段階がプルダウンの場合は KEY で選ぶよう直します"]),
+        prepare: KIKAN_PREPARE.concat(["負担限度額認定の申請入力画面の開き方を確認し、CLICK「新規申請」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["認定段階がプルダウンの場合は KEY で選ぶよう直します"]),
         ideas: ["決定通知の発送準備まで一気に進めたいときは、登録後の SCREENSHOT を決定一覧の代わりに使えます"],
-        targetWindow: "Cokas", csvFile: "29_kaigo_futan.csv",
+        targetWindow: "基幹系", csvFile: "29_kaigo_futan.csv",
         csv: [
             ["被保険者番号", "申請日", "預貯金額", "認定段階"],
             ["0000101", "2026/07/01", "450000", "第2段階"],
@@ -6270,14 +7379,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 税務
     {
-        id: "cokas-zeimu-shinkoku", category: "Cokas-i：税務", level: 3,
+        id: "kikan-zeimu-shinkoku", category: "基幹系：税務", level: 3,
         name: "住民税申告書の入力（所得・控除）",
         summary: "住民税の申告書を、宛名番号で呼び出して給与収入・公的年金・各種控除の順に入力し、計算結果を確認してから登録します。",
         useCase: "申告期の大量入力。CSVは申告書の内容を Excel に打ち込んで作ります（Excel で合計チェックをしてから流すと安全）。",
-        prepare: COKAS_PREPARE.concat(["申告入力の画面を開き、宛名番号の欄から始める", "控除欄の並びとTABの回数を手で確認し、KEY {TAB} の回数を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["控除の種類を増やすときは、CSVに列を足し「控除の入力」グループに KEY ^a・TEXT・KEY {TAB} を追加します"]),
+        prepare: KIKAN_PREPARE.concat(["申告入力の画面を開き、宛名番号の欄から始める", "控除欄の並びとTABの回数を手で確認し、KEY {TAB} の回数を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["控除の種類を増やすときは、CSVに列を足し「控除の入力」グループに KEY ^a・TEXT・KEY {TAB} を追加します"]),
         ideas: ["読み取りグループ「所得割額」を有効化すると、結果CSVで申告書の手計算と照合できます", "医療費控除だけ・寄附金控除だけ、のように控除ごとにマクロを分けると画面遷移が単純になります"],
-        targetWindow: "Cokas", csvFile: "30_zeimu_shinkoku.csv",
+        targetWindow: "基幹系", csvFile: "30_zeimu_shinkoku.csv",
         csv: [
             ["宛名番号", "給与収入", "公的年金等収入", "社会保険料控除", "生命保険料控除", "医療費控除"],
             ["1000001", "3500000", "0", "480000", "40000", "0"],
@@ -6310,14 +7419,14 @@ TEMPLATES = TEMPLATES.concat([
             ])
     },
     {
-        id: "cokas-zeimu-shomei", category: "Cokas-i：税務", level: 1,
+        id: "kikan-zeimu-shomei", category: "基幹系：税務", level: 1,
         name: "課税（所得）証明の発行前照会と画面控え",
         summary: "宛名番号と年度で課税情報を照会し、画面を証跡として保存します。証明書の発行前の内容確認や、郵送請求のまとめ処理の準備に使える見るだけのロボットです。",
         useCase: "郵送請求の一括確認、他課からの課税照会（同意書あり）への回答準備。",
-        prepare: COKAS_PREPARE.concat(["課税照会の画面を開き、宛名番号の欄にカーソルを置いておく", "宛名番号の次に年度の欄がある想定です（違う場合は TAB の回数を合わせる）"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["課税照会の画面を開き、宛名番号の欄にカーソルを置いておく", "宛名番号の次に年度の欄がある想定です（違う場合は TAB の回数を合わせる）"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["読み取りグループ「合計所得金額」を有効化すると、照会結果を一覧表にして回答書に貼れます"],
-        targetWindow: "Cokas", csvFile: "31_zeimu_shomei.csv",
+        targetWindow: "基幹系", csvFile: "31_zeimu_shomei.csv",
         csv: [
             ["宛名番号", "年度"],
             ["1000001", "令和8年度"],
@@ -6336,14 +7445,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "課税照会_{{宛名番号}}_{{年度}},WINDOW"]])
     },
     {
-        id: "cokas-zeimu-tokucho", category: "Cokas-i：税務", level: 2,
+        id: "kikan-zeimu-tokucho", category: "基幹系：税務", level: 2,
         name: "特別徴収から普通徴収への異動届を一括入力",
         summary: "事業所から届く給与所得者異動届出書（退職などで特別徴収をやめる届）を、宛名番号・特別徴収義務者番号・異動年月日・異動事由の順に入力します。",
         useCase: "年度途中に毎月まとまって届く異動届の入力。",
-        prepare: COKAS_PREPARE.concat(["異動届の入力画面の開き方を確認し、CLICK「異動届入力」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["一括徴収の申出がある届は、別のCSVに分けて「徴収方法」の入力を足したマクロで流すと安全です"]),
+        prepare: KIKAN_PREPARE.concat(["異動届の入力画面の開き方を確認し、CLICK「異動届入力」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["一括徴収の申出がある届は、別のCSVに分けて「徴収方法」の入力を足したマクロで流すと安全です"]),
         ideas: ["届出書を受け付けた日にCSVに追記しておけば、月末に一気に流すだけになります"],
-        targetWindow: "Cokas", csvFile: "32_zeimu_tokucho.csv",
+        targetWindow: "基幹系", csvFile: "32_zeimu_tokucho.csv",
         csv: [
             ["宛名番号", "特別徴収義務者番号", "異動年月日", "異動事由"],
             ["1000001", "50000001", "2026/09/30", "退職"],
@@ -6366,14 +7475,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 住民情報（宛名）
     {
-        id: "cokas-atena-henrei", category: "Cokas-i：住民情報（宛名）", level: 1,
+        id: "kikan-atena-henrei", category: "基幹系：住民情報（宛名）", level: 1,
         name: "返戻郵便の宛先を照会して現住所を記録",
         summary: "あて所不明で戻ってきた郵便の宛名番号を1件ずつ照会し、現在の住所を読み取ります。結果CSVで「返戻時の住所」と「現住所」を並べると、転居している人がすぐ分かります。",
         useCase: "通知書・納付書の返戻処理、再送付先の確認。",
-        prepare: COKAS_PREPARE.concat(["宛名（住民情報）の照会画面を開いておく", "読み取りグループ「現住所」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["宛名（住民情報）の照会画面を開いておく", "読み取りグループ「現住所」を📍で合わせて有効化する"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["現住所が返戻時と同じ人は「居所不明」、違う人は「再送付」と、Excel で一発で振り分けられます"],
-        targetWindow: "Cokas", csvFile: "33_atena_henrei.csv",
+        targetWindow: "基幹系", csvFile: "33_atena_henrei.csv",
         csv: [
             ["宛名番号", "返戻時の住所"],
             ["1000001", "見本市中央1-1-1"],
@@ -6386,14 +7495,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "返戻確認_{{宛名番号}},WINDOW"]])
     },
     {
-        id: "cokas-atena-sofusaki", category: "Cokas-i：住民情報（宛名）", level: 2,
+        id: "kikan-atena-sofusaki", category: "基幹系：住民情報（宛名）", level: 2,
         name: "送付先（宛名）の一括登録",
         summary: "施設入所者や代理人あての送付先を、郵便番号・住所・宛名・適用開始日の順に登録します。",
         useCase: "介護施設への入所に伴う送付先の変更届、成年後見人の送付先登録など。",
-        prepare: COKAS_PREPARE.concat(["送付先登録の画面の開き方を確認し、CLICK「送付先登録」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["住所欄が郵便番号から自動入力される画面では、郵便番号のあとに WAIT と KEY {TAB} を増やして番地だけを TEXT で入れます"]),
+        prepare: KIKAN_PREPARE.concat(["送付先登録の画面の開き方を確認し、CLICK「送付先登録」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["住所欄が郵便番号から自動入力される画面では、郵便番号のあとに WAIT と KEY {TAB} を増やして番地だけを TEXT で入れます"]),
         ideas: ["税・国保・介護で送付先が別管理の場合は、同じCSVで業務ごとにマクロを流すだけで揃えられます"],
-        targetWindow: "Cokas", csvFile: "34_atena_sofusaki.csv",
+        targetWindow: "基幹系", csvFile: "34_atena_sofusaki.csv",
         csv: [
             ["宛名番号", "送付先郵便番号", "送付先住所", "送付先氏名", "適用開始日"],
             ["1000001", "000-0001", "見本市北町1-2-3 見本ホーム", "見本ホーム 気付 見本 太郎", "2026/10/01"],
@@ -6416,14 +7525,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 住民基本台帳
     {
-        id: "cokas-juki-joukyou", category: "Cokas-i：住民基本台帳", level: 2,
+        id: "kikan-juki-joukyou", category: "基幹系：住民基本台帳", level: 2,
         name: "給付対象者の住民登録状況（転出・死亡）をまとめて確認",
         summary: "給付金や手当の対象者リストを1件ずつ照会し、住民の状態（住民・転出・死亡など）を読み取ります。該当なしは自動で飛ばして記録するので、結果CSVがそのまま支給前チェック表になります。",
         useCase: "給付金・手当の支給前の資格確認、名簿の生存・在住確認。",
-        prepare: COKAS_PREPARE.concat(["住民記録の照会画面を開いておく", "読み取りグループ「住民状態」「異動日」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["住民記録の照会画面を開いておく", "読み取りグループ「住民状態」「異動日」を📍で合わせて有効化する"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["結果CSVを「住民状態」でフィルターすれば、支給を止めるべき人（転出・死亡）がすぐ分かります", "「該当なし」でスキップされた行は宛名番号の誤りの可能性があるので、エラー行CSVで見直せます"],
-        targetWindow: "Cokas", csvFile: "35_juki_joukyou.csv",
+        targetWindow: "基幹系", csvFile: "35_juki_joukyou.csv",
         csv: [
             ["宛名番号", "氏名カナ", "給付区分"],
             ["1000001", "ミホン タロウ", "A給付"],
@@ -6438,14 +7547,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "住民状態_{{宛名番号}},WINDOW"]])
     },
     {
-        id: "cokas-juki-koufu", category: "Cokas-i：住民基本台帳", level: 2,
+        id: "kikan-juki-koufu", category: "基幹系：住民基本台帳", level: 2,
         name: "住民票の写し等の交付記録を一括入力",
         summary: "郵送請求などでまとめて受け付けた住民票の写し・記載事項証明の交付記録を、請求日・請求者区分・対象者・通数・手数料の順に入力します。",
         useCase: "郵送請求の処理記録、交付簿の電子化。",
-        prepare: COKAS_PREPARE.concat(["交付記録の入力画面の開き方を確認し、CLICK「交付記録」を合わせる"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["交付記録の入力画面の開き方を確認し、CLICK「交付記録」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["結果CSVの手数料列を合計すれば、定額小為替の受領額とのつき合わせがすぐできます"],
-        targetWindow: "Cokas", csvFile: "36_juki_koufu.csv",
+        targetWindow: "基幹系", csvFile: "36_juki_koufu.csv",
         csv: [
             ["請求日", "請求者区分", "宛名番号", "通数", "手数料"],
             ["2026/10/01", "本人", "1000001", "1", "300"],
@@ -6468,14 +7577,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 収納管理
     {
-        id: "cokas-shuno-joukyou", category: "Cokas-i：収納管理", level: 1,
+        id: "kikan-shuno-joukyou", category: "基幹系：収納管理", level: 1,
         name: "納付状況を照会して未納額を記録",
         summary: "宛名番号と税目で納付状況を照会し、未納額を読み取って画面を保存します。見るだけのロボットです。",
         useCase: "証明書発行前の完納確認、窓口相談の事前準備、他課からの納付状況照会。",
-        prepare: COKAS_PREPARE.concat(["収納状況の照会画面を開いておく", "読み取りグループ「未納額」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["収納状況の照会画面を開いておく", "読み取りグループ「未納額」を📍で合わせて有効化する"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["結果CSVの「未納額」が0の行だけを選べば、完納証明の対象者リストになります"],
-        targetWindow: "Cokas", csvFile: "37_shuno_joukyou.csv",
+        targetWindow: "基幹系", csvFile: "37_shuno_joukyou.csv",
         csv: [
             ["宛名番号", "税目"],
             ["1000001", "市県民税"],
@@ -6494,14 +7603,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "納付状況_{{宛名番号}}_{{税目}},WINDOW"]])
     },
     {
-        id: "cokas-shuno-keshikomi", category: "Cokas-i：収納管理", level: 2,
+        id: "kikan-shuno-keshikomi", category: "基幹系：収納管理", level: 2,
         name: "手入力が必要な入金の消込登録",
         summary: "窓口の手書き領収や、データ連携できなかった入金を、通知書番号・納付日・納付額・納付場所の順に入力して消し込みます。登録前に金額を確認します。",
         useCase: "取り込みエラーになった入金データの手消込、出張窓口の領収分の入力。",
-        prepare: COKAS_PREPARE.concat(["入金（消込）入力の画面の開き方を確認し、CLICK「入金入力」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["過誤納が出たときのメッセージ題名を IF に足すと、そこで止まって確認できます（モード STOP）"]),
+        prepare: KIKAN_PREPARE.concat(["入金（消込）入力の画面の開き方を確認し、CLICK「入金入力」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["過誤納が出たときのメッセージ題名を IF に足すと、そこで止まって確認できます（モード STOP）"]),
         ideas: ["結果CSVの「入金番号」と元の領収書番号を並べれば、照合表がそのまま残ります"],
-        targetWindow: "Cokas", csvFile: "38_shuno_keshikomi.csv",
+        targetWindow: "基幹系", csvFile: "38_shuno_keshikomi.csv",
         csv: [
             ["通知書番号", "納付日", "納付額", "納付場所"],
             ["2026000001", "2026/09/30", "12300", "本庁窓口"],
@@ -6526,14 +7635,14 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "消込_{{通知書番号}},WINDOW"]])
     },
     {
-        id: "cokas-shuno-kofuri", category: "Cokas-i：収納管理", level: 2,
+        id: "kikan-shuno-kofuri", category: "基幹系：収納管理", level: 2,
         name: "口座振替依頼書の一括登録",
         summary: "口座振替の申込を、税目・金融機関コード・支店コード・口座種別・口座番号・開始期の順に登録します。口座番号の打ち間違いを防ぐため、登録前に確認ポイントで依頼書と見比べます。",
         useCase: "金融機関から戻ってくる口座振替依頼書の入力。",
-        prepare: COKAS_PREPARE.concat(["口座振替の登録画面の開き方を確認し、CLICK「口座登録」を合わせる", "見本CSVの口座番号は架空です"]),
-        customize: COKAS_CUSTOMIZE,
+        prepare: KIKAN_PREPARE.concat(["口座振替の登録画面の開き方を確認し、CLICK「口座登録」を合わせる", "見本CSVの口座番号は架空です"]),
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["同じ人が複数の税目を口座振替にする場合は、税目ごとに行を分けたCSVにすると1回で終わります"],
-        targetWindow: "Cokas", csvFile: "39_shuno_kofuri.csv",
+        targetWindow: "基幹系", csvFile: "39_shuno_kofuri.csv",
         csv: [
             ["宛名番号", "税目", "金融機関コード", "支店コード", "口座種別", "口座番号", "開始期"],
             ["1000001", "市県民税", "0000", "001", "普通", "0000001", "令和8年度第3期"],
@@ -6559,14 +7668,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 滞納管理
     {
-        id: "cokas-tainou-kousho", category: "Cokas-i：滞納管理", level: 2,
+        id: "kikan-tainou-kousho", category: "基幹系：滞納管理", level: 2,
         name: "交渉（折衝）経過記録の一括登録",
         summary: "電話・窓口・臨戸での交渉内容を、交渉日・方法・相手・内容・次回予定の順に経過記録へ登録します。記録の末尾に入力日（和暦）を自動で付けます。",
         useCase: "外勤のあとにまとめて行う折衝記録の入力。メモを Excel に書いておけば、帰庁後は流すだけです。",
-        prepare: COKAS_PREPARE.concat(["滞納者の経過記録画面の開き方を確認し、CLICK「経過記録追加」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["内容欄が複数行の場合、CSVのセル内改行もそのまま貼り付けられます"]),
+        prepare: KIKAN_PREPARE.concat(["滞納者の経過記録画面の開き方を確認し、CLICK「経過記録追加」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["内容欄が複数行の場合、CSVのセル内改行もそのまま貼り付けられます"]),
         ideas: ["「次回予定」を結果CSVで日付順に並べれば、そのまま翌週の訪問・電話予定表になります"],
-        targetWindow: "Cokas", csvFile: "40_tainou_kousho.csv",
+        targetWindow: "基幹系", csvFile: "40_tainou_kousho.csv",
         csv: [
             ["滞納者番号", "交渉日", "方法", "相手", "内容", "次回予定"],
             ["T000001", "2026/10/01", "電話", "本人", "分納の相談あり。収入資料の提出を依頼。", "2026/10/15"],
@@ -6589,14 +7698,14 @@ TEMPLATES = TEMPLATES.concat([
             ])
     },
     {
-        id: "cokas-tainou-bunno", category: "Cokas-i：滞納管理", level: 3,
+        id: "kikan-tainou-bunno", category: "基幹系：滞納管理", level: 3,
         name: "分納誓約の登録と誓約番号の記録",
         summary: "分納誓約書の内容（誓約日・月額・初回納付日・回数）を登録し、作られた誓約番号を読み取って記録します。登録前に誓約書と見比べる確認ポイントつきです。",
         useCase: "分納相談が集中する時期（年度末・賞与時期）の誓約登録。",
-        prepare: COKAS_PREPARE.concat(["分納誓約の登録画面の開き方を確認し、CLICK「分納誓約」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["納付計画が自動計算される画面では、計算ボタンの CLICK と WAIT を登録の前に足します"]),
+        prepare: KIKAN_PREPARE.concat(["分納誓約の登録画面の開き方を確認し、CLICK「分納誓約」を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["納付計画が自動計算される画面では、計算ボタンの CLICK と WAIT を登録の前に足します"]),
         ideas: ["結果CSVの「誓約番号」と初回納付日を使って、Word テンプレートで納付書送付の案内文を作れます"],
-        targetWindow: "Cokas", csvFile: "41_tainou_bunno.csv",
+        targetWindow: "基幹系", csvFile: "41_tainou_bunno.csv",
         csv: [
             ["滞納者番号", "誓約日", "月額", "初回納付日", "回数"],
             ["T000001", "2026/10/15", "10000", "2026/10/31", "12"],
@@ -6621,13 +7730,13 @@ TEMPLATES = TEMPLATES.concat([
             .concat([["SCREENSHOT", "分納誓約_{{滞納者番号}},WINDOW"]])
     },
     {
-        id: "cokas-tainou-zaisan", category: "Cokas-i：滞納管理", level: 2,
+        id: "kikan-tainou-zaisan", category: "基幹系：滞納管理", level: 2,
         name: "財産調査の照会文書を Word で一括作成",
-        summary: "滞納者ごとに、金融機関あての預貯金照会文を Word で作って「滞納者番号_金融機関名.docx」で保存します。Cokas-i から出した対象者一覧（CSV）とWordを組み合わせる、システムをまたいだ使い方の見本です。",
+        summary: "滞納者ごとに、金融機関あての預貯金照会文を Word で作って「滞納者番号_金融機関名.docx」で保存します。基幹系システムから出した対象者一覧（CSV）とWordを組み合わせる、システムをまたいだ使い方の見本です。",
         useCase: "財産調査の照会文書を何十通も作るとき。",
         prepare: ["保存先フォルダ C:\\RPA作業\\財産調査 を作っておく", "Wordが入っていること（最初の1行でWordを起動します）", "照会文の文面は自分の自治体の様式に合わせて書き換える"],
         customize: ["文面は TEXT の中身です。{{列名}} にCSVの値が入ります", "書式を整えたいときは「Wordの雛形の《差し込み枠》を置換して保存」テンプレートの方式に切り替えます"],
-        ideas: ["Cokas-i の一覧画面からCSVを出力できれば、抽出→文書作成までが1回の操作になります", "同じ滞納者に複数の金融機関がある場合は、金融機関ごとに行を分けるだけです"],
+        ideas: ["基幹系システムの一覧画面からCSVを出力できれば、抽出→文書作成までが1回の操作になります", "同じ滞納者に複数の金融機関がある場合は、金融機関ごとに行を分けるだけです"],
         targetWindow: "", csvFile: "42_tainou_zaisan.csv",
         csv: [
             ["滞納者番号", "滞納者氏名", "生年月日", "住所", "金融機関名", "支店名"],
@@ -6662,14 +7771,14 @@ TEMPLATES = TEMPLATES.concat([
     },
     // ------------------------------------------------------------- 横断活用
     {
-        id: "cokas-cross-check", category: "Cokas-i：横断活用", level: 3,
+        id: "kikan-cross-check", category: "基幹系：横断活用", level: 3,
         name: "1人ずつ国保・介護・収納を横断照会して一覧にする",
         summary: "宛名番号ごとに、国保の資格照会 → 介護の認定照会 → 収納の納付状況照会を順に開いて、それぞれ画面を保存し、読み取った値を1行にまとめます。業務をまたいだ「名寄せ」表が自動でできあがります。",
         useCase: "総合相談・生活困窮者支援の事前把握、窓口での「この人は他に何か手続きが要る？」の確認。",
-        prepare: COKAS_PREPARE.concat(["各業務の照会画面を開くメニュー名（CLICK「国保資格照会」など）を自分の画面に合わせる", "照会のあと、メニューに戻るボタン名（CLICK「メニューへ戻る」）を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["業務を増やすときは、1つの業務のグループを複製してメニュー名・読み取り項目を変えます", "「該当なし」が出ても（例：国保に未加入）その人の行は止めずに次の業務へ進みます（IF のモード CONTINUE）。該当なしの業務の読み取り値は空欄か前の画面の値になるので、画面の証跡と合わせて確認してください"]),
+        prepare: KIKAN_PREPARE.concat(["各業務の照会画面を開くメニュー名（CLICK「国保資格照会」など）を自分の画面に合わせる", "照会のあと、メニューに戻るボタン名（CLICK「メニューへ戻る」）を合わせる"]),
+        customize: KIKAN_CUSTOMIZE.concat(["業務を増やすときは、1つの業務のグループを複製してメニュー名・読み取り項目を変えます", "「該当なし」が出ても（例：国保に未加入）その人の行は止めずに次の業務へ進みます（IF のモード CONTINUE）。該当なしの業務の読み取り値は空欄か前の画面の値になるので、画面の証跡と合わせて確認してください"]),
         ideas: ["読み取った値は同じ行の実行結果CSVに横並びになるので、Excelで開けば1人1行の総合一覧になります", "照会だけなので、まずは自分の担当外の業務を見る「予習ロボット」として使うのもおすすめです"],
-        targetWindow: "Cokas", csvFile: "43_cokas_cross.csv",
+        targetWindow: "基幹系", csvFile: "43_kikan_cross.csv",
         csv: [
             ["宛名番号", "氏名カナ"],
             ["1000001", "ミホン タロウ"],
@@ -6710,7 +7819,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "取得日・区分（全日／午前／午後／時間）・時間数・理由をCSVに並べて、休暇申請を1件ずつ入力します。申請ボタンの前に確認ポイントがあります。",
         useCase: "夏休みの前や年度末に、まとめて休暇を申請するとき。",
         prepare: SHOMU_PREPARE.concat(["休暇申請の画面の開き方を確認し、CLICK「休暇申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["区分がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直します", "時間休でないときは時間数を空欄にすると、貼り付けを飛ばします"]),
+        customize: KIKAN_CUSTOMIZE.concat(["区分がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直します", "時間休でないときは時間数を空欄にすると、貼り付けを飛ばします"]),
         ideas: ["課の休暇計画表（Excel）をCSVで保存すれば、そのまま申請データになります"],
         targetWindow: "庶務事務", csvFile: "44_shomu_nenkyu.csv",
         csv: [
@@ -6739,7 +7848,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "日付・開始時刻・終了時刻・業務内容をCSVから入力して、時間外勤務（命令）の申請を出します。",
         useCase: "繁忙期に、決まった曜日の時間外勤務をまとめて事前申請するとき。",
         prepare: SHOMU_PREPARE.concat(["時間外勤務申請の画面の開き方を確認し、CLICK「時間外勤務申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["時刻が「時」「分」の別々の欄なら、CSVの列を分けて TEXT と KEY {TAB} を増やします"]),
+        customize: KIKAN_CUSTOMIZE.concat(["時刻が「時」「分」の別々の欄なら、CSVの列を分けて TEXT と KEY {TAB} を増やします"]),
         ideas: ["業務内容に {{日付}} や {{ROW}} を差し込むと、件名に通し番号が付けられます"],
         targetWindow: "庶務事務", csvFile: "45_shomu_chokin.csv",
         csv: [
@@ -6768,7 +7877,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "打刻を忘れた日の出勤・退勤時刻と理由を入力して、勤務時間の修正申請を出します。",
         useCase: "出張や研修で打刻できなかった日が何日もあるとき。",
         prepare: SHOMU_PREPARE.concat(["勤務時間修正（打刻修正）の画面の開き方を確認し、CLICK「打刻修正申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE,
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["出張の予定表から日付と時刻をCSVにすれば、出張から戻った日にまとめて申請できます"],
         targetWindow: "庶務事務", csvFile: "46_shomu_dakoku.csv",
         csv: [
@@ -6795,7 +7904,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "庶務担当向け。職員番号を1件ずつ照会し、年休の残日数と当月の時間外勤務時間を読み取って、画面を保存します。見るだけのロボットです。",
         useCase: "年休の取得促進、時間外勤務が多い職員の把握、課内の勤務状況の点検。",
         prepare: SHOMU_PREPARE.concat(["職員の勤務状況を照会する画面を開いておく", "読み取りグループ「年休残日数」「時間外勤務時間」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["結果CSVを Excel で並べ替えれば、残日数の少ない人・時間外の多い人がすぐ分かります"],
         targetWindow: "庶務事務", csvFile: "47_shomu_zan.csv",
         csv: [
@@ -6819,7 +7928,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "事前申請した時間外勤務を日付で探して開き、実際の開始・終了時刻と休憩時間を入力して実績を報告します。",
         useCase: "月末にまとめて実績報告をするとき。事前申請の時刻と実績が違った日だけCSVに並べてもOKです。",
         prepare: SHOMU_PREPARE.concat(["実績報告の画面の開き方を確認し、CLICK「実績報告」「実績入力」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["申請の一覧が表で表示されるシステムでは、検索のかわりに CLICK_POS で行を選ぶ方法もあります"]),
+        customize: KIKAN_CUSTOMIZE.concat(["申請の一覧が表で表示されるシステムでは、検索のかわりに CLICK_POS で行を選ぶ方法もあります"]),
         ideas: ["パソコンのログオン・ログオフ時刻の記録などから実績を作れば、手入力の時刻の誤りも減らせます"],
         targetWindow: "庶務事務", csvFile: "48_shomu_jisseki.csv",
         csv: [
@@ -6856,7 +7965,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "夏季休暇・結婚休暇・ボランティア休暇などの特別休暇を、取得日・休暇の種類・理由の順に入力して申請します。",
         useCase: "夏季休暇を数日に分けて取るとき、まとめて申請しておきたいとき。",
         prepare: SHOMU_PREPARE.concat(["特別休暇の申請画面の開き方を確認し、CLICK「特別休暇申請」を合わせる"]),
-        customize: COKAS_CUSTOMIZE.concat(["休暇の種類がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直します"]),
+        customize: KIKAN_CUSTOMIZE.concat(["休暇の種類がプルダウンの場合は、TEXT ではなく KEY（{DOWN} など）で選ぶよう直します"]),
         ideas: ["年次休暇のテンプレートと同じCSVの形にしておくと、休暇計画表から両方まとめて作れます"],
         targetWindow: "庶務事務", csvFile: "49_shomu_tokkyu.csv",
         csv: [
@@ -6884,7 +7993,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "土日のイベント出勤などで週休日に勤務する日と、その代わりに休む日（振替先）をセットで申請します。",
         useCase: "選挙事務・イベント・防災訓練などで土日出勤が続くとき。",
         prepare: SHOMU_PREPARE.concat(["週休日の振替申請の画面の開き方を確認し、CLICK「週休日振替」を合わせる"]),
-        customize: COKAS_CUSTOMIZE,
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["振替先の日を {{勤務する日}} から何日後、のように自分で決めておくと、CSV作りが Excel の数式だけで済みます"],
         targetWindow: "庶務事務", csvFile: "50_shomu_furikae.csv",
         csv: [
@@ -6911,7 +8020,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "出発日・帰着日・用務先・用務内容・交通手段を入力して、出張（旅行命令）の申請を出します。",
         useCase: "研修や会議の出張が続くとき、年間の予定が決まっている定例の出張をまとめて申請するとき。",
         prepare: SHOMU_PREPARE.concat(["旅行命令（出張）申請の画面の開き方を確認し、CLICK「出張申請」を合わせる", "旅費の計算画面が続くシステムでは、計算と確認の手順を足す"]),
-        customize: COKAS_CUSTOMIZE.concat(["日帰りの出張だけなら、帰着日の列に出発日と同じ日付を入れておきます"]),
+        customize: KIKAN_CUSTOMIZE.concat(["日帰りの出張だけなら、帰着日の列に出発日と同じ日付を入れておきます"]),
         ideas: ["研修の案内メールから日付と会場をCSVに写すだけで、申請までが一続きになります"],
         targetWindow: "庶務事務", csvFile: "51_shomu_ryoko.csv",
         csv: [
@@ -6940,7 +8049,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "庶務担当・管理職向け。職員番号と対象月で照会し、その月の時間外勤務時間と年間の累計を読み取ります。結果CSVを Excel で開けば、所属の目安を超えそうな人がすぐ分かります。",
         useCase: "毎月の時間外勤務の点検、働き方の見直しの資料づくり。",
         prepare: SHOMU_PREPARE.concat(["時間外勤務の集計（照会）画面を開いておく", "読み取りグループ「月の時間外勤務時間」「年の累計」を📍で合わせて有効化する"]),
-        customize: COKAS_CUSTOMIZE,
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["Excel の条件付き書式で、所属で決めた目安の時間を超えたセルに色を付ければ、そのまま点検表になります", "毎月同じCSV（対象月だけ変える）を流せば、月ごとの推移表が作れます"],
         targetWindow: "庶務事務", csvFile: "52_shomu_chokin_check.csv",
         csv: [
@@ -6967,7 +8076,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "庶務担当向け。職員ごとに月の勤務実績（出勤簿）を表示して、画面をPNGで保存します。見るだけのロボットです。",
         useCase: "月末の出勤簿の点検、監査への提出資料、紙の出勤簿の代わりの控え。",
         prepare: SHOMU_PREPARE.concat(["出勤簿（勤務実績）の照会画面を開いておく", "1か月分が1画面に収まらない場合は、ブラウザの表示倍率を下げるか、範囲を「画面全体」にする"]),
-        customize: COKAS_CUSTOMIZE,
+        customize: KIKAN_CUSTOMIZE,
         ideas: ["保存先は evidence\\日付\\ です。ファイル名に対象月と氏名が入るので、フォルダを開くだけで一覧になります"],
         targetWindow: "庶務事務", csvFile: "53_shomu_shukkinbo.csv",
         csv: [
@@ -6992,7 +8101,7 @@ TEMPLATES = TEMPLATES.concat([
         summary: "管理職向け。申請番号で申請を開き、確認ポイントで内容を見てから承認します。承認しない申請は［⏭ この行をスキップ］で飛ばせば、結果CSVに「スキップ」として残ります。",
         useCase: "休暇・時間外勤務・出張などの承認がたまったとき。1件ずつ画面を開く手間をなくし、判断だけに集中できます。",
         prepare: SHOMU_PREPARE.concat(["承認待ち一覧の画面の開き方を確認し、CLICK「承認待ち一覧」「承認」を合わせる", "承認待ちの申請番号の一覧をCSVにする（一覧画面からCSV出力できるシステムならそれを使う）"]),
-        customize: COKAS_CUSTOMIZE.concat(["確認ポイントは無効化しないでください。承認の判断は必ず人が行う作りです"]),
+        customize: KIKAN_CUSTOMIZE.concat(["確認ポイントは無効化しないでください。承認の判断は必ず人が行う作りです"]),
         ideas: ["結果CSVで「スキップ」になった申請だけが、差し戻しや問い合わせが必要な申請の一覧になります"],
         targetWindow: "庶務事務", csvFile: "54_shomu_shonin.csv",
         csv: [
@@ -7015,6 +8124,270 @@ TEMPLATES = TEMPLATES.concat([
                 ["IF", "エラー,{ENTER},SKIP"],
                 ["SCREENSHOT", "承認_{{申請番号}},WINDOW"]
             ])
+    }
+]);
+
+// ----------------------------------------------------------------- 変数・繰り返し・分岐
+function tplJ(o) {
+    return JSON.stringify(o);
+}
+
+var NOTEPAD_SETUP = [
+    ["GROUP_START", "準備：メモ帳を開く（最初の1行だけ）", { when: "first" }],
+    ["RUN", "notepad.exe"],
+    ["WAIT", "2000"],
+    ["GROUP_END", ""],
+    ["SWITCH", "メモ帳"]
+];
+
+TEMPLATE_CATEGORIES = TEMPLATE_CATEGORIES.concat(["変数・繰り返し・分岐"]);
+
+TEMPLATES = TEMPLATES.concat([
+    {
+        id: "ctl-normalize", category: "変数・繰り返し・分岐", level: 1,
+        name: "全角・半角や桁数がバラバラな番号をそろえてから入力",
+        summary: "「１２３」「45」のような番号を半角7桁（0000123）に、氏名の空白を全角1つに、電話番号を半角のハイフン区切りに整えてから入力します。メモ帳で動きを確かめられます。",
+        useCase: "手入力のExcelや他課からもらったデータは、全角半角や桁数がそろっていないことがよくあります。システムに入れる前に整えると、検索で「該当なし」になりません。",
+        prepare: ["特になし（メモ帳は自動で開きます）。動きを確かめたら、SWITCH と入力の部分を自分のシステムに合わせます"],
+        customize: ["桁数は「ゼロ埋め」の設定A（7）を変えます", "整えた値は {{$番号7桁}} {{$氏名}} {{$電話}} で、TEXT や CSV の代わりにどこでも使えます"],
+        ideas: ["「文字を加工する」は、置換・切り出し・和暦変換など14種類。データの前処理をExcelでやらなくてよくなります", "整えた値を RECORD で実行結果CSVに残せば、整形済みデータの一覧も同時にできます"],
+        targetWindow: "", csvFile: "55_ctl_normalize.csv",
+        csv: [
+            ["宛名番号", "氏名", "電話番号"],
+            ["１２３", "見本  太郎", "０９０－０１２３－４５６７"],
+            ["45", "試験　 花子", "090-0000-1111"],
+            ["0006789", "練習　一郎", "03 1234 5678"]
+        ],
+        steps: NOTEPAD_SETUP.concat([
+            ["GROUP_START", "番号を半角7桁にそろえる"],
+            ["STR_OP", tplJ({ name: "番号半角", src: "{{宛名番号}}", op: "ZEN2HAN", a: "", b: "" })],
+            ["STR_OP", tplJ({ name: "番号7桁", src: "{{$番号半角}}", op: "PAD", a: "7", b: "0" })],
+            ["GROUP_END", ""],
+            ["GROUP_START", "氏名の空白を全角1つにそろえる"],
+            ["STR_OP", tplJ({ name: "氏名", src: "{{氏名}}", op: "REGEX_REPLACE", a: "[ 　]+", b: "　" })],
+            ["GROUP_END", ""],
+            ["GROUP_START", "電話番号を半角・ハイフン区切りにそろえる"],
+            ["STR_OP", tplJ({ name: "電話", src: "{{電話番号}}", op: "ZEN2HAN", a: "", b: "" })],
+            ["STR_OP", tplJ({ name: "電話", src: "{{$電話}}", op: "REGEX_REPLACE", a: "[^0-9]+", b: "-" })],
+            ["GROUP_END", ""],
+            ["TEXT", "{{$番号7桁}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{$氏名}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{$電話}}"], ["KEY", "{ENTER}"],
+            ["RECORD", tplJ({ name: "整えた宛名番号", value: "{{$番号7桁}}" })]
+        ])
+    },
+    {
+        id: "ctl-dates", category: "変数・繰り返し・分岐", level: 1,
+        name: "受付日から期限日を計算して、和暦で通知文に差し込む",
+        summary: "受付日（2026/10/01・2026-10-03・令和8年10月5日 などバラバラでもOK）から14日後の期限日を計算し、どちらも和暦にして通知文を作ります。",
+        useCase: "「受付から○日以内」の期限を、人が暦を見て数えている作業。数え間違いがなくなります。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["日数は「日付にA日を足す」の設定A（14）を変えます。マイナスにすると前の日になります", "通知文は TEXT の中身です"],
+        ideas: ["期限日を EXCEL_WRITE で台帳に書き込めば、期限管理表が自動で埋まります", "「もし〜なら」と組み合わせて、期限日が今日より前の人だけ催告する、といった使い方もできます"],
+        targetWindow: "", csvFile: "56_ctl_dates.csv",
+        csv: [
+            ["氏名", "受付日"],
+            ["見本 太郎", "2026/10/01"],
+            ["試験 花子", "2026-10-03"],
+            ["練習 一郎", "令和8年10月5日"]
+        ],
+        steps: NOTEPAD_SETUP.concat([
+            ["STR_OP", tplJ({ name: "期限日", src: "{{受付日}}", op: "DATE_ADD", a: "14", b: "" })],
+            ["STR_OP", tplJ({ name: "受付日和暦", src: "{{受付日}}", op: "WAREKI", a: "", b: "" })],
+            ["STR_OP", tplJ({ name: "期限日和暦", src: "{{$期限日}}", op: "WAREKI", a: "", b: "" })],
+            ["TEXT", "{{氏名}} 様\r\n受付日：{{$受付日和暦}}\r\n提出期限：{{$期限日和暦}}（受付から14日後）\r\n----------\r\n"],
+            ["RECORD", tplJ({ name: "期限日", value: "{{$期限日}}" })]
+        ])
+    },
+    {
+        id: "ctl-if-amount", category: "変数・繰り返し・分岐", level: 2,
+        name: "金額で分岐：10万円以上だけ人が確認してから入力",
+        summary: "「もし〜なら／そうでなければ」で、金額が10万円以上の行だけ確認ポイントで止まり、それ以外はそのまま進みます。判定結果は実行結果CSVにも残します。",
+        useCase: "全件を目で確認するのは大変だけど、高額なものだけは確認したい、というとき。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["基準の金額は「もし〜なら」の くらべる相手（100000）を変えます", "「１５０，０００」のような全角・カンマ付きの数も、数としてくらべます"],
+        ideas: ["条件には「含む」「正規表現に一致」「ウィンドウがある」「ファイルがある」なども使えます", "IF（ウィンドウ検知）は「画面が出たら」、もし〜なら は「値が〜なら」と使い分けます"],
+        targetWindow: "", csvFile: "57_ctl_if_amount.csv",
+        csv: [
+            ["申請番号", "金額"],
+            ["A-001", "120000"],
+            ["A-002", "50000"],
+            ["A-003", "１５０，０００"]
+        ],
+        steps: NOTEPAD_SETUP.concat([
+            ["IF_START", tplJ({ left: "{{金額}}", op: "GE", right: "100000" })],
+            ["CONFIRM", "{{申請番号}} は {{金額}} 円です。高額なので内容を確認してね。OKなら［▶ 続行］"],
+            ["SET_VAR", tplJ({ name: "区分", value: "高額（確認済み）", mode: "TEXT" })],
+            ["ELSE", ""],
+            ["SET_VAR", tplJ({ name: "区分", value: "通常", mode: "TEXT" })],
+            ["IF_END", ""],
+            ["TEXT", "{{申請番号}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{金額}}"], ["KEY", "{TAB}"],
+            ["TEXT", "{{$区分}}"], ["KEY", "{ENTER}"],
+            ["RECORD", tplJ({ name: "区分", value: "{{$区分}}" })]
+        ])
+    },
+    {
+        id: "ctl-pages", category: "変数・繰り返し・分岐", level: 2,
+        name: "ページ送りしながら全ページを撮影（回数を決めた繰り返し）",
+        summary: "画面を先頭に戻してから「撮影 → PageDown」をページ数だけくり返し、全ページを画像で残します。ページ数はCSVで文書ごとに変えられます。",
+        useCase: "PDFや照会画面の複数ページを証跡として残すとき、印刷できない画面を控えておくとき。",
+        prepare: ["撮影したい文書や画面を開いておく", "CSVの「ウィンドウ名」をタイトルの先頭か末尾に合わせる（🔍一覧）"],
+        customize: ["1ページずつ進むキーが違う画面では KEY {PGDN} を {DOWN 30} などに変えます"],
+        ideas: ["何回目かは {{$ページ}} で使えるので、ファイル名が「報告書_p1」「報告書_p2」…と自動で付きます", "回数が分からないときは「条件のあいだくり返す」と「繰り返しを抜ける」を使います"],
+        targetWindow: "", csvFile: "58_ctl_pages.csv",
+        csv: [
+            ["ウィンドウ名", "文書名", "ページ数"],
+            ["見本の報告書", "報告書", "5"],
+            ["見本の会議録", "会議録", "3"]
+        ],
+        steps: [
+            ["SWITCH", "{{ウィンドウ名}}"],
+            ["KEY", "^{HOME}"],
+            ["WAIT", "800"],
+            ["LOOP_START", tplJ({ mode: "COUNT", count: "{{ページ数}}", left: "", op: "NOT_EMPTY", right: "", counter: "ページ", max: "500" })],
+            ["SCREENSHOT", "{{文書名}}_p{{$ページ}},WINDOW"],
+            ["KEY", "{PGDN}"],
+            ["WAIT", "800"],
+            ["LOOP_END", ""]
+        ]
+    },
+    {
+        id: "ctl-excel-list", category: "変数・繰り返し・分岐", level: 2,
+        name: "Excelのブックを開かずに、A列を最後まで読む（繰り返しを抜ける）",
+        summary: "画面を使わずにブックのA列を1行目から読み、空のセルが出たら「繰り返しを抜ける」で終わります。読んだ件数と値の一覧を実行結果CSVに残します。",
+        useCase: "台帳の件数を数える、名簿を読んで別のシステムに入力する前の確認など。",
+        prepare: ["ブックのパスをCSVに書く（見本は C:\\RPA作業\\台帳.xlsx）", "ブックは閉じておく（開いていても読めますが、書き込みはできません）"],
+        customize: ["読む列は「Excelのセルを読む」のセル番地 A{{$行}} の A を変えます", "上限は「繰り返し」の回数（1000）です"],
+        ideas: ["読んだ値で「もし〜なら」を使えば、条件に合う行だけ処理するロボットになります", "EXCEL_WRITE と組み合わせれば、読んだ値を加工して別の列に書き戻せます"],
+        targetWindow: "", csvFile: "59_ctl_excel_list.csv",
+        csv: [
+            ["ブックのパス", "シート"],
+            ["C:\\RPA作業\\台帳.xlsx", "1"]
+        ],
+        steps: [
+            ["SET_VAR", tplJ({ name: "一覧", value: "", mode: "TEXT" })],
+            ["LOOP_START", tplJ({ mode: "COUNT", count: "1000", left: "", op: "NOT_EMPTY", right: "", counter: "行", max: "1000" })],
+            ["EXCEL_READ", tplJ({ path: "{{ブックのパス}}", sheet: "{{シート}}", cell: "A{{$行}}", name: "値" })],
+            ["IF_START", tplJ({ left: "{{$値}}", op: "EMPTY", right: "" })],
+            ["BREAK", ""],
+            ["IF_END", ""],
+            ["SET_VAR", tplJ({ name: "一覧", value: "{{$一覧}}{{$値}}／", mode: "TEXT" })],
+            ["LOOP_END", ""],
+            ["SET_VAR", tplJ({ name: "件数", value: "{{$行}}-1", mode: "CALC" })],
+            ["RECORD", tplJ({ name: "件数", value: "{{$件数}}" })],
+            ["RECORD", tplJ({ name: "一覧", value: "{{$一覧}}" })]
+        ]
+    },
+    {
+        id: "ctl-try", category: "変数・繰り返し・分岐", level: 2,
+        name: "エラーが出ても止めずに記録して次の行へ（エラー時の処理）",
+        summary: "「エラー時の処理」の中でエラーが起きたら、止めずに「エラーのとき」へ進み、エラーの内容と画面を記録して次の行に進みます。見本CSVの2行目はわざと存在しない画面にしてあります。",
+        useCase: "100件のうち数件だけエラーになる処理で、途中で止まらずに最後まで流し、エラーの行だけ後でまとめて直したいとき。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["「エラー時の処理」の中に、止めたくない処理（登録ボタンのクリックなど）を入れます", "IF の STOP（緊急停止）と ⏹ 停止は受け止めないので、本当に止めたい異常はちゃんと止まります"],
+        ideas: ["実行結果CSVの「結果」列でフィルターすれば、失敗した行だけの一覧になります", "「エラーのとき」に KEY {ESC} や CLICK「閉じる」を入れて、エラー画面を閉じてから次へ進むのが実用的です"],
+        targetWindow: "", csvFile: "60_ctl_try.csv",
+        csv: [
+            ["ウィンドウ名", "内容"],
+            ["メモ帳", "1行目のデータ"],
+            ["存在しない画面", "2行目のデータ"],
+            ["メモ帳", "3行目のデータ"]
+        ],
+        steps: [
+            ["GROUP_START", "準備：メモ帳を開く（最初の1行だけ）", { when: "first" }],
+            ["RUN", "notepad.exe"],
+            ["WAIT", "2000"],
+            ["GROUP_END", ""],
+            ["TRY_START", "切り替えて入力（エラーなら記録して次へ）"],
+            ["SWITCH", "{{ウィンドウ名}}"],
+            ["TEXT", "{{内容}}\r\n"],
+            ["RECORD", tplJ({ name: "結果", value: "OK" })],
+            ["CATCH", ""],
+            ["RECORD", tplJ({ name: "結果", value: "失敗：{{$エラー内容}}" })],
+            ["SCREENSHOT", "エラー_{{ROW}},FULL"],
+            ["TRY_END", ""]
+        ]
+    },
+    {
+        id: "ctl-ask", category: "変数・繰り返し・分岐", level: 1,
+        name: "実行のはじめに処理日と担当者を聞いて、全行に使う",
+        summary: "最初の1行目のときだけ入力欄を出して、処理日と担当者を聞きます。入力した値は変数に入るので、全部の行で使えます。",
+        useCase: "処理日や担当者名など、実行するたびに変わるけれどCSVに書くほどでもない値。",
+        prepare: ["特になし（メモ帳は自動で開きます）"],
+        customize: ["聞きたい項目を増やすときは「値を入力してもらう」を複製して変数名を変えます"],
+        ideas: ["最初から入っている値に {{TODAY}} を入れておけば、たいていはそのまま［続行］するだけです", "パスワードなどの秘密の値は、入力してもらう方式でも画面やログに残るので使わないでください"],
+        targetWindow: "", csvFile: "61_ctl_ask.csv",
+        csv: [
+            ["氏名"],
+            ["見本 太郎"],
+            ["試験 花子"]
+        ],
+        steps: [
+            ["GROUP_START", "準備：メモ帳を開いて、処理日と担当者を聞く（最初の1行だけ）", { when: "first" }],
+            ["RUN", "notepad.exe"],
+            ["WAIT", "2000"],
+            ["ASK", tplJ({ name: "処理日", message: "処理日を入力してね", defaultValue: "{{TODAY}}" })],
+            ["ASK", tplJ({ name: "担当者", message: "担当者の名前を入力してね", defaultValue: "" })],
+            ["GROUP_END", ""],
+            ["SWITCH", "メモ帳"],
+            ["TEXT", "{{氏名}}"], ["KEY", "{TAB}"],
+            ["TEXT", "処理日 {{$処理日}}"], ["KEY", "{TAB}"],
+            ["TEXT", "担当 {{$担当者}}"], ["KEY", "{ENTER}"]
+        ]
+    },
+    {
+        id: "ctl-regex-excel", category: "変数・繰り返し・分岐", level: 3,
+        name: "備考から電話番号と郵便番号を取り出して、Excel台帳に書き込む",
+        summary: "自由に書かれた備考欄から、正規表現で電話番号と郵便番号だけを取り出し、Excel台帳の右の列に書き込みます。画面操作はしないので、ほかの作業をしながらでも動きます。",
+        useCase: "申請書の自由記述や、システムから出したメモ欄に埋もれた連絡先を整理するとき。",
+        prepare: ["書き込み先のブック C:\\RPA作業\\台帳.xlsx を用意して閉じておく（1行目は見出し、データは2行目から）", "Excelが入っているPCで使う"],
+        customize: ["書き込む列は「Excelのセルに書く」のセル番地 C{{ROW+1}}・D{{ROW+1}} を変えます", "取り出したい形が違うときは、正規表現（パターンA）を変えます"],
+        ideas: ["正規表現の例：メールアドレス [\\w.+-]+@[\\w.-]+ ／ 8桁の数字 \\d{8} ／ 「様」の前の名前 (\\S+)様（設定Bに1）", "見つからなかったときは空になるので、「もし〜なら」で空かどうかを見て印を付けられます"],
+        targetWindow: "", csvFile: "62_ctl_regex_excel.csv",
+        csv: [
+            ["氏名", "備考"],
+            ["見本 太郎", "日中の連絡先は090-0000-1234。〒000-0001 見本市中央1-1-1"],
+            ["試験 花子", "自宅 03-0000-5678 （〒000-0002）"],
+            ["練習 一郎", "連絡先なし"]
+        ],
+        steps: [
+            ["STR_OP", tplJ({ name: "電話", src: "{{備考}}", op: "REGEX_EXTRACT", a: "0\\d{1,4}-\\d{1,4}-\\d{4}", b: "" })],
+            ["STR_OP", tplJ({ name: "郵便番号", src: "{{備考}}", op: "REGEX_EXTRACT", a: "〒?(\\d{3}-\\d{4})", b: "1" })],
+            ["EXCEL_WRITE", tplJ({ path: "C:\\RPA作業\\台帳.xlsx", sheet: "1", cell: "C{{ROW+1}}", value: "{{$電話}}" })],
+            ["EXCEL_WRITE", tplJ({ path: "C:\\RPA作業\\台帳.xlsx", sheet: "1", cell: "D{{ROW+1}}", value: "{{$郵便番号}}" })],
+            ["RECORD", tplJ({ name: "電話", value: "{{$電話}}" })],
+            ["RECORD", tplJ({ name: "郵便番号", value: "{{$郵便番号}}" })]
+        ]
+    },
+    {
+        id: "ctl-while-excel", category: "変数・繰り返し・分岐", level: 3,
+        name: "Excelの表を空白の行まで下にたどって合計する（条件のあいだの繰り返し）",
+        summary: "開いているExcelで、選んだセルから下へ1つずつ値をコピーし、空のセルが来るまで合計と件数を数えます。「条件のあいだくり返す」と「計算して入れる」の見本です。",
+        useCase: "画面上の一覧を上から順に処理していく、という RPA でいちばんよくある形の練習。",
+        prepare: ["Excelで、合計したい列の先頭のデータ（見出しの下）を選んでおく", "数字だけの列で試す"],
+        customize: ["横にたどるときは KEY {DOWN} を {RIGHT} に変えます", "合計の代わりに、値ごとにシステムへ入力する手順を入れれば「一覧を最後まで処理するロボット」になります"],
+        ideas: ["COPY_SAVE で読んだ値は {{$値}} という変数にも入ります", "上限回数（500）を超えると、終わらない繰り返しとして自動で止まります"],
+        targetWindow: "Excel", csvFile: "63_ctl_while_excel.csv",
+        csv: [
+            ["メモ"],
+            ["この見本は1回だけ実行します（CSVの1行＝1回）"]
+        ],
+        steps: [
+            ["SET_VAR", tplJ({ name: "合計", value: "0", mode: "TEXT" })],
+            ["SET_VAR", tplJ({ name: "値", value: "開始", mode: "TEXT" })],
+            ["LOOP_START", tplJ({ mode: "WHILE", count: "", left: "{{$値}}", op: "NOT_EMPTY", right: "", counter: "回数", max: "500" })],
+            ["COPY_SAVE", "値"],
+            ["KEY", "{ESC}"],
+            ["IF_START", tplJ({ left: "{{$値}}", op: "NOT_EMPTY", right: "" })],
+            ["SET_VAR", tplJ({ name: "合計", value: "{{$合計}}+{{$値}}", mode: "CALC" })],
+            ["SET_VAR", tplJ({ name: "件数", value: "{{$回数}}", mode: "TEXT" })],
+            ["IF_END", ""],
+            ["KEY", "{DOWN}"],
+            ["LOOP_END", ""],
+            ["RECORD", tplJ({ name: "件数", value: "{{$件数}}" })],
+            ["RECORD", tplJ({ name: "合計", value: "{{$合計}}" })]
+        ]
     }
 ]);
 // @@TEMPLATE_DATA_END
@@ -7053,7 +8426,7 @@ function showTemplateGallery() {
         return;
     }
     var html = '<div class="form-help">お手本マクロから始めよう♡ 「✨ 作る」を押すと新しいマクロとして追加されて、見本のCSVも samples フォルダに用意されるよ。' +
-        "中身の説明は docs\\templates.md にもあるキュン。</div>" +
+        "中身の説明は docs\\templates.html にもあるキュン。</div>" +
         '<div class="tpl-toolbar">分類: <select id="tplFilter" onchange="filterTemplates()"><option value="">すべて</option>';
     var c;
     var i;
@@ -7279,6 +8652,9 @@ window.onload = function () {
 
 // Cancelling here would be irreversible even if the user chooses to stay, so it waits for onunload
 window.onunload = function () {
+    if (runState) {
+        closeExcel(runState);
+    }
     if (runState && runState.running) {
         if (runState.psJob) {
             runState.psJob.cancel();

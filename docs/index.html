@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ドキュメント - ふじキュン♡のRPAマクロビルダー</title>
+<style>
+:root { --fg: #2f2a33; --muted: #6d6470; --accent: #c2185b; --line: #ead7e2; --bg: #ffffff; --soft: #fdf5f9; --code: #f4eef2; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Meiryo UI", "Yu Gothic UI", "Segoe UI", sans-serif; font-size: 16px; line-height: 1.75; color: var(--fg); background: var(--soft); }
+header { position: sticky; top: 0; z-index: 2; background: linear-gradient(90deg, #f48fb1, #f7b6d2 55%, #b3d9ff); color: #fff; padding: 8px 16px; }
+header .title { font-weight: bold; margin-right: 16px; text-shadow: 0 1px 2px rgba(120, 30, 80, .35); }
+header nav a { color: #fff; margin-right: 12px; text-decoration: none; font-size: 15px; white-space: nowrap; }
+header nav a.current { text-decoration: underline; font-weight: bold; }
+main { max-width: 1000px; margin: 0 auto; padding: 16px 24px 48px; background: var(--bg); min-height: 100vh; }
+h1, h2, h3 { scroll-margin-top: 64px; }
+h1 { font-size: 26px; color: var(--accent); border-bottom: 3px solid var(--line); padding-bottom: 6px; }
+h2 { font-size: 22px; margin-top: 36px; border-left: 6px solid #f48fb1; padding-left: 10px; }
+h3 { font-size: 18px; margin-top: 26px; color: #8e3b66; }
+a { color: #1565c0; }
+code { font-family: Consolas, "MS Gothic", monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: #2d2733; color: #ece6f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; color: inherit; padding: 0; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; margin: 10px 0; min-width: 60%; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; text-align: left; }
+th { background: #fce4ef; }
+tr:nth-child(even) td { background: #fffafd; }
+blockquote { margin: 12px 0; padding: 8px 14px; background: #fff8e1; border-left: 4px solid #ffb300; }
+hr { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+@media print { header { position: static; } main { max-width: none; } }
+</style>
+</head>
+<body>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html" class="current">目次</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
+<main>
+<h1 id="ドキュメント">ドキュメント</h1>
+<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>とにかく動かしてみたい</td><td><a href="tutorial.html">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="templates.html">テンプレート解説</a> — 63種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="manual.html">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="faq.html">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr></tbody></table></div>
+<p>見本のCSVは <a href="../samples"><code>samples</code></a> フォルダにあります。ツールの［📚 テンプレート］から作ると、同じCSVが自動で用意されます。</p>
+<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>
+</main>
+</body>
+</html>

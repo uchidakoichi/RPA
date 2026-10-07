@@ -1,2 +1,3 @@
 *.hta -text
 *.csv -text
+*.zip binary
