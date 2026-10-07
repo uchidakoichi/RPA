@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q&amp;A（よくある質問） - ふじキュン♡のRPAマクロビルダー</title>
+<style>
+:root { --fg: #2f2a33; --muted: #6d6470; --accent: #c2185b; --line: #ead7e2; --bg: #ffffff; --soft: #fdf5f9; --code: #f4eef2; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Meiryo UI", "Yu Gothic UI", "Segoe UI", sans-serif; font-size: 16px; line-height: 1.75; color: var(--fg); background: var(--soft); }
+header { position: sticky; top: 0; z-index: 2; background: linear-gradient(90deg, #f48fb1, #f7b6d2 55%, #b3d9ff); color: #fff; padding: 8px 16px; }
+header .title { font-weight: bold; margin-right: 16px; text-shadow: 0 1px 2px rgba(120, 30, 80, .35); }
+header nav a { color: #fff; margin-right: 12px; text-decoration: none; font-size: 15px; white-space: nowrap; }
+header nav a.current { text-decoration: underline; font-weight: bold; }
+main { max-width: 1000px; margin: 0 auto; padding: 16px 24px 48px; background: var(--bg); min-height: 100vh; }
+h1, h2, h3 { scroll-margin-top: 64px; }
+h1 { font-size: 26px; color: var(--accent); border-bottom: 3px solid var(--line); padding-bottom: 6px; }
+h2 { font-size: 22px; margin-top: 36px; border-left: 6px solid #f48fb1; padding-left: 10px; }
+h3 { font-size: 18px; margin-top: 26px; color: #8e3b66; }
+a { color: #1565c0; }
+code { font-family: Consolas, "MS Gothic", monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: #2d2733; color: #ece6f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; color: inherit; padding: 0; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; margin: 10px 0; min-width: 60%; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; text-align: left; }
+th { background: #fce4ef; }
+tr:nth-child(even) td { background: #fffafd; }
+blockquote { margin: 12px 0; padding: 8px 14px; background: #fff8e1; border-left: 4px solid #ffb300; }
+hr { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+@media print { header { position: static; } main { max-width: none; } }
+</style>
+</head>
+<body>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html" class="current">Q&amp;A</a></nav></header>
+<main>
+<h1 id="qaよくある質問">Q&amp;A（よくある質問）</h1>
+<p>困ったときは、まず <strong>［🩺 環境チェック］</strong> を押してみてください。どの機能がその端末で使えるかが分かります。</p>
+<ul><li><a href="#起動環境">起動・環境</a></li><li><a href="#音アラーム">音・アラーム</a></li><li><a href="#入力がうまくいかない">入力がうまくいかない</a></li><li><a href="#ウィンドウクリック">ウィンドウ・クリック</a></li><li><a href="#csv差し込み">CSV・差し込み</a></li><li><a href="#実行結果">実行・結果</a></li><li><a href="#保存共有">保存・共有</a></li><li><a href="#使い方のアイデア">使い方のアイデア</a></li><li><a href="#変数繰り返し分岐">変数・繰り返し・分岐</a></li></ul>
+<hr>
+<h2 id="起動環境">起動・環境</h2>
+<h3 id="q-ダブルクリックしても何も起きないactivexが使えないと出る">Q. ダブルクリックしても何も起きない／「ActiveXが使えない」と出る</h3>
+<ul><li>ブラウザ（Edge/Chrome）で開いていませんか？ <code>.hta</code> ファイルを <strong>エクスプローラーからダブルクリック</strong> してください。</li><li>ダウンロードしたファイルなら、右クリック →［プロパティ］→ <strong>［許可する］</strong>（ブロックの解除）にチェックしてから起動します。</li><li>それでも起動しない場合、組織の設定で HTA（mshta.exe）の実行が止められている可能性があります。情報システム担当の方に確認してください。</li></ul>
+<h3 id="q-一時ファイルへの自動保存に失敗と出る">Q. 「一時ファイルへの自動保存に失敗」と出る</h3>
+<p>HTA を置いたフォルダに書き込めません。デスクトップ、ドキュメント、<code>C:\RPA作業\</code> など、自分が書き込めるフォルダに移してください。</p>
+<h3 id="q-powershellを起動できなかった-0xffffffffと出る">Q. 「PowerShellを起動できなかった（… [0xFFFFFFFF]）」と出る</h3>
+<p>PowerShell を起動する前の「プログラムを起動する」段階で断られています。ふじキュンは次の順に起動方法を自動で試し、うまくいった方法をその後も使います。</p>
+<ol><li>WScript.Shell.Run（通常の方法・画面なし）</li><li>cmd.exe を画面なしで起動し、その中から PowerShell を起動（画面なし）</li><li>WScript.Shell.Exec（黒い画面が一瞬出ることがあります）</li><li>Shell.Application.ShellExecute</li></ol>
+<p>一度うまくいった方法は <code>fujikyun_settings.json</code> に記録され、次に起動したときも最初に使います。［🩺 環境チェック］を押すと記録を消して、もう一度最初から調べ直します。ログに「PowerShellは ○○ で起動できたキュン」と出るので、どの方法になったか確認できます。</p>
+<p>［🩺 環境チェック］の「プログラムの起動（WScript.Shell.Run）」と「PowerShellの起動・実行」の行を見ると、どの方法なら動くかが分かります。全部だめな場合はセキュリティ製品や組織のポリシーで止められているので、下の「使える機能」で組み立ててください。</p>
+<h3 id="q-環境チェックでpowershellの起動実行が-ng-になる">Q. 環境チェックで「PowerShellの起動・実行」が NG になる</h3>
+<p>組織のポリシーで PowerShell が止められている可能性があります。その場合でも次の機能は使えます。</p>
+<ul><li>使える: KEY・TEXT・CSV・COPY_SAVE・WAIT・WAIT_FOR・IF・CONFIRM・SWITCH・RUN</li><li>使えない: CLICK・CLICK_POS・CLICK_IMG・SCREENSHOT・座標/画像の取得・［🔍 一覧］・PowerShell版のアラーム</li></ul>
+<p>ボタンを押す操作は、Tab でボタンまで移動して <code>KEY {ENTER}</code>（または <code>{SPACE}</code>）で押す方法に置き換えられることが多いです。</p>
+<h3 id="q-powershellの言語モードが-fulllanguage-以外になっている">Q. 「PowerShellの言語モード」が FullLanguage 以外になっている</h3>
+<p>PowerShell が制限モードで動いています。C# を使う CLICK_POS・CLICK_IMG・SCREENSHOT は動かない可能性が高いので、キーボード操作中心で組んでください。</p>
+<hr>
+<h2 id="音アラーム">音・アラーム</h2>
+<h3 id="q-アラームを鳴らせなかったと出た">Q. 「アラームを鳴らせなかった…（）」と出た</h3>
+<p>以前のバージョンでは、PowerShell の起動に失敗したときに理由が空欄で表示されていました。現在のバージョンでは次のように改善しています。</p>
+<ol><li>PowerShell を <strong>フルパス</strong>（<code>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</code>）で起動します。</li><li>PowerShell で鳴らせないときは、自動で <strong>Windows Media Player 部品</strong> → <strong>音声合成（読み上げ）</strong> の順に切り替えて知らせます。</li><li>エラーには <strong>エラーコード</strong>（例: <code>[0x80070005]</code>）を表示します。</li></ol>
+<p>［🔔］ボタンでテストして、ログに何と出るかを確認してください。［🩺 環境チェック］でどの方法が使えるかも分かります。</p>
+<div class="table-wrap"><table><thead><tr><th>ログに出るコード（例）</th><th>考えられる原因</th></tr></thead><tbody><tr><td><code>0xFFFFFFFF</code></td><td>プログラムの起動そのものが断られた。ウイルス対策・EDR などのセキュリティ製品や組織のポリシーが、HTA からの起動を止めている可能性</td></tr><tr><td><code>0x80070002</code></td><td>ファイルが見つからない（PowerShell やアラーム音が無い）</td></tr><tr><td><code>0x80070005</code></td><td>アクセス拒否（ポリシーで実行が止められている）</td></tr><tr><td><code>0x800704EC</code></td><td>グループポリシー等でプログラムがブロックされている</td></tr></tbody></table></div>
+<h3 id="q-アラームが鳴らないエラーも出ない">Q. アラームが鳴らない（エラーも出ない）</h3>
+<ul><li>パソコンの音量やミュートを確認してください。</li><li>下段の <strong>［□ アラーム音］</strong> のチェックが外れていると、異常停止時に鳴りません（🔔 のテストは常に鳴ります）。</li><li>アラーム音のファイル <code>C:\Windows\Media\Alarm01.wav</code> があるか、環境チェックで確認できます。</li></ul>
+<hr>
+<h2 id="入力がうまくいかない">入力がうまくいかない</h2>
+<h3 id="q-文字が入力されない別の場所に入る">Q. 文字が入力されない／別の場所に入る</h3>
+<ul><li>入力先の欄に <strong>カーソルが入っているか</strong> 確認してください。ロボットは「いまカーソルがある場所」に貼り付けます。</li><li>画面が表示される前に入力している可能性があります。前に <strong>WAIT</strong>（例 1000）を入れるか、「間隔」を増やしてください。</li><li>途中で別のウィンドウが前に出る環境では、下段の <strong>［□ 毎ステップ前面化］</strong> を ON にします。</li></ul>
+<h3 id="q-前の文字が残ったまま後ろに追加される">Q. 前の文字が残ったまま、後ろに追加される</h3>
+<p>TEXT・CSV は「貼り付け」なので、元の文字の後ろに入ります。直前に <strong><code>KEY ^a</code></strong>（全選択）を入れると上書きになります。</p>
+<h3 id="q-key-で文字を送るとひらがなや変な文字になる">Q. KEY で文字を送ると、ひらがなや変な文字になる</h3>
+<p>日本語入力（IME）が ON だと、KEY で送った英字が変換されてしまいます。<strong>文字の入力は TEXT を使ってください</strong>（クリップボード経由なので IME の影響を受けません）。</p>
+<h3 id="q-やを-key-で送りたい">Q. 「+」や「%」を KEY で送りたい</h3>
+<p>SendKeys では <code>+</code>（Shift）<code>^</code>（Ctrl）<code>%</code>（Alt）などは特別な意味があります。<code>{+}</code> <code>{%}</code> のように <code>{ }</code> で囲みます。文字として入力したいだけなら TEXT を使うのが簡単です。</p>
+<h3 id="q-excel-に貼り付けると日付や数字の形が変わる">Q. Excel に貼り付けると日付や数字の形が変わる</h3>
+<p>Excel が自動で書式を変えています。先に Excel 側で、貼り付ける列のセルの書式を「文字列」にしておいてください（先頭の 0 が消える番号なども同じです）。</p>
+<hr>
+<h2 id="ウィンドウクリック">ウィンドウ・クリック</h2>
+<h3 id="q-対象ウィンドウが見つからないで止まる">Q. 「対象ウィンドウが見つからない」で止まる</h3>
+<ul><li>タイトルは <strong>完全一致 → 先頭一致 → 末尾一致</strong> で探します。途中の文字だけでは見つかりません。</li><li>［🔍 一覧］で実際のタイトルを確認し、変わらない先頭部分か末尾部分を指定してください。</li><li>例: 「台帳.xlsx - Excel」→ <code>Excel</code>（末尾）または <code>台帳.xlsx</code>（先頭）</li></ul>
+<h3 id="q-click-で見つからなかったと出る">Q. CLICK で「見つからなかった」と出る</h3>
+<ul><li>画面のボタンの文字と <strong>完全に同じ</strong> か確認してください（全角・半角、スペースも区別します）。</li><li>独自の描画をしている画面や、Citrix・リモートデスクトップの中では名前が取れません。<strong>CLICK_POS</strong> か <strong>CLICK_IMG</strong> を使ってください。</li></ul>
+<h3 id="q-click-で押下invokeに対応していないオブジェクトと出る">Q. CLICK で「押下(Invoke)に対応していないオブジェクト」と出る</h3>
+<p>名前は見つかりましたが、押せない部品です（入力欄やラベルなど）。入力欄にカーソルを置きたいときは、Tab での移動か CLICK_POS を使います。</p>
+<h3 id="q-click_pos-の位置がずれる">Q. CLICK_POS の位置がずれる</h3>
+<ul><li>ウィンドウの位置・大きさが変わると座標がずれます。対象ウィンドウを <strong>最大化</strong> して、その状態で座標を取り直してください。</li><li>ディスプレイの拡大率（125%など）を変えた場合も取り直してください。</li></ul>
+<h3 id="q-click_img-が見つけてくれない">Q. CLICK_IMG が見つけてくれない</h3>
+<ul><li>しきい値を 0.9 → 0.85 → 0.8 と少しずつ下げてみてください。</li><li>見本画像に背景が多く入っていると失敗しやすいです。ボタンの特徴的な部分だけを小さめに切り取り直してください。</li><li>Windows のテーマ・色・拡大率が、画像を切り取ったときと同じか確認してください。</li></ul>
+<hr>
+<h2 id="csv差し込み">CSV・差し込み</h2>
+<h3 id="q-csv-が文字化けする">Q. CSV が文字化けする</h3>
+<p>文字コードを［文字コード自動判定］から <strong>Shift_JIS</strong> や <strong>UTF-8</strong> に切り替えてみてください。</p>
+<h3 id="q-氏名-がそのまま入力される">Q. <code>{{氏名}}</code> がそのまま入力される</h3>
+<p>CSV の見出しと文字が違います（スペース、全角・半角の違いなど）。ログに「差し込み {{…}} が何か分からなかった」と出ます。［＋ 差し込みを追加 ▼］から選ぶと確実です。見出しが無いCSVなら <code>{{1}}</code> のように列番号で指定します。</p>
+<h3 id="q-csvを使わずに同じ作業を何回かくり返したい">Q. CSVを使わずに同じ作業を何回かくり返したい</h3>
+<p>「CSVの行数＝回数」として使えます。1列だけのCSV（例: 見出し「回」、1〜10の10行）を作って読み込めば10回くり返します（テンプレート「一定間隔で画面を記録」を参照）。CSV を読み込まずに実行すると1回だけ実行します。</p>
+<h3 id="q-最初の1回だけまたは最後だけ実行したい手順がある">Q. 最初の1回だけ（または最後だけ）実行したい手順がある</h3>
+<p><strong>グループ</strong> を作り、実行タイミングを「最初の1行だけ」または「最後の1行だけ」にします。アプリの起動やログインは「最初だけ」、保存や終了は「最後だけ」にすると便利です。</p>
+<hr>
+<h2 id="実行結果">実行・結果</h2>
+<h3 id="q-実行を止めたい">Q. 実行を止めたい</h3>
+<p>実行中はロボットが入力先の画面を前に出しているので、次のどれかで止めます。</p>
+<ul><li><strong>Esc を約1秒長押し</strong>（どの画面が前にあっても止まります。PowerShell が使える端末のみ）</li><li>ふじキュンの画面をクリックしてから <strong>Esc</strong> か［⏹ 停止］</li><li>確認ポイントの表示中は、そのまま［⏹ 停止］か Esc</li></ul>
+<p>マクロの中の KEY <code>{ESC}</code> は一瞬押すだけなので、長押し停止には反応しません。</p>
+<h3 id="q-途中から再開したい">Q. 途中から再開したい</h3>
+<p>［↓ 実行結果CSV］で、どの行まで「完了」になったかを確認し、<strong>開始行</strong> をその次の行番号にして実行します。</p>
+<h3 id="q-エラーになった行だけやり直したい">Q. エラーになった行だけやり直したい</h3>
+<p>［↓ エラー行をCSV保存］→ <code>gprime_error_list.csv</code> を Excel で直す → そのファイルを CSV 欄で読み込んで実行します。</p>
+<ul><li>このCSVには「元データ行No」列があるので、「1行目は見出し」が ON なら <code>{{ROW}}</code> は元のCSVの行番号になります（Excel のセル番地などもずれません）。</li><li>IF の SKIP 以外のエラー（IF の STOP、タイムアウト、ウィンドウが見つからない、クリック失敗など）は <strong>実行そのものが止まる</strong>ので、その後ろの行は処理されていません。元のCSVで <strong>開始行</strong> を続きの行にして実行してください。</li></ul>
+<h3 id="q-実行結果csv-とエラー行csv-の違いは">Q. 実行結果CSV とエラー行CSV の違いは？</h3>
+<div class="table-wrap"><table><thead><tr><th></th><th>実行結果CSV</th><th>エラー行CSV</th></tr></thead><tbody><tr><td>入る行</td><td>処理したすべての行</td><td>エラー・SKIP の行だけ</td></tr><tr><td>追加される列</td><td>COPY_SAVE の値、証跡ファイル、実行結果、備考など</td><td>元データ行No、エラー内容、発生日時</td></tr><tr><td>主な用途</td><td>結果の確認・台帳づくり</td><td>直して再実行</td></tr></tbody></table></div>
+<p>どちらも ▶実行 を押すたびにリセットされます。必要なら実行のたびに保存してください。</p>
+<hr>
+<h2 id="保存共有">保存・共有</h2>
+<h3 id="q-起動すると前回の編集中データが見つかったと出る">Q. 起動すると「前回の編集中データが見つかった」と出る</h3>
+<p>前回、本番ファイルに保存せずに終了しました。［OK］で続きから編集できます。［キャンセル］なら本番ファイルを読み込み、一時ファイルは <code>gprime_macros_temp_discarded_日時.json</code> に控えとして残ります（退避できなかったときは、上書きされないように一時ファイルの内容を開きます）。</p>
+<h3 id="q-起動すると本番ファイルを読み込めなかったと出る">Q. 起動すると「本番ファイルを読み込めなかった」と出る</h3>
+<p><code>gprime_macros.json</code> が壊れているか、ほかの人やソフトが開いていて読めませんでした。元のファイルは <code>gprime_macros_broken_日時.json</code> に控えを取ってあり、本番ファイルもそのまま残っています。いったんふじキュンを閉じて開き直すか、1つ前の版 <code>gprime_macros_backup.json</code> を［📥 取込］で戻してください。この状態で本番ファイルに保存しようとすると、上書きしてよいか確認が出ます。</p>
+<h3 id="q-run-でコマンドで特別な意味を持つ文字が入っていたと出て行が飛ばされた">Q. RUN で「コマンドで特別な意味を持つ文字が入っていた」と出て、行が飛ばされた</h3>
+<p>RUN の差し込みに <code>&quot;</code> <code>&amp;</code> <code>|</code> <code>&lt;</code> <code>&gt;</code> <code>^</code> <code>%</code> や改行が入っていると、データがコマンドとして実行されてしまう危険があるので、その行は実行しません。フォルダ名やファイル名にこれらの文字を使わないようにCSVを直してから、エラー行CSVで再実行してください。</p>
+<h3 id="q-マクロを同僚に渡したい">Q. マクロを同僚に渡したい</h3>
+<p>［📤 書出］で <code>macro_export\マクロ名.json</code>（同じ名前があれば <code>マクロ名 (2).json</code>）ができるので、それを渡して相手に［📥 取込］してもらいます。CLICK_IMG を使っている場合は <code>rpa_images</code> フォルダも一緒に渡してください。</p>
+<h3 id="q-別のパソコンに引っ越したい">Q. 別のパソコンに引っ越したい</h3>
+<p>HTA のフォルダごとコピーすれば、マクロ・画像・見本CSVがそのまま使えます。画像のパスを相対パス（<code>rpa_images\…</code>）にしておくと、フォルダの場所が変わっても動きます。</p>
+<hr>
+<h2 id="使い方のアイデア">使い方のアイデア</h2>
+<h3 id="q-入力以外にどんなことができる">Q. 入力以外にどんなことができる？</h3>
+<ul><li><strong>照会＋証跡</strong>: 番号を順番に照会して画面を保存（監査・点検用）</li><li><strong>値の収集</strong>: たくさんの Excel から同じセルの値を集めて一覧化</li><li><strong>チェック</strong>: 「該当なし」を SKIP させて、結果CSVで未登録の一覧を作る</li><li><strong>検算</strong>: 電卓で計算し直して、台帳の金額と見比べる</li><li><strong>ファイル整理</strong>: RUN から Windows のコマンドを呼んで、フォルダ作成・ファイル名変更を一括で</li><li><strong>定型文の量産</strong>: 差し込みで、お知らせ文・メール下書き・Word 文書を人数分</li></ul>
+<p>くわしくは <a href="templates.html">テンプレート解説</a> の「応用・発見のヒント」を見てください。</p>
+<h3 id="q-安全に使うコツは">Q. 安全に使うコツは？</h3>
+<ol><li>最初は <strong>照会（見るだけ）</strong> のマクロから始める</li><li>必ず <strong>1件だけ</strong>（開始行＝終了行）で試す</li><li>登録・送信の前に <strong>確認ポイント（CONFIRM）</strong> を入れる</li><li><strong>SCREENSHOT</strong> で証跡を残す</li><li>止め方（<strong>Esc を約1秒長押し</strong>、またはふじキュンの画面で Esc／⏹）を覚えておく</li></ol>
+<hr>
+<h2 id="変数繰り返し分岐">変数・繰り返し・分岐</h2>
+<h3 id="q-繰り返しが終わらない上限の回に達したで止まった">Q. 繰り返しが終わらない／「上限の○回に達した」で止まった</h3>
+<p>「条件のあいだくり返す」の条件が、いつまでも満たされたままになっています。条件に使っている変数が、繰り返しの中で変わっているか確認してください（［🔎 変数］パネルで見られます）。回数が分かっている場合は「決めた回数くり返す」を使うと安全です。</p>
+<h3 id="q-変数の値がおかしい何が入っているか知りたい">Q. 変数の値がおかしい／何が入っているか知りたい</h3>
+<p>下の段の <strong>［🔎 変数］</strong> を押すと、実行中の変数・この行のCSVの値・コピーした値がリアルタイムで表示されます。一時停止（⏸）しながら確認すると分かりやすいです。</p>
+<h3 id="q-名前-が空っぽになる">Q. <code>{{$名前}}</code> が空っぽになる</h3>
+<p>その変数にまだ値が入っていません（入れるコマンドより前で使っている、変数名のつづりが違う など）。［＋ 差し込みを追加 ▼］から選ぶと、マクロの中で使っている変数名が一覧に出ます。</p>
+<h3 id="q-excelのセルを読む書くで失敗する">Q. Excelのセルを読む・書くで失敗する</h3>
+<ul><li>Excel が入っているか［🩺 環境チェック］で確認してください。</li><li>書き込むブックは閉じておいてください（ほかで開いていると「書き込めない」エラーになります）。</li><li>シートは名前か番号（1＝1枚目）で、セル番地は <code>A1</code> の形で指定します。</li></ul>
+<h3 id="q-エラー時の処理を入れたのに止まった">Q. エラー時の処理を入れたのに止まった</h3>
+<p>IF（ウィンドウ検知）の STOP（緊急停止）と、⏹ 停止・Esc による停止は、わざと止める操作なので受け止めません。また「エラーのとき」の中で起きたエラーは、外側のエラー時の処理（なければ停止）に回ります。</p>
+<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>
+</main>
+</body>
+</html>

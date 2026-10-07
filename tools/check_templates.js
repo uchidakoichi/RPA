@@ -56,14 +56,15 @@ for (let i = 0; i < count; i++) {
     const steps = JSON.parse(R(`JSON.stringify(templateSteps(TEMPLATES[${i}]))`));
     const header = t.csv[0];
     const copies = steps.filter(s => s.cmd === "COPY_SAVE").map(s => s.val);
+    const vars = JSON.parse(R(`JSON.stringify(definedVarNames(templateSteps(TEMPLATES[${i}])))`));
     let depth = 0;
     for (const s of steps) {
         assert.ok(R(`!!COMMAND_DEFS[${JSON.stringify(s.cmd)}]`), where + " unknown command " + s.cmd);
         const err = R(`(function(){var d=COMMAND_DEFS[${JSON.stringify(s.cmd)}];return d.validate(d.parse(${JSON.stringify(s.val)}));})()`);
         assert.strictEqual(err, "", `${where} ${s.cmd} "${s.val}": ${err}`);
         assert.ok(s.label, where + " label");
-        if (s.cmd === "GROUP_START") { depth++; }
-        if (s.cmd === "GROUP_END") { depth--; }
+        if (R(`isBlockStart(${JSON.stringify(s.cmd)})`)) { depth++; }
+        if (R(`isBlockEnd(${JSON.stringify(s.cmd)})`)) { depth--; }
         assert.ok(depth >= 0, where + " GROUP_END without GROUP_START");
         if (s.cmd === "CSV") {
             assert.ok(+s.val >= 1 && +s.val <= header.length, `${where} CSV column ${s.val} out of range`);
@@ -71,11 +72,13 @@ for (let i = 0; i < count; i++) {
         for (const m of s.val.match(/\{\{([^{}]+)\}\}/g) || []) {
             const k = m.slice(2, -2).trim();
             const ok = /^\d+$/.test(k) || /^ROW\s*[+-]\s*\d+$/i.test(k) || BUILTIN.includes(k.toUpperCase()) ||
-                header.includes(k) || (k.startsWith("COPY:") && copies.includes(k.slice(5)));
+                header.includes(k) || (k.startsWith("COPY:") && copies.includes(k.slice(5))) ||
+                (k.startsWith("$") && vars.includes(k.slice(1).trim()));
             assert.ok(ok, `${where} unresolved placeholder ${m}`);
         }
     }
     assert.strictEqual(depth, 0, where + " unbalanced groups");
+    assert.ok(R(`groupsBalanced(templateSteps(TEMPLATES[${i}]))`), where + " block structure (ELSE/CATCH placement, matching ends)");
     const text = R(`templateCsvText(TEMPLATES[${i}])`);
     assert.deepStrictEqual(JSON.parse(R(`JSON.stringify(parseCsv(${JSON.stringify(text)}))`)), t.csv, where + " CSV round trip");
 }

@@ -1,4 +1,4 @@
-// Generates samples/*.csv and docs/templates.md from the template data embedded in
+// Generates samples/*.csv and docs/src/templates.md from the template data embedded in
 // fujikyun_rpa_builder.hta, so the HTA, the sample CSVs and the docs never drift apart.
 // Usage (maintainers only, needs Node.js):  node tools/build_templates.js
 "use strict";
@@ -45,7 +45,7 @@ out.push("ふじキュン♡のRPAマクロビルダーには **" + TEMPLATES.le
 out.push("");
 out.push("- 見本CSVの人名・番号・URL・メールアドレスはすべて **架空** です。");
 out.push("- 画面のボタン名・ウィンドウ名・TAB の回数は職場のシステムごとに違います。各テンプレートの「準備」「カスタマイズのポイント」を読んで合わせてください。");
-out.push("- Cokas-i などの基幹系システムのテンプレートは、メニュー名・ボタン名・欄の並びを **架空の例** で書いています（自治体ごとに画面が違うため）。最初は確認ポイント（✋）で入力欄を手でクリックする半自動で動き、慣れたら無効化されている座標クリック（CLICK_POS）や読み取りグループを有効化して完全自動にできます。");
+out.push("- 基幹系システムや庶務事務システムのテンプレートは、メニュー名・ボタン名・欄の並びを **架空の例** で書いています（自治体ごとに画面が違うため）。最初は確認ポイント（✋）で入力欄を手でクリックする半自動で動き、慣れたら無効化されている座標クリック（CLICK_POS）や読み取りグループを有効化して完全自動にできます。");
 out.push("- はじめて動かすときは、実行欄の **開始行・終了行を両方 1** にして 1 件だけ試しましょう。");
 out.push("");
 out.push("## 一覧");
@@ -101,6 +101,6 @@ for (const c of CATEGORIES) {
         out.push("");
     }
 }
-fs.mkdirSync(path.join(root, "docs"), { recursive: true });
-fs.writeFileSync(path.join(root, "docs", "templates.md"), out.join("\n"), "utf8");
-console.log("generated", TEMPLATES.length, "sample CSVs and docs/templates.md");
+fs.mkdirSync(path.join(root, "docs", "src"), { recursive: true });
+fs.writeFileSync(path.join(root, "docs", "src", "templates.md"), out.join("\n"), "utf8");
+console.log("generated", TEMPLATES.length, "sample CSVs and docs/src/templates.md");
