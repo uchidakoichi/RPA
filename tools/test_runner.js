@@ -67,7 +67,7 @@ function makeCtx() {
   return { ctx, R, files, keys, clicks, logs };
 }
 function macro(R, steps, rows) {
-  R(`appData = { version: 24, macros: [{ id: 'm1', name: 't', targetWindow: 'メモ帳', steps: normalizeData({ macros: [{ steps: ${JSON.stringify(steps)} }] }).macros[0].steps }] };
+  R(`appData = { version: 27, macros: [{ id: 'm1', name: 't', targetWindow: 'メモ帳', steps: normalizeData({ macros: [{ steps: ${JSON.stringify(steps)} }] }).macros[0].steps }] };
      currentMacroIndex = 0;
      csvState = { path: 'x', encoding: 'utf-8', records: [], header: ['氏名', 'ROW'], rows: ${JSON.stringify(rows)} };
      byId('startRowInput').value = '1'; byId('endRowInput').value = ''; byId('stepIntervalInput').value = '0';
@@ -92,7 +92,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   {
     const { R, clicks, files, ctx } = makeCtx();
     ctx.__psDelay = 700;
-    macro(R, [{ cmd: 'CLICK_POS', val: '10,10' }], [['x', '1']]);
+    macro(R, [{ cmd: 'CLICK_POS', val: '{"x":"10","y":"10"}' }], [['x', '1']]);
     R('startRun()');
     await until(() => R('!!(runState && runState.psJob)'), 5000);
     R('stopRun("test")');
@@ -106,7 +106,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     const { R, keys, ctx } = makeCtx();
     let n = 0;
     ctx.__activate = t => (/エラー/.test(t) ? R('runState.rowPos') === 1 : true);
-    macro(R, [{ cmd: 'IF', val: 'エラー,,SKIP' }, { cmd: 'KEY', val: 'row' },
+    macro(R, [{ cmd: 'WINDOW_CHECK', val: '{"title":"エラー","key":"","mode":"SKIP"}' }, { cmd: 'KEY', val: 'row' },
               { cmd: 'GROUP_START', val: 'save', when: 'last' }, { cmd: 'KEY', val: 'SAVE' }, { cmd: 'GROUP_END', val: '' }],
           [['a', '1'], ['b', '2']]);
     R('startRun()');
@@ -130,7 +130,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   // 5) header beats built-ins; 元データ行No drives {{ROW}}
   {
     const { R } = makeCtx();
-    R(`csvState.header = ['氏名','ROW']; var RS2 = { rows: [{ no: 7, data: ['太郎', 'hdr'] }], rowPos: 0, captured: {} };`);
+    R(`csvState.header = ['氏名','ROW']; var RS2 = { rows: [{ no: 7, data: ['太郎', 'hdr'] }], rowPos: 0 };`);
     assert.strictEqual(R('expandPlaceholders("{{ROW}}/{{ROW+1}}/{{氏名}}", RS2)'), 'hdr/8/太郎');
     R(`csvState = { path: 'x', records: [], header: ['氏名','元データ行No','エラー内容'], rows: [['a','12','e'],['b','30','e']] };`);
     assert.strictEqual(R('originalRowNoColumn()'), 1);
@@ -152,7 +152,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   {
     const { R, ctx } = makeCtx();
     ctx.__psDelay = 600;
-    macro(R, [{ cmd: 'CLICK_POS', val: '1,1' }], [['x', '1']]);
+    macro(R, [{ cmd: 'CLICK_POS', val: '{"x":"1","y":"1"}' }], [['x', '1']]);
     R('startRun()');
     await until(() => R('!!(runState && runState.psJob)'), 3000);
     R('stopRun("t1")');
@@ -180,10 +180,10 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   {
     const { R, keys, ctx } = makeCtx();
     ctx.__activate = t => (/エラー/.test(t) ? R('runState.rowPos') === 1 : true);
-    macro(R, [{ cmd: 'IF', val: 'エラー,,SKIP' },
+    macro(R, [{ cmd: 'WINDOW_CHECK', val: '{"title":"エラー","key":"","mode":"SKIP"}' },
               { cmd: 'GROUP_START', val: 'off', disabled: true }, { cmd: 'GROUP_START', val: 'L1', when: 'last' }, { cmd: 'KEY', val: 'NO1' }, { cmd: 'GROUP_END' }, { cmd: 'GROUP_END' },
               { cmd: 'GROUP_START', val: 'F', when: 'first' }, { cmd: 'GROUP_START', val: 'L2', when: 'last' }, { cmd: 'KEY', val: 'NO2' }, { cmd: 'GROUP_END' }, { cmd: 'GROUP_END' },
-              { cmd: 'GROUP_START', val: 'L3', when: 'last' }, { cmd: 'KEY', val: 'YES' }, { cmd: 'IF', val: 'エラー,,SKIP' }, { cmd: 'GROUP_END' }],
+              { cmd: 'GROUP_START', val: 'L3', when: 'last' }, { cmd: 'KEY', val: 'YES' }, { cmd: 'WINDOW_CHECK', val: '{"title":"エラー","key":"","mode":"SKIP"}' }, { cmd: 'GROUP_END' }],
           [['a', '1'], ['b', '2']]);
     R('startRun()');
     await until(() => !R('isRunning()'), 8000);
@@ -272,16 +272,16 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   // 16) unreadable production file: copy kept, sample shown, save needs confirmation; safe save keeps a backup
   {
     const { R, files } = makeCtx();
-    files['C:\\app\\gprime_macros.json'] = '{"version":24,"macros":[{"na';
+    files['C:\\app\\fujikyun_macros.json'] = '{"version":27,"macros":[{"na';
     R('loadInitialData()');
     assert.ok(R('saveBlockReason') !== '', 'save must be guarded');
-    assert.ok(Object.keys(files).some(f => /gprime_macros_broken_\d{8}_\d{6}\.json$/.test(f)), 'broken copy kept');
+    assert.ok(Object.keys(files).some(f => /fujikyun_macros_broken_\d{8}_\d{6}\.json$/.test(f)), 'broken copy kept');
     assert.ok(R('startupNotices.length') >= 1);
     R('saveProduction()');
-    assert.strictEqual(files['C:\\app\\gprime_macros.json'], '{"version":24,"macros":[{"na', 'not overwritten without confirmation');
+    assert.strictEqual(files['C:\\app\\fujikyun_macros.json'], '{"version":27,"macros":[{"na', 'not overwritten without confirmation');
     R('saveBlockReason = ""; saveProduction()');
-    assert.ok(JSON.parse(files['C:\\app\\gprime_macros.json']).macros.length >= 1);
-    assert.strictEqual(files['C:\\app\\gprime_macros_backup.json'], '{"version":24,"macros":[{"na', 'previous version kept as backup');
+    assert.ok(JSON.parse(files['C:\\app\\fujikyun_macros.json']).macros.length >= 1);
+    assert.strictEqual(files['C:\\app\\fujikyun_macros_backup.json'], '{"version":27,"macros":[{"na', 'previous version kept as backup');
     assert.ok(!Object.keys(files).some(f => /\.saving$/.test(f)));
     console.log('ok 16: unreadable file guarded, safe save with backup');
   }
@@ -289,8 +289,8 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   //     newer data versions guard the save
   {
     const { R, files, ctx } = makeCtx();
-    files['C:\\app\\gprime_macros_temp.json'] = JSON.stringify({ version: 99, macros: [{ name: 'temp', steps: [] }] });
-    files['C:\\app\\gprime_macros.json'] = JSON.stringify({ version: 24, macros: [{ name: 'main', steps: [] }] });
+    files['C:\\app\\fujikyun_macros_temp.json'] = JSON.stringify({ version: 99, macros: [{ name: 'temp', steps: [] }] });
+    files['C:\\app\\fujikyun_macros.json'] = JSON.stringify({ version: 27, macros: [{ name: 'main', steps: [] }] });
     ctx.confirm = () => false;
     ctx.__lockedMove = true;
     R('loadInitialData()');
@@ -301,7 +301,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   // 18) undo shows the macro whose change is undone
   {
     const { R } = makeCtx();
-    R(`appData = { version: 24, macros: [{ id: 'a', name: 'A', targetWindow: '', steps: [] }, { id: 'b', name: 'B', targetWindow: '', steps: [] }] };
+    R(`appData = { version: 27, macros: [{ id: 'a', name: 'A', targetWindow: '', steps: [] }, { id: 'b', name: 'B', targetWindow: '', steps: [] }] };
        historyStack = []; historyPos = -1; currentMacroIndex = 0; recordHistory('start');
        appData.macros[0].steps.push({ cmd: 'KEY', val: 'a', label: 'a' }); recordHistory('edit A');
        currentMacroIndex = 1; appData.macros[1].steps.push({ cmd: 'KEY', val: 'b', label: 'b' }); recordHistory('edit B');
@@ -315,7 +315,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   {
     const { R, files } = makeCtx();
     R(`runHeader = null; errorRows = [{ no: 5, data: ['a', 'b'], reason: 'x', time: 't' }]; exportErrorRows();`);
-    const csv = files['C:\\app\\gprime_error_list.csv'];
+    const csv = files['C:\\app\\fujikyun_error_list.csv'];
     assert.ok(/^\uFEFF?列1,列2,元データ行No,エラー内容,発生日時\r\n/.test(csv), csv);
     console.log('ok 19: error CSV always has a heading');
   }
@@ -381,7 +381,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     assert.strictEqual(R('resultRows[0].status'), 'エラー');
     console.log('ok 21: if / else / continue / loop limit');
   }
-  // 22) try / catch: an error inside is caught and recorded, the run continues; IF STOP is never caught
+  // 22) try / catch: an error inside is caught and recorded, the run continues; WINDOW_CHECK STOP is never caught
   {
     const { R, ctx } = makeCtx();
     const J = o => JSON.stringify(o);
@@ -404,7 +404,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     ctx.__activate = t => true;
     macro(R, [
       { cmd: 'TRY_START', val: 'x' },
-      { cmd: 'IF', val: 'エラー,,STOP' },
+      { cmd: 'WINDOW_CHECK', val: '{"title":"エラー","key":"","mode":"STOP"}' },
       { cmd: 'CATCH' },
       { cmd: 'TEXT', val: 'caught' },
       { cmd: 'TRY_END' }
@@ -413,7 +413,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     await until(() => !R('isRunning()'), 8000);
     assert.deepStrictEqual(JSON.parse(R('JSON.stringify(__p22)')), []);
     assert.strictEqual(R('resultRows[0].status'), 'エラー');
-    console.log('ok 22: try / catch, IF STOP not caught');
+    console.log('ok 22: try / catch, WINDOW_CHECK STOP not caught');
   }
   // 23) string operations and calculation
   {
@@ -486,7 +486,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
       const { R, ctx } = makeCtx();
       ctx.__activate = t => !/存在しない/.test(t);
       R(`var tpl = TEMPLATES.filter(function (t) { return t.id === ${JSON.stringify(id)}; })[0];
-         appData = { version: 25, macros: [{ id: 'm', name: tpl.name, targetWindow: tpl.targetWindow, steps: templateSteps(tpl) }] };
+         appData = { version: 27, macros: [{ id: 'm', name: tpl.name, targetWindow: tpl.targetWindow, steps: templateSteps(tpl) }] };
          currentMacroIndex = 0;
          csvState = { path: 'x', encoding: 'utf-8', records: tpl.csv, header: tpl.csv[0], rows: tpl.csv.slice(1) };
          byId('startRowInput').value = '1'; byId('endRowInput').value = ''; byId('stepIntervalInput').value = '0';
@@ -511,7 +511,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   {
     const { R, ctx } = makeCtx();
     const J = o => JSON.stringify(o);
-    R(`appData = normalizeData({ version: 26, macros: [
+    R(`appData = normalizeData({ version: 27, macros: [
         { id: 'main', name: '本体', steps: [
           { cmd: 'TEXT', val: 'a' },
           { cmd: 'CALL_MACRO', val: '{"id":"sub","name":"部品"}' },
@@ -547,9 +547,9 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     const { R } = makeCtx();
     const payload = ['S\t無題 - メモ帳', 'N\t登録\t10\t20', 'W\t2300', 'C\t100\t200\tDOUBLE', 'K\t{TAB}', 'K\t{TAB}', 'K\t{TAB}', 'T\tabc', 'J', 'K\t^s', 'C\t5\t6\tRIGHT', 'W\t1500'].join('\n');
     const steps = JSON.parse(R('JSON.stringify(recordedToSteps(' + JSON.stringify(payload) + '))'));
-    assert.deepStrictEqual(steps.map(s => s.cmd + ':' + s.val), ['SWITCH:メモ帳', 'CLICK:登録', 'WAIT:2300', 'CLICK_POS:100,200,DOUBLE', 'KEY:{TAB 3}', 'TEXT:abc',
-      'COMMENT:⏺ ここで日本語を入力（変換）していたよ。TEXT か CSV に置き換えてね', 'KEY:^s', 'CLICK_POS:5,6,RIGHT']);
-    assert.ok(/ダブルクリック/.test(R(`autoLabelFor({ cmd: 'CLICK_POS', val: '1,2,DOUBLE' })`)));
+    assert.deepStrictEqual(steps.map(s => s.cmd + ':' + s.val), ['SWITCH:メモ帳', 'CLICK_NAME:登録', 'WAIT:2300', 'CLICK_POS:{"x":"100","y":"200","kind":"DOUBLE"}', 'KEY:{TAB 3}', 'TEXT:abc',
+      'COMMENT:⏺ ここで日本語を入力（変換）していたよ。TEXT か CSV に置き換えてね', 'KEY:^s', 'CLICK_POS:{"x":"5","y":"6","kind":"RIGHT"}']);
+    assert.ok(/ダブルクリック/.test(R(`autoLabelFor({ cmd: 'CLICK_POS', val: '{"x":"1","y":"2","kind":"DOUBLE"}' })`)));
     const script = R('buildClickPosScript(1, 2, "RIGHT").join("\\n")');
     assert.ok(script.includes('mouse_event(0x0008') && script.includes('mouse_event(0x0010'));
     console.log('ok 28: recording conversion and click kinds');
@@ -559,8 +559,8 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     const { R, ctx } = makeCtx();
     const J = o => JSON.stringify(o);
     macro(R, [
-      { cmd: 'OCR_READ', val: J({ area: 'RECT', x: '10', y: '20', w: '300', h: '40', name: '読んだ' }) },
-      { cmd: 'OCR_CLICK', val: J({ text: '登録', area: 'WINDOW', nth: '1' }) },
+      { cmd: 'READ_TEXT', val: J({ area: 'RECT', x: '10', y: '20', w: '300', h: '40', name: '読んだ' }) },
+      { cmd: 'CLICK_TEXT', val: J({ text: '登録', area: 'WINDOW', nth: '1' }) },
       { cmd: 'STR_OP', val: J({ name: '番号', src: '{{$読んだ}}', op: 'REGEX_EXTRACT', a: 'R\\d{2}-\\d{4}', b: '' }) },
       { cmd: 'RECORD', val: J({ name: '番号', value: '{{$番号}}' }) }
     ], [['x', '1']]);
@@ -600,7 +600,7 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
   // 31) schedules: due logic, unattended run, Windows task command line
   {
     const { R, ctx } = makeCtx();
-    R(`appData = normalizeData({ version: 26, macros: [{ id: 'm1', name: '日次', steps: [{ cmd: 'TEXT', val: 'scheduled' }] }] }); currentMacroIndex = 0;`);
+    R(`appData = normalizeData({ version: 27, macros: [{ id: 'm1', name: '日次', steps: [{ cmd: 'TEXT', val: 'scheduled' }] }] }); currentMacroIndex = 0;`);
     const due = (time, repeat, now, lastRun, date) => R(`scheduleDue({ enabled: true, time: '${time}', repeat: '${repeat}', date: '${date || ''}', lastRun: '${lastRun || ''}' }, new Date(${now}))`);
     assert.strictEqual(due('18:30', 'DAILY', '2026,9,7,18,31'), true);
     assert.strictEqual(due('18:30', 'DAILY', '2026,9,7,18,45'), false);
@@ -624,6 +624,35 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     R(`appData.macros[0].steps = [{ cmd: 'CSV', val: '1', label: 'x' }]; csvState = { path: '', encoding: '', records: [], header: null, rows: [] }; startRun({ unattended: true });`);
     assert.strictEqual(asked, false); assert.strictEqual(R('isRunning()'), false);
     console.log('ok 31: schedules');
+  }
+  // 32) command set: every command is in the palette or is a block marker; commas in inserted
+  //     window titles and file names stay inside their setting; COPY fills a variable
+  {
+    const { R, ctx, keys } = makeCtx();
+    const loose = JSON.parse(R(`(function () {
+      var listed = {}, out = [], g, i, c;
+      for (g = 0; g < PALETTE_GROUPS.length; g++) { for (i = 0; i < PALETTE_GROUPS[g].cmds.length; i++) { listed[PALETTE_GROUPS[g].cmds[i]] = true; } }
+      for (c in COMMAND_DEFS) { if (!listed[c] && !isBlockEnd(c) && c !== 'CATCH') { out.push(c); } if (!COMMAND_DEFS[c].category) { out.push(c + ':no category'); } }
+      return JSON.stringify(out);
+    })()`));
+    assert.deepStrictEqual(loose, []);
+    const J = o => JSON.stringify(o);
+    const seen = [];
+    ctx.__activate = t => { seen.push(t); return !/エラー/.test(t); };
+    R(`window.clipboardData.getData = function () { return 'R08-0001\\r\\n'; };`);
+    macro(R, [
+      { cmd: 'WAIT_FOR', val: J({ title: '{{氏名}}', key: '{ENTER}', timeout: '5' }) },
+      { cmd: 'WINDOW_CHECK', val: J({ title: 'エラー,{{氏名}}', key: '', mode: 'SKIP' }) },
+      { cmd: 'COPY', val: '番号' },
+      { cmd: 'TEXT', val: '{{$番号}}' }
+    ], [['山田,太郎', '1']]);
+    R('startRun()');
+    await until(() => !R('isRunning()'), 8000);
+    assert.ok(seen.includes('山田,太郎') && seen.includes('エラー,山田,太郎'), seen.join('|'));
+    assert.ok(keys.includes('{ENTER}'));
+    assert.strictEqual(R('resultRows[0].values["番号"]'), 'R08-0001');
+    assert.strictEqual(R('resultRows[0].status'), '完了');
+    console.log('ok 32: command set, JSON settings and COPY variables');
   }
   console.log('ALL RUN TESTS PASSED');
   process.exit(0);
