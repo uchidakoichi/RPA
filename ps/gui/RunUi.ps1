@@ -223,9 +223,9 @@ function New-FujiWinIo {
         Start = { param($CommandLine) Start-FujiCommandLine -CommandLine $CommandLine }
         ClickAt = { param($X, $Y, $Kind) Invoke-FujiMouseClick -X $X -Y $Y -Kind $Kind }
         Screenshot = { param($Path, $Full) Save-FujiScreenshot -Path $Path -Full $Full }
-        ClickName = { throw (Get-FujiText 'run.notYet' ((Get-FujiCommandDef 'CLICK_NAME')['title'])) }
-        ClickImage = { throw (Get-FujiText 'run.notYet' ((Get-FujiCommandDef 'CLICK_IMG')['title'])) }
-        Ocr = { throw (Get-FujiText 'run.notYet' ((Get-FujiCommandDef 'READ_TEXT')['title'])) }
+        ClickName = { param($Name, $WindowTitle) Invoke-FujiNameClick -Name $Name -WindowTitle $WindowTitle }
+        ClickImage = { param($Path, $Threshold) Invoke-FujiImageClick -Path $Path -Threshold $Threshold }
+        Ocr = { param($Settings, $Find, $Nth) Invoke-FujiOcr -Settings $Settings -Find $Find -Nth $Nth }
         Excel = { param($Request) Invoke-FujiExcelRequest -Request $Request }
         Outlook = { param($Mail) Send-FujiOutlookMail -Mail $Mail }
         OpenUrl = { param($Url) Start-Process -FilePath $Url }
@@ -238,7 +238,7 @@ function New-FujiWinIo {
         Watch = { Update-FujiWatchPanel }
         Alarm = { Invoke-FujiAlarm }
         Notify = { Invoke-FujiNotify }
-        EndRun = { Close-FujiRunExcel }
+        EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
     }
 }
 

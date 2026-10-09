@@ -686,6 +686,35 @@ Assert-True ($res.Records[1][0] -eq '=A1' -and $res.Records[1][1] -eq "'=HYPERLI
 foreach ($v in @('@x', '+x', "`tx", '-x')) { Assert-Equal ("'" + $v) (ConvertTo-FujiSafeCsvValue $v) ('safe CSV value ' + [int][char]$v[0]) }
 Assert-Equal '+1.5' (ConvertTo-FujiSafeCsvValue '+1.5') 'safe CSV value: signed number kept'
 
+# image matching (the compiled matcher) and OCR results
+[void](Initialize-FujiImageMatch)
+Assert-True (-not (Initialize-FujiImageMatch)) 'matcher compiled once'
+$sw = 40; $sh = 30
+$screen = New-Object -TypeName 'int[]' -ArgumentList ($sw * $sh)
+for ($i = 0; $i -lt $screen.Length; $i++) { $screen[$i] = [int](0xFF000000 -bor (($i * 2654435761) -band 0xFFFFFF)) }
+$tw = 6; $th = 5
+$tpl = New-Object -TypeName 'int[]' -ArgumentList ($tw * $th)
+for ($y = 0; $y -lt $th; $y++) { for ($x = 0; $x -lt $tw; $x++) { $tpl[$y * $tw + $x] = $screen[(12 + $y) * $sw + 21 + $x] } }
+$hit = Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 0.9 -Left 100 -Top 200
+Assert-True ($hit.X -eq 124 -and $hit.Y -eq 214 -and $hit.Score -eq 1.0) 'image match: exact place, centre, screen offset'
+$tpl[0] = 0x00FFFFFF
+$tpl[1] = [int](0xFF000000 -bor ((($tpl[1] -band 0xFFFFFF) -bxor 0x808080)))
+$hit = Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 0.9
+Assert-True ($hit.X -eq 24 -and $hit.Y -eq 14 -and [Math]::Abs($hit.Score - (28 / 29.0)) -lt 0.001) 'image match: transparent pixel ignored, one wrong pixel lowers the score'
+Assert-True ($null -eq (Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 1.0)) 'image match: nothing at 100%'
+$line1 = @{ Words = @(@{ Text = 'Save'; X = 0; Y = 0; W = 40; H = 10 }, @{ Text = 'all'; X = 50; Y = 0; W = 30; H = 10 }) }
+$jp = -join ([char[]](0x767B, 0x9332))
+$line2 = @{ Words = @(@{ Text = [string]$jp[0]; X = 10; Y = 40; W = 20; H = 20 }, @{ Text = [string]$jp[1]; X = 30; Y = 40; W = 20; H = 20 }, @{ Text = ([string][char]0xFF2F + [char]0xFF2B); X = 60; Y = 40; W = 20; H = 20 }) }
+Assert-Equal ("Save all`r`n" + $jp + [char]0xFF2F + [char]0xFF2B) (ConvertTo-FujiOcrText -Lines @($line1, $line2)) 'OCR text: a space only where a word is ASCII on either side'
+$p = Find-FujiOcrText -Lines @($line1, $line2) -Find $jp -OffsetX 100 -OffsetY 200 -Scale 2
+Assert-True ($p.X -eq 115 -and $p.Y -eq 225) 'OCR find: text across words, back to screen pixels'
+Assert-True ((Find-FujiOcrText -Lines @($line1, $line2) -Find 'OK').X -eq 70) 'OCR find: full-width letters match half-width (case kept)'
+Assert-True ((Find-FujiOcrText -Lines @($line1, $line2) -Find 'eal').X -eq 40 -and $null -eq (Find-FujiOcrText -Lines @($line1, $line2) -Find 'Save' -Nth 2)) 'OCR find: spaces ignored, Nth place'
+$scr = @{ X = 0; Y = 0; Width = 1920; Height = 1080 }
+Assert-True ((Get-FujiOcrRect -Settings @{ area = 'RECT'; x = '1'; y = '2'; w = '3'; h = '4' } -Screen $scr).Height -eq 4 -and (Get-FujiOcrRect -Settings @{ area = 'WINDOW' } -Screen $scr).Width -eq 1920) 'OCR rect: given, or whole screen without a window'
+Assert-Equal 2.0 (Get-FujiOcrScale -Width 300 -Height 100 -MaxDimension 2600) 'OCR scale: up to 2x'
+Assert-Equal 1.3 (Get-FujiOcrScale -Width 2000 -Height 100 -MaxDimension 2600) 'OCR scale: within the engine limit'
+
 # rows to run
 $rr = Get-FujiRunRow -CsvRows @([string[]]@('a'), [string[]]@(''), [string[]]@('c'), [string[]]@('d')) -StartText ([string][char]0xFF12) -EndText '3'
 Assert-True ($rr.Rows.Count -eq 1 -and $rr.Rows[0].No -eq 3 -and $rr.Logs.Count -eq 1) 'run rows: range (full-width digits), blank row skipped'
