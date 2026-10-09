@@ -1,6 +1,6 @@
-# ふじキュン♡のRPAマクロビルダー PowerShell版（移植中）
+# ふじキュン♡のRPAマクロビルダー PowerShell版
 
-HTA 版（`fujikyun_rpa_builder.hta`）を、Windows PowerShell 5.1 ＋ Windows Forms へ移植しています。完成するまで HTA 版はそのまま使えます。
+HTA 版（`fujikyun_rpa_builder.hta`）を、Windows PowerShell 5.1 ＋ Windows Forms へ移植したものです。使う人向けの説明は [docs/src/powershell.md](../docs/src/powershell.md) にあります。HTA 版もそのまま使えます。
 
 ## 方針
 
