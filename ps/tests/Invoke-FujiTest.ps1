@@ -466,6 +466,11 @@ Assert-Equal '0,1077,10,2' ('{0},{1},{2},{3}' -f $cr.X, $cr.Y, $cr.Width, $cr.He
 $cr = Get-FujiCaptureRect -X -100 -Y 10 -Width 60 -Height 30 -Screen @{ X = -1920; Y = 0; Width = 3840; Height = 1080 }
 Assert-Equal '-130,0,60,20' ('{0},{1},{2},{3}' -f $cr.X, $cr.Y, $cr.Width, $cr.Height) 'capture rect on a left monitor'
 
+# ----------------------------------------------------------------- Windows API declarations (built, not called here)
+$native = Get-FujiNativeType
+Assert-True ($null -ne $native.GetMethod('SetProcessDPIAware') -and $null -ne $native.GetMethod('SendMessage')) 'native functions declared without a compiler'
+Assert-True ([object]::ReferenceEquals($native, (Get-FujiNativeType))) 'native type made once'
+
 # ----------------------------------------------------------------- source rules
 # The app file handed out must be the current build of the sources
 $built = & (Join-Path $psRoot 'build/Build-FujiBundle.ps1') -PassThru

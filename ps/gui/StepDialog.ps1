@@ -73,8 +73,9 @@ function Show-FujiStepDialog {
 
     $form.Add_Shown({
             # Grey example text inside empty one-line boxes (EM_SETCUEBANNER)
+            $native = Get-FujiNativeType
             foreach ($cue in $script:StepDlg.Cues) {
-                [void][FujiUi.Native]::SendMessage($cue[0].Handle, $script:EmSetCueBanner, [IntPtr]1, [string]$cue[1])
+                [void]$native::SendMessage($cue[0].Handle, $script:EmSetCueBanner, [IntPtr]1, [string]$cue[1])
             }
             Update-FujiImagePreview -Opening
         })
@@ -106,9 +107,15 @@ function New-FujiHintLabel {
 # A drop-down that fills Target: Mode 'set' replaces the text, 'append' adds to it
 function New-FujiHelperCombo {
     param([string]$First, [object[]]$Choices, [object[]]$Values, $Target, [string]$Mode, [int]$Width)
-    $items = @($First) + @($Choices)
-    $c = New-FujiComboBox -Items $items -Width $Width
-    $c.Tag = @{ Values = (@('') + @($Values)); Target = $Target; Mode = $Mode }
+    # Lists, not "@(..) + @(..)": that form failed on Windows PowerShell 5.1 ("argument types do not match")
+    $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $items.Add($First)
+    foreach ($x in $Choices) { $items.Add($x) }
+    $vals = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $vals.Add('')
+    foreach ($x in $Values) { $vals.Add($x) }
+    $c = New-FujiComboBox -Items $items.ToArray() -Width $Width
+    $c.Tag = @{ Values = $vals.ToArray(); Target = $Target; Mode = $Mode }
     $c.SelectedIndex = 0
     $c.Add_SelectedIndexChanged({
             $box = $this
@@ -238,16 +245,18 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($d.Status['rect'])
         }
         'macroselect' {
-            $labels = @(Get-FujiText 'gui.chooseMacro')
-            $values = @('')
+            $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            $labels.Add((Get-FujiText 'gui.chooseMacro'))
+            $values.Add('')
             for ($i = 0; $i -lt $script:Ed.Data.macros.Count; $i++) {
                 $m = $script:Ed.Data.macros[$i]
                 $text = [string]$m.name
                 if ($i -eq $script:Ed.MacroIndex) { $text += Get-FujiText 'gui.thisMacro' }
-                $labels += $text
-                $values += [string]$m.id
+                $labels.Add($text)
+                $values.Add([string]$m.id)
             }
-            $inputControl = New-FujiComboBox -Items $labels -Values $values -Width ([Math]::Min($Width, (Get-FujiScaled 460)))
+            $inputControl = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width ([Math]::Min($Width, (Get-FujiScaled 460)))
             Set-FujiComboValue -Combo $inputControl -Value $Value
             [void]$row.Controls.Add($inputControl)
         }

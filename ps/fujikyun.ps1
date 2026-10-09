@@ -21,6 +21,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $here = $PSScriptRoot
+$script:StartWatch = [System.Diagnostics.Stopwatch]::StartNew()
+$script:StartMarks = New-Object -TypeName 'System.Collections.Generic.List[double]'
 $textReady = $false
 try {
     # ===== src/Commands.ps1 =====
@@ -1849,6 +1851,39 @@ function ConvertTo-FujiJson {
     return (ConvertTo-FujiJsonString -Value ([string]$InputObject))
 }
 
+# ===== src/Native.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Windows API functions without a C# compiler
+#  Add-Type with C# source starts csc.exe on Windows PowerShell 5.1, which takes seconds (more
+#  when antivirus checks it) on every start. The same declarations are made here at run time
+#  with System.Reflection.Emit (DefinePInvokeMethod): nothing is compiled or written to disk.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiNative = $null
+
+# The type holding the functions: [type] with static methods, e.g. ($t)::SetProcessDPIAware()
+function Get-FujiNativeType {
+    if ($null -ne $script:FujiNative) { return $script:FujiNative }
+    $name = New-Object -TypeName System.Reflection.AssemblyName -ArgumentList 'FujiNative'
+    $asm = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($name, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
+    $module = $asm.DefineDynamicModule('FujiNative')
+    $tb = $module.DefineType('FujiNative.User32', [System.Reflection.TypeAttributes]'Public, Class, Abstract, Sealed')
+    # name, return type, parameter types, character set
+    $declarations = @(
+        @('SetProcessDPIAware', [bool], [type[]]@(), [System.Runtime.InteropServices.CharSet]::Auto),
+        @('SendMessage', [IntPtr], [type[]]@([IntPtr], [int], [IntPtr], [string]), [System.Runtime.InteropServices.CharSet]::Unicode)
+    )
+    foreach ($d in $declarations) {
+        $m = $tb.DefinePInvokeMethod($d[0], 'user32.dll',
+            [System.Reflection.MethodAttributes]'Public, Static, PinvokeImpl, HideBySig',
+            [System.Reflection.CallingConventions]::Standard, $d[1], $d[2],
+            [System.Runtime.InteropServices.CallingConvention]::Winapi, $d[3])
+        $m.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+    }
+    $script:FujiNative = $tb.CreateType()
+    return $script:FujiNative
+}
+
 # ===== src/Placeholders.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Placeholders  {{1}} {{column}} {{$variable}} {{ROW}} {{ROW+1}} {{TODAY}} {{WAREKI}} ...
@@ -2339,32 +2374,37 @@ function Get-FujiScaled {
 function Initialize-FujiUi {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    if (-not ('FujiUi.Native' -as [type])) {
-        Add-Type -Namespace 'FujiUi' -Name 'Native' -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
-'@
-    }
     # Real pixels everywhere (screen capture and clicks use the same coordinates as the screen)
-    [void][FujiUi.Native]::SetProcessDPIAware()
+    $native = Get-FujiNativeType
+    [void]$native::SetProcessDPIAware()
     [System.Windows.Forms.Application]::EnableVisualStyles()
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
     try { $script:Ui.Scale = $g.DpiX / 96.0 } finally { $g.Dispose() }
-    $family = 'Segoe UI'
-    $installed = @([System.Drawing.FontFamily]::Families | ForEach-Object { $_.Name })
-    foreach ($name in @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic')) {
-        if ($installed -contains $name) { $family = $name; break }
-    }
+    $family = Select-FujiFontFamily -Names @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic') -Default 'Segoe UI'
     $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 10
     $script:Ui.BoldFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Bold)
     $script:Ui.StrikeFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Strikeout)
     $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 9
-    $mono = 'Consolas'
-    if ($installed -contains 'BIZ UDGothic') { $mono = 'BIZ UDGothic' } elseif ($installed -contains 'MS Gothic') { $mono = 'MS Gothic' }
+    $mono = Select-FujiFontFamily -Names @('BIZ UDGothic', 'MS Gothic') -Default 'Consolas'
     $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, 9.5
     $script:Ui.ToolTip = New-Object -TypeName System.Windows.Forms.ToolTip
     $script:Ui.ToolTip.AutoPopDelay = 20000
+}
+
+# The first installed font of Names (asks for each one: listing every font of the PC is slow)
+function Select-FujiFontFamily {
+    param([string[]]$Names, [string]$Default)
+    foreach ($n in $Names) {
+        try {
+            $f = New-Object -TypeName System.Drawing.FontFamily -ArgumentList $n
+            $f.Dispose()
+            return $n
+        } catch {
+            $null = $_
+        }
+    }
+    return $Default
 }
 
 # Runs an event handler body; an unexpected error goes to the log instead of closing the window
@@ -2662,12 +2702,25 @@ function Show-FujiMainForm {
                 foreach ($entry in $script:LogBuffer) { Add-FujiLogLine -Box $script:Ui.Log -Line $entry[0] -Level $entry[1] }
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
+                Write-FujiStartupTime
                 if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
                 $script:Ui.List.Focus()
             }
         })
     Update-FujiAll
     [System.Windows.Forms.Application]::Run($form)
+}
+
+# How long the start took: from the PowerShell process start (includes reading this script),
+# and the parts measured inside the script (StartMarks: texts and commands, window setup, data)
+function Write-FujiStartupTime {
+    $total = ((Get-Date) - (Get-Process -Id $PID).StartTime).TotalSeconds
+    $m = $script:StartMarks
+    $w = $script:StartWatch.Elapsed.TotalSeconds
+    if ($m.Count -lt 3) { return }
+    $f = '0.0'
+    $before = $total - $w
+    Write-FujiUiLog -Message (Get-FujiText 'gui.startupTime' $total.ToString($f) $before.ToString($f) $m[0].ToString($f) ($m[1] - $m[0]).ToString($f) ($m[2] - $m[1]).ToString($f) ($w - $m[2]).ToString($f))
 }
 
 # ----------------------------------------------------------------- top panel
@@ -3314,8 +3367,17 @@ function Select-FujiWindowUi {
 }
 
 # ----------------------------------------------------------------- templates
+# Read on first use (a 200 KB file: reading it at start made the window slow to open)
+$script:Templates = $null
+function Get-FujiTemplateData {
+    if ($null -eq $script:Templates) {
+        $script:Templates = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path (Join-Path $script:Ed.Directory 'fujikyun_templates.json'))
+    }
+    return $script:Templates
+}
+
 function Show-FujiTemplateGallery {
-    $all = $script:Templates['templates']
+    $all = (Get-FujiTemplateData)['templates']
     $f = New-FujiDialogForm -Title (Get-FujiText 'gui.templateTitle' $all.Count) -Width (Get-FujiScaled 1000) -Height (Get-FujiScaled 640)
     $f.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 600), (Get-FujiScaled 400)
     $topRow = New-FujiFlow
@@ -3324,8 +3386,10 @@ function Show-FujiTemplateGallery {
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.templateHelp') -MaxWidth (Get-FujiScaled 960)))
     [void]$topRow.SetFlowBreak($topRow.Controls[0], $true)
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.category')))
-    $cats = @(Get-FujiText 'gui.allCategories') + @($script:Templates['categories'])
-    $combo = New-FujiComboBox -Items $cats -Values $cats -Width (Get-FujiScaled 280)
+    $cats = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $cats.Add((Get-FujiText 'gui.allCategories'))
+    foreach ($c in (Get-FujiTemplateData)['categories']) { $cats.Add([string]$c) }
+    $combo = New-FujiComboBox -Items $cats.ToArray() -Values $cats.ToArray() -Width (Get-FujiScaled 280)
     [void]$topRow.Controls.Add($combo)
     $split = New-Object -TypeName System.Windows.Forms.SplitContainer
     # A new SplitContainer is 150 px wide: size it before placing the splitter
@@ -3376,7 +3440,7 @@ function Update-FujiTemplateList {
     $gal.Shown.Clear()
     $gal.List.BeginUpdate()
     $gal.List.Items.Clear()
-    foreach ($t in $script:Templates['templates']) {
+    foreach ($t in (Get-FujiTemplateData)['templates']) {
         if ($cat -and $t['category'] -ne $cat) { continue }
         $gal.Shown.Add($t)
         [void]$gal.List.Items.Add((Get-FujiText 'gui.templateItem' (Get-FujiText ('gui.levels.' + $t['level'])) $t['name']))
@@ -3640,8 +3704,9 @@ function Show-FujiStepDialog {
 
     $form.Add_Shown({
             # Grey example text inside empty one-line boxes (EM_SETCUEBANNER)
+            $native = Get-FujiNativeType
             foreach ($cue in $script:StepDlg.Cues) {
-                [void][FujiUi.Native]::SendMessage($cue[0].Handle, $script:EmSetCueBanner, [IntPtr]1, [string]$cue[1])
+                [void]$native::SendMessage($cue[0].Handle, $script:EmSetCueBanner, [IntPtr]1, [string]$cue[1])
             }
             Update-FujiImagePreview -Opening
         })
@@ -3673,9 +3738,15 @@ function New-FujiHintLabel {
 # A drop-down that fills Target: Mode 'set' replaces the text, 'append' adds to it
 function New-FujiHelperCombo {
     param([string]$First, [object[]]$Choices, [object[]]$Values, $Target, [string]$Mode, [int]$Width)
-    $items = @($First) + @($Choices)
-    $c = New-FujiComboBox -Items $items -Width $Width
-    $c.Tag = @{ Values = (@('') + @($Values)); Target = $Target; Mode = $Mode }
+    # Lists, not "@(..) + @(..)": that form failed on Windows PowerShell 5.1 ("argument types do not match")
+    $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $items.Add($First)
+    foreach ($x in $Choices) { $items.Add($x) }
+    $vals = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $vals.Add('')
+    foreach ($x in $Values) { $vals.Add($x) }
+    $c = New-FujiComboBox -Items $items.ToArray() -Width $Width
+    $c.Tag = @{ Values = $vals.ToArray(); Target = $Target; Mode = $Mode }
     $c.SelectedIndex = 0
     $c.Add_SelectedIndexChanged({
             $box = $this
@@ -3805,16 +3876,18 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($d.Status['rect'])
         }
         'macroselect' {
-            $labels = @(Get-FujiText 'gui.chooseMacro')
-            $values = @('')
+            $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            $labels.Add((Get-FujiText 'gui.chooseMacro'))
+            $values.Add('')
             for ($i = 0; $i -lt $script:Ed.Data.macros.Count; $i++) {
                 $m = $script:Ed.Data.macros[$i]
                 $text = [string]$m.name
                 if ($i -eq $script:Ed.MacroIndex) { $text += Get-FujiText 'gui.thisMacro' }
-                $labels += $text
-                $values += [string]$m.id
+                $labels.Add($text)
+                $values.Add([string]$m.id)
             }
-            $inputControl = New-FujiComboBox -Items $labels -Values $values -Width ([Math]::Min($Width, (Get-FujiScaled 460)))
+            $inputControl = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width ([Math]::Min($Width, (Get-FujiScaled 460)))
             Set-FujiComboValue -Combo $inputControl -Value $Value
             [void]$row.Controls.Add($inputControl)
         }
@@ -3999,8 +4072,9 @@ function Save-FujiCursorImage {
     Import-FujiText -Path (Join-Path $here 'fujikyun_ja.json')
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
-    $script:Templates = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path (Join-Path $here 'fujikyun_templates.json'))
+    $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     Initialize-FujiUi
+    $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
@@ -4009,6 +4083,7 @@ function Save-FujiCursorImage {
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
         (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
     }
+    $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     Show-FujiMainForm
 } catch {
     $detail = $_.Exception.Message

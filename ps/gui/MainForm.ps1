@@ -44,12 +44,25 @@ function Show-FujiMainForm {
                 foreach ($entry in $script:LogBuffer) { Add-FujiLogLine -Box $script:Ui.Log -Line $entry[0] -Level $entry[1] }
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
+                Write-FujiStartupTime
                 if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
                 $script:Ui.List.Focus()
             }
         })
     Update-FujiAll
     [System.Windows.Forms.Application]::Run($form)
+}
+
+# How long the start took: from the PowerShell process start (includes reading this script),
+# and the parts measured inside the script (StartMarks: texts and commands, window setup, data)
+function Write-FujiStartupTime {
+    $total = ((Get-Date) - (Get-Process -Id $PID).StartTime).TotalSeconds
+    $m = $script:StartMarks
+    $w = $script:StartWatch.Elapsed.TotalSeconds
+    if ($m.Count -lt 3) { return }
+    $f = '0.0'
+    $before = $total - $w
+    Write-FujiUiLog -Message (Get-FujiText 'gui.startupTime' $total.ToString($f) $before.ToString($f) $m[0].ToString($f) ($m[1] - $m[0]).ToString($f) ($m[2] - $m[1]).ToString($f) ($w - $m[2]).ToString($f))
 }
 
 # ----------------------------------------------------------------- top panel
@@ -696,8 +709,17 @@ function Select-FujiWindowUi {
 }
 
 # ----------------------------------------------------------------- templates
+# Read on first use (a 200 KB file: reading it at start made the window slow to open)
+$script:Templates = $null
+function Get-FujiTemplateData {
+    if ($null -eq $script:Templates) {
+        $script:Templates = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path (Join-Path $script:Ed.Directory 'fujikyun_templates.json'))
+    }
+    return $script:Templates
+}
+
 function Show-FujiTemplateGallery {
-    $all = $script:Templates['templates']
+    $all = (Get-FujiTemplateData)['templates']
     $f = New-FujiDialogForm -Title (Get-FujiText 'gui.templateTitle' $all.Count) -Width (Get-FujiScaled 1000) -Height (Get-FujiScaled 640)
     $f.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 600), (Get-FujiScaled 400)
     $topRow = New-FujiFlow
@@ -706,8 +728,10 @@ function Show-FujiTemplateGallery {
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.templateHelp') -MaxWidth (Get-FujiScaled 960)))
     [void]$topRow.SetFlowBreak($topRow.Controls[0], $true)
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.category')))
-    $cats = @(Get-FujiText 'gui.allCategories') + @($script:Templates['categories'])
-    $combo = New-FujiComboBox -Items $cats -Values $cats -Width (Get-FujiScaled 280)
+    $cats = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $cats.Add((Get-FujiText 'gui.allCategories'))
+    foreach ($c in (Get-FujiTemplateData)['categories']) { $cats.Add([string]$c) }
+    $combo = New-FujiComboBox -Items $cats.ToArray() -Values $cats.ToArray() -Width (Get-FujiScaled 280)
     [void]$topRow.Controls.Add($combo)
     $split = New-Object -TypeName System.Windows.Forms.SplitContainer
     # A new SplitContainer is 150 px wide: size it before placing the splitter
@@ -758,7 +782,7 @@ function Update-FujiTemplateList {
     $gal.Shown.Clear()
     $gal.List.BeginUpdate()
     $gal.List.Items.Clear()
-    foreach ($t in $script:Templates['templates']) {
+    foreach ($t in (Get-FujiTemplateData)['templates']) {
         if ($cat -and $t['category'] -ne $cat) { continue }
         $gal.Shown.Add($t)
         [void]$gal.List.Items.Add((Get-FujiText 'gui.templateItem' (Get-FujiText ('gui.levels.' + $t['level'])) $t['name']))

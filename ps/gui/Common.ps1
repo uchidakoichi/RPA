@@ -30,32 +30,37 @@ function Get-FujiScaled {
 function Initialize-FujiUi {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    if (-not ('FujiUi.Native' -as [type])) {
-        Add-Type -Namespace 'FujiUi' -Name 'Native' -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
-'@
-    }
     # Real pixels everywhere (screen capture and clicks use the same coordinates as the screen)
-    [void][FujiUi.Native]::SetProcessDPIAware()
+    $native = Get-FujiNativeType
+    [void]$native::SetProcessDPIAware()
     [System.Windows.Forms.Application]::EnableVisualStyles()
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
     try { $script:Ui.Scale = $g.DpiX / 96.0 } finally { $g.Dispose() }
-    $family = 'Segoe UI'
-    $installed = @([System.Drawing.FontFamily]::Families | ForEach-Object { $_.Name })
-    foreach ($name in @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic')) {
-        if ($installed -contains $name) { $family = $name; break }
-    }
+    $family = Select-FujiFontFamily -Names @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic') -Default 'Segoe UI'
     $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 10
     $script:Ui.BoldFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Bold)
     $script:Ui.StrikeFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Strikeout)
     $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 9
-    $mono = 'Consolas'
-    if ($installed -contains 'BIZ UDGothic') { $mono = 'BIZ UDGothic' } elseif ($installed -contains 'MS Gothic') { $mono = 'MS Gothic' }
+    $mono = Select-FujiFontFamily -Names @('BIZ UDGothic', 'MS Gothic') -Default 'Consolas'
     $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, 9.5
     $script:Ui.ToolTip = New-Object -TypeName System.Windows.Forms.ToolTip
     $script:Ui.ToolTip.AutoPopDelay = 20000
+}
+
+# The first installed font of Names (asks for each one: listing every font of the PC is slow)
+function Select-FujiFontFamily {
+    param([string[]]$Names, [string]$Default)
+    foreach ($n in $Names) {
+        try {
+            $f = New-Object -TypeName System.Drawing.FontFamily -ArgumentList $n
+            $f.Dispose()
+            return $n
+        } catch {
+            $null = $_
+        }
+    }
+    return $Default
 }
 
 # Runs an event handler body; an unexpected error goes to the log instead of closing the window
