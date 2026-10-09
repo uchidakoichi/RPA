@@ -482,7 +482,7 @@ function Get-FujiTemplateStep {
 function ConvertTo-FujiTemplateCsvText {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
     $rows = @()
-    foreach ($r in $Template['csv']) { $rows += , ([string[]]@($r)) }
+    foreach ($r in $Template['csv']) { $rows += , ([string[]]$r.ToArray()) }
     return (ConvertTo-FujiCsvText -Rows $rows)
 }
 
@@ -877,8 +877,11 @@ function Import-FujiEditorCsv {
     $csv = $Editor.Csv
     $csv.Path = $p
     $csv.Encoding = $res.Encoding
-    $csv.Records = @($parsed.Records)
-    $csv.Warnings = @($parsed.Warnings)
+    # Arrays, not the parser's List: "@(...)" around a generic List fails once the same line has
+    # run often enough to be compiled and then meets an empty List (PowerShell 5.1 and 7:
+    # "Argument types do not match"), so lists are turned into arrays with ToArray()
+    $csv.Records = $parsed.Records.ToArray()
+    $csv.Warnings = $parsed.Warnings
     $forced = $false
     if (-not $HasHeader -and $csv.Records.Count -gt 0) {
         $marker = Get-FujiText 'editor.csv.resultHeaderName'

@@ -72,3 +72,13 @@ function ConvertTo-FujiCsvText {
     $lines = foreach ($r in $Rows) { (@($r) | ForEach-Object { ConvertTo-FujiCsvField -Value ([string]$_) }) -join ',' }
     return ((@($lines) -join "`r`n") + "`r`n")
 }
+
+# A value the app adds to an output CSV (recorded screen text, notes, errors) that Excel would run as
+# a formula (= + - @, tab, CR at the start) gets a leading apostrophe. Plain numbers such as -5 stay.
+# The original CSV columns are never changed: an error-row CSV is read back to re-run those rows.
+function ConvertTo-FujiSafeCsvValue {
+    param([AllowNull()][AllowEmptyString()][string]$Value)
+    $v = [string]$Value
+    if ($v -match '^[=+\-@\t\r]' -and $v -notmatch '^[+\-]?[0-9]+(\.[0-9]+)?$') { return "'" + $v }
+    return $v
+}
