@@ -41,6 +41,7 @@ function Get-FujiText {
     }
     if ($null -eq $node) { return $Key }
     if ($node -is [System.Array]) { return , $node }
+    if ($node -is [System.Management.Automation.PSCustomObject]) { return $node }
     if ($FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
     return [string]$node
 }

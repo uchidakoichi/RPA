@@ -34,26 +34,20 @@ function ConvertFrom-FujiJson {
     return $value
 }
 
+$script:FujiJsonEscape = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["\\\x00-\x1F]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+$script:FujiJsonEscapes = @{ [char]0x22 = '\"'; [char]0x5C = '\\'; [char]0x08 = '\b'; [char]0x0C = '\f'; [char]0x0A = '\n'; [char]0x0D = '\r'; [char]0x09 = '\t' }
+
+# JSON.stringify's escaping: quote, backslash and control characters only (text stays readable)
 function ConvertTo-FujiJsonString {
     param([AllowNull()][AllowEmptyString()][string]$Value)
-    $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($Value.Length + 2)
-    [void]$sb.Append('"')
-    foreach ($c in $Value.ToCharArray()) {
-        switch ([int]$c) {
-            0x22 { [void]$sb.Append('\"') }
-            0x5C { [void]$sb.Append('\\') }
-            0x08 { [void]$sb.Append('\b') }
-            0x0C { [void]$sb.Append('\f') }
-            0x0A { [void]$sb.Append('\n') }
-            0x0D { [void]$sb.Append('\r') }
-            0x09 { [void]$sb.Append('\t') }
-            default {
-                if ([int]$c -lt 0x20) { [void]$sb.Append(('\u{0:x4}' -f [int]$c)) } else { [void]$sb.Append($c) }
-            }
-        }
-    }
-    [void]$sb.Append('"')
-    return $sb.ToString()
+    if (-not $script:FujiJsonEscape.IsMatch([string]$Value)) { return '"' + $Value + '"' }
+    $escaped = $script:FujiJsonEscape.Replace($Value, {
+        param($m)
+        $c = $m.Value[0]
+        if ($script:FujiJsonEscapes.ContainsKey($c)) { return $script:FujiJsonEscapes[$c] }
+        return ('\u{0:x4}' -f [int]$c)
+    })
+    return '"' + $escaped + '"'
 }
 
 # Indent: spaces per level (0 = one line), like JSON.stringify(value, null, indent)

@@ -64,6 +64,7 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 | `tools/hta_context.js` | 保守用: 上の各ツールが HTA のスクリプトを読み込むための共通部品 |
 | `ps/` | PowerShell 版（移植中。[ps/README.md](ps/README.md)） |
 | `tools/make_ps_golden.js` | 保守用: PowerShell 版のテストに使う期待値を HTA 版の関数から作る |
+| `tools/export_ps_templates.js` | 保守用: HTA 版のテンプレートを PowerShell 版用の JSON に書き出す |
 | `RPA.md` | 要件定義書 |
 
 ## ライセンス

@@ -19,6 +19,8 @@ $ErrorActionPreference = 'Stop'
 $psRoot = Split-Path -Path $PSScriptRoot -Parent
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1' | Sort-Object Name) { . $f.FullName }
 Import-FujiText -Path (Join-Path $psRoot 'fujikyun_ja.json')
+Import-FujiCommand -Path (Join-Path $psRoot 'fujikyun_commands.json')
+$templates = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path (Join-Path $psRoot 'fujikyun_templates.json'))
 $golden = Read-FujiUtf8File -Path (Join-Path $PSScriptRoot 'golden.json') | ConvertFrom-Json
 
 $script:failures = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -178,10 +180,80 @@ $text = ConvertTo-FujiCsvText -Rows $rows
 Assert-Equal "a,`"b,c`",`"d`"`"e`",`"f`r`ng`",`r`n" $text 'csv write'
 Assert-Equal @(, @('a', 'b,c', "d`"e", "f`r`ng", '')) @(foreach ($rec in (ConvertFrom-FujiCsv -Text $text).Records) { , @($rec) }) 'csv write/read round trip'
 
+# ----------------------------------------------------------------- commands and templates
+$script:FujiCsvHeaderNameOf = { param($Column) $h = @($golden.fixture.header); if ($Column -ge 1 -and $Column -le $h.Count) { ([string]$h[$Column - 1]).Trim() } else { '' } }
+$labelsById = @{}
+foreach ($t in $golden.templateLabels) {
+    $ps = Get-Golden $t 'ps'
+    if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
+}
+Assert-Equal 67 $templates['templates'].Count 'template count'
+foreach ($t in $templates['templates']) {
+    $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($item in $t['steps']) {
+        $step = New-FujiStep -Cmd $item[0] -Value ([string]$item[1])
+        if ($item.Count -gt 2) { foreach ($k in $item[2].Keys) { $step[$k] = $item[2][$k] } }
+        $steps.Add($step)
+        $settings = ConvertFrom-FujiStepValue -Cmd $step.cmd -Value $step.val
+        $err = Test-FujiStepSetting -Cmd $step.cmd -Settings $settings
+        Assert-Equal '' $err ('{0}: {1} settings "{2}"' -f $t['id'], $step.cmd, $step.val)
+        $back = ConvertTo-FujiStepValue -Cmd $step.cmd -Settings $settings -MacroName ([string]$settings['name'])
+        Assert-Equal $step.val $back ('{0}: {1} value round trip' -f $t['id'], $step.cmd)
+    }
+    $labels = @(foreach ($s in $steps) { if ($s.Contains('label') -and $s.label -and $s.label -ne (Get-FujiStepLabel -Cmd $s.cmd -Value $s.val)) { $s.label } else { Get-FujiStepLabel -Cmd $s.cmd -Value $s.val } })
+    Assert-Equal $labelsById[$t['id']] $labels ('{0}: labels' -f $t['id'])
+    Assert-True (Test-FujiBlockBalanced -Steps $steps) ('{0}: blocks balanced' -f $t['id'])
+}
+
+# Invalid settings are reported
+$bad = @(
+    @('CSV', @{ col = '0' }), @('WAIT', @{ ms = '-1' }), @('WAIT_FOR', @{ title = 'x'; key = ''; timeout = '0' }), @('COPY', @{ name = 'a b' }),
+    @('CLICK_IMG', @{ path = 'a.png'; threshold = '0.3' }), @('CLICK_TEXT', @{ text = 'x'; area = 'RECT'; x = '1'; y = '1'; w = '2'; h = '9'; nth = '1' }),
+    @('STR_OP', @{ name = 'v'; src = ''; op = 'REGEX_EXTRACT'; a = '(unclosed'; b = '' }), @('LOOP_START', @{ mode = 'COUNT'; count = '3'; left = ''; op = 'EQ'; right = ''; counter = 'n'; max = '0' }),
+    @('IF_START', @{ left = ''; op = 'EQ'; right = '' }), @('MAIL', @{ to = ' ' })
+)
+foreach ($b in $bad) { Assert-True ((Test-FujiStepSetting -Cmd $b[0] -Settings $b[1]) -ne '') ('{0} invalid settings must be reported' -f $b[0]) }
+Assert-Equal '' (Test-FujiStepSetting -Cmd 'IF_START' -Settings @{ left = ''; op = 'EMPTY'; right = '' }) 'IF_START EMPTY needs no left value'
+Assert-Equal '{"x":"12","y":"-3","kind":"LEFT"}' (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings @{ x = '12px'; y = '-3'; kind = 'odd' }) 'CLICK_POS normalised'
+Assert-Equal '{"path":"a.png","threshold":"0.5"}' (ConvertTo-FujiStepValue -Cmd 'CLICK_IMG' -Settings @{ path = 'a.png'; threshold = '0.2' }) 'CLICK_IMG threshold clamped'
+Assert-Equal '{"id":"m1","name":"Sub"}' (ConvertTo-FujiStepValue -Cmd 'CALL_MACRO' -Settings @{ id = 'm1' } -MacroName 'Sub') 'CALL_MACRO keeps the name'
+$p = ConvertFrom-FujiStepValue -Cmd 'WAIT_FOR' -Value 'not json'
+Assert-Equal '30' $p['timeout'] 'broken JSON value falls back to defaults'
+
+# ----------------------------------------------------------------- macros file (same text as the HTA writes)
+$macroInput = ConvertTo-FujiData -InputObject $golden.macroInput
+$norm = ConvertTo-FujiMacroData -Source $macroInput
+Assert-Equal ([string]$golden.macroOutput) (ConvertTo-FujiMacroJson -Data $norm.Data) 'macros file identical to the HTA'
+Assert-True (-not $norm.NewerVersion) 'data version 27 is not newer'
+Assert-True (ConvertTo-FujiMacroData -Source ([ordered]@{ version = 28; macros = @() })).NewerVersion 'data version 28 is newer'
+$dup = ConvertTo-FujiMacroData -Source (ConvertFrom-FujiJson -Json '{"macros":[{"id":"x","steps":[]},{"id":"x","steps":[]},{"steps":[]}]}')
+$ids = @($dup.Data.macros | ForEach-Object { $_.id })
+Assert-True ($ids.Count -eq 3 -and @($ids | Select-Object -Unique).Count -eq 3 -and $ids[0] -eq 'x') 'macro ids made unique'
+$reread = ConvertTo-FujiMacroData -Source (ConvertFrom-FujiJson -Json (ConvertTo-FujiMacroJson -Data $norm.Data))
+Assert-Equal (ConvertTo-FujiMacroJson -Data $norm.Data) (ConvertTo-FujiMacroJson -Data $reread.Data) 'macros file round trip'
+
+# ----------------------------------------------------------------- block helpers
+$blk = New-Object -TypeName 'System.Collections.Generic.List[object]'
+foreach ($c in @('GROUP_START', 'IF_START', 'KEY', 'ELSE', 'KEY', 'IF_END', 'TRY_START', 'CATCH', 'TRY_END', 'GROUP_END', 'KEY')) { $blk.Add([ordered]@{ cmd = $c; val = '' }) }
+Assert-Equal @(0, 1, 2, 1, 2, 1, 1, 1, 1, 0, 0) (Get-FujiDepth -Steps $blk) 'depths'
+Assert-Equal 9 (Find-FujiBlockEnd -Steps $blk -StartIndex 0) 'block end'
+Assert-Equal 1 (Find-FujiBlockStart -Steps $blk -EndIndex 5) 'block start'
+Assert-Equal 3 (Find-FujiBlockMiddle -Steps $blk -StartIndex 1 -Cmd 'ELSE') 'block middle'
+Assert-Equal 1 (Find-FujiBlockOwner -Steps $blk -Index 4) 'block owner'
+Assert-Equal @(3) (Get-FujiBlockMiddleIndex -Steps $blk -Start 1 -End 5) 'middles of a block'
+Assert-True (Test-FujiBlockBalanced -Steps $blk) 'balanced'
+$blk.Insert(2, [ordered]@{ cmd = 'CATCH'; val = '' })
+Assert-True (-not (Test-FujiBlockBalanced -Steps $blk)) 'CATCH inside an if-block is not balanced'
+$vars = Get-FujiDefinedVarName -Steps (New-Object -TypeName 'System.Collections.Generic.List[object]' -ArgumentList @(, [object[]]@(
+    [ordered]@{ cmd = 'COPY'; val = 'n1' }, [ordered]@{ cmd = 'SET_VAR'; val = '{"name":"n2","value":"","mode":"TEXT"}' }, [ordered]@{ cmd = 'LOOP_START'; val = '{"counter":""}' }
+))) -ErrorVarName 'err'
+Assert-Equal @('err', 'n1', 'n2', (Get-FujiCommandDef 'LOOP_START')['parseDefaults']['counter']) $vars 'defined variables'
+
 # ----------------------------------------------------------------- source rules
 foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-Item -LiteralPath $PSCommandPath)) {
-    $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
-    $bad = @($bytes | Where-Object { $_ -gt 0x7F }).Count
+    # Latin-1 maps every byte to one char, so a non-ASCII byte shows up as a char above 0x7F
+    $text = [System.Text.Encoding]::GetEncoding(28591).GetString([System.IO.File]::ReadAllBytes($f.FullName))
+    $bad = [regex]::Matches($text, '[^\x00-\x7F]').Count
     Assert-True ($bad -eq 0) ('{0} must be ASCII only ({1} non-ASCII bytes)' -f $f.Name, $bad)
 }
 

@@ -85,7 +85,25 @@ for (const [list, match, expect, reason] of PS_EXPECT) {
     hits[0].ps = Object.assign({ reason }, expect);
 }
 
-const out = { generated: "from fujikyun_rpa_builder.hta by tools/make_ps_golden.js", now: "2026-10-09T14:05:12", csv, calc, strop, numbers, conditions, wareki, fixture, placeholders, unsafe };
+// Labels the HTA gives every template step (the PowerShell edition computes its own and compares)
+const templateLabels = JSON.parse(R(`JSON.stringify(TEMPLATES.map(function (t) { return { id: t.id, labels: templateSteps(t).map(function (s) { return s.label; }) }; }))`));
+// The PowerShell edition's label icons follow the palette (the HTA's labels kept older icons)
+for (const t of templateLabels) {
+    const ps = t.labels.map(l => l.replace(/^📝 結果の/, "🧾 結果の").replace(/^📗 (.*) を書く$/, "🖊 $1 を書く"));
+    if (ps.some((l, i) => l !== t.labels[i])) { t.ps = ps; }
+}
+
+// A macros file through the HTA's normalizeData + serializeData, to compare the PowerShell writer
+const macroInput = { version: 27, macros: [
+    { id: "a1b2c3d4", name: "見本", targetWindow: "メモ帳", steps: [
+        { cmd: "csv", val: "1" }, { cmd: "KEY", val: "{TAB}", label: "自分のラベル" }, { cmd: "OLD_CMD", val: "x,y" },
+        { cmd: "GROUP_START", val: "保存", when: "last" }, { cmd: "WINDOW_CHECK", val: "{\"title\":\"エラー\",\"key\":\"{ENTER}\",\"mode\":\"skip\"}", disabled: true },
+        { cmd: "GROUP_END", val: "" }, { cmd: "TEXT", val: "改行\r\nと\"引用\"と\\" }, { val: "no cmd" }, { cmd: "GROUP_START", val: "g", when: "sometimes" }, { cmd: "GROUP_END" }] },
+    { id: "e5f6a7b8", targetWindow: null, steps: [] }
+] };
+
+
+const out = { generated: "from fujikyun_rpa_builder.hta by tools/make_ps_golden.js", now: "2026-10-09T14:05:12", csv, calc, strop, numbers, conditions, wareki, fixture, placeholders, unsafe, templateLabels, macroInput, macroOutput: R(`appData = normalizeData(${J(macroInput)}); serializeData()`) };
 const file = path.join(__dirname, "..", "ps", "tests", "golden.json");
 fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(out, null, 1) + "\n", "utf8");

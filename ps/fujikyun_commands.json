@@ -1,0 +1,1690 @@
+{
+  "_about": "PowerShell 版のコマンド定義（画面の表示名・説明・入力欄）。2026-10-09 に HTA 版の COMMAND_DEFS から書き出し、以後はこのファイルが元データ。",
+  "commands": {
+    "KEY": {
+      "title": "キー送信",
+      "icon": "⌨",
+      "category": "input",
+      "format": "text",
+      "help": "SendKeys形式でキーを送るキュン♡ 例: {TAB} / +{TAB}(Shift+Tab) / {ENTER} / {SPACE} / ^c(Ctrl+C) / ^v(Ctrl+V) / %{F4}(Alt+F4) / {TAB 3}(3回)",
+      "defaultVal": "{TAB}",
+      "fields": [
+        {
+          "id": "key",
+          "label": "送信キー",
+          "type": "keypreset",
+          "placeholder": "{TAB}"
+        }
+      ]
+    },
+    "TEXT": {
+      "title": "文字列貼付",
+      "icon": "📝",
+      "category": "input",
+      "format": "text",
+      "help": "文字列をクリップボード経由で貼り付けるよ（Ctrl+V）。日本語入力(IME)がONでも化けないキュン。{{氏名}} や {{1}} でCSVの値、{{$合計}} で変数、{{WAREKI}} で今日の和暦…みたいに「差し込み」もできるよ♡",
+      "defaultVal": "",
+      "fields": [
+        {
+          "id": "text",
+          "label": "入力する文字列（差し込み可）",
+          "type": "textarea",
+          "placeholders": true,
+          "raw": true
+        }
+      ]
+    },
+    "CSV": {
+      "title": "CSV列を貼付",
+      "icon": "📄",
+      "category": "input",
+      "format": "text",
+      "help": "実行中のCSV行から、指定した列のデータをクリップボード経由で貼り付けるキュン。列番号は1始まりだよ。",
+      "defaultVal": "1",
+      "fields": [
+        {
+          "id": "col",
+          "label": "CSV列番号（1始まり）",
+          "type": "csvcol",
+          "placeholder": "1"
+        }
+      ]
+    },
+    "COPY": {
+      "title": "コピーして変数へ",
+      "icon": "📋",
+      "category": "input",
+      "format": "text",
+      "help": "いま選択されている文字を Ctrl+C でコピーして変数に入れるキュン。あとのコマンドで {{$変数名}} として使えるし、［↓ 実行結果CSV］にも同じ名前の列で記録されるよ。直前に KEY ^a（全選択）を入れると確実だよ。",
+      "defaultVal": "取得値",
+      "fields": [
+        {
+          "id": "name",
+          "label": "入れる変数名（実行結果CSVの列名にもなるよ）",
+          "type": "text",
+          "placeholder": "例: 伝票番号"
+        }
+      ],
+      "definesVar": "name"
+    },
+    "WAIT": {
+      "title": "待機",
+      "icon": "⏳",
+      "category": "wait",
+      "format": "text",
+      "help": "指定したミリ秒だけロボットをお休みさせるキュン。1000ミリ秒 = 1秒だよ。",
+      "defaultVal": "1000",
+      "fields": [
+        {
+          "id": "ms",
+          "label": "待機時間（ミリ秒）",
+          "type": "text",
+          "placeholder": "1000"
+        }
+      ]
+    },
+    "WAIT_FOR": {
+      "title": "ウィンドウ出現待ち",
+      "icon": "👀",
+      "category": "wait",
+      "format": "json",
+      "help": "指定タイトルのウィンドウがアクティブにできるか1秒ごとに見張るよ。出てきたらキーを押して次へ。タイムアウトしたら安全停止＋アラームだキュン。",
+      "defaultVal": "{\"title\":\"\",\"key\":\"{ENTER}\",\"timeout\":\"30\"}",
+      "fields": [
+        {
+          "id": "title",
+          "label": "待つウィンドウのタイトル（一部・差し込み可）",
+          "type": "text",
+          "placeholder": "例: 確認",
+          "placeholders": true
+        },
+        {
+          "id": "key",
+          "label": "出現したら押すキー（空欄なら押さない）",
+          "type": "keypreset",
+          "placeholder": "{ENTER}"
+        },
+        {
+          "id": "timeout",
+          "label": "タイムアウト（秒）",
+          "type": "text",
+          "placeholder": "30"
+        }
+      ],
+      "parseDefaults": {
+        "title": "",
+        "key": "",
+        "timeout": "30"
+      },
+      "hideVal": true
+    },
+    "WINDOW_CHECK": {
+      "title": "ウィンドウ検知（異常時）",
+      "icon": "⚠",
+      "category": "wait",
+      "format": "json",
+      "help": "指定タイトルのウィンドウが今出ているか即チェック！出ていたらキーを押して、STOPなら大音量アラームで緊急停止、SKIPならこのCSV行を打ち切って次の行へ、CONTINUEならそのまま続行（ときどき出るお知らせを閉じるのに便利）だキュン。出ていなければ何もせず次へ進むよ。",
+      "defaultVal": "{\"title\":\"\",\"key\":\"{ENTER}\",\"mode\":\"STOP\"}",
+      "fields": [
+        {
+          "id": "title",
+          "label": "検知するウィンドウのタイトル（一部・差し込み可）",
+          "type": "text",
+          "placeholder": "例: エラー",
+          "placeholders": true
+        },
+        {
+          "id": "key",
+          "label": "検知したら押すキー（空欄なら押さない）",
+          "type": "keypreset",
+          "placeholder": "{ENTER}"
+        },
+        {
+          "id": "mode",
+          "label": "検知したときの動き",
+          "type": "select",
+          "options": [
+            [
+              "STOP",
+              "STOP：アラーム＋緊急停止"
+            ],
+            [
+              "SKIP",
+              "SKIP：この行を打ち切って次の行へ"
+            ],
+            [
+              "CONTINUE",
+              "CONTINUE：キーを押して、そのまま続行"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "title": "",
+        "key": "",
+        "mode": "STOP"
+      },
+      "hideVal": true
+    },
+    "CONFIRM": {
+      "title": "確認ポイント（人が確認）",
+      "icon": "✋",
+      "category": "wait",
+      "format": "text",
+      "help": "ロボットをいったん止めて、メッセージを出して人の確認を待つキュン。［続行］［この行をスキップ］［停止］を選べるよ。登録ボタンを押す前の最終チェックや、カーソル位置を手で合わせたい時に使ってね。{{氏名}} などの差し込みもできるよ。",
+      "defaultVal": "内容を確認してね。よければ［▶ 続行］を押してね♡",
+      "fields": [
+        {
+          "id": "message",
+          "label": "表示するメッセージ（差し込み可）",
+          "type": "textarea",
+          "placeholders": true,
+          "raw": true
+        }
+      ]
+    },
+    "CLICK_NAME": {
+      "title": "名前でクリック",
+      "icon": "👆",
+      "category": "mouse",
+      "format": "text",
+      "help": "【名前でクリック・第一推奨】座標じゃなくて、UI Automation でボタンなどの表示名（Name）を探して直接押すキュン。表示名は完全一致だよ。画面の位置や大きさが変わっても動くよ。",
+      "defaultVal": "",
+      "fields": [
+        {
+          "id": "name",
+          "label": "ボタンなどの表示名",
+          "type": "text",
+          "placeholder": "例: 登録"
+        }
+      ]
+    },
+    "CLICK_POS": {
+      "title": "座標でクリック",
+      "icon": "🎯",
+      "category": "mouse",
+      "format": "json",
+      "help": "【座標でクリック】画面左上を(0,0)として、指定したピクセル位置をクリックするキュン（左・ダブル・右クリック）。ウィンドウの位置や大きさが変わるとずれるから、ほかの方法が使えないときに使ってね。",
+      "defaultVal": "{\"x\":\"0\",\"y\":\"0\",\"kind\":\"LEFT\"}",
+      "fields": [
+        {
+          "id": "x",
+          "label": "X座標（ピクセル）",
+          "type": "text",
+          "placeholder": "100"
+        },
+        {
+          "id": "y",
+          "label": "Y座標（ピクセル）",
+          "type": "text",
+          "placeholder": "200"
+        },
+        {
+          "id": "kind",
+          "label": "クリックの種類",
+          "type": "select",
+          "options": [
+            [
+              "LEFT",
+              "左クリック"
+            ],
+            [
+              "DOUBLE",
+              "ダブルクリック"
+            ],
+            [
+              "RIGHT",
+              "右クリック"
+            ]
+          ]
+        },
+        {
+          "id": "capture",
+          "label": "座標のかんたん取得",
+          "type": "capture"
+        }
+      ],
+      "parseDefaults": {
+        "x": "0",
+        "y": "0",
+        "kind": "LEFT"
+      },
+      "hideVal": true
+    },
+    "CLICK_IMG": {
+      "title": "画像でクリック",
+      "icon": "🖼",
+      "category": "mouse",
+      "format": "json",
+      "help": "【画像でクリック】画面を撮影して、参照画像と同じ模様の場所を探し、見つけた場所の中心をクリックするキュン。Citrix/RDPなど中身が見えない画面に強いよ。外部ソフトは要らないよ。見つからないときは1秒おきに3回まで探すよ。",
+      "defaultVal": "{\"path\":\"\",\"threshold\":\"0.9\"}",
+      "fields": [
+        {
+          "id": "path",
+          "label": "参照画像ファイル（PNG/BMP/JPG）",
+          "type": "imgpath",
+          "placeholder": "例: C:\\img\\btn.png",
+          "hint": "相対パスはふじキュンのフォルダ基準だよ。📷で切り取ると rpa_images フォルダに保存されるキュン"
+        },
+        {
+          "id": "threshold",
+          "label": "一致率のしきい値（0.5〜1.0）",
+          "type": "text",
+          "placeholder": "0.9",
+          "hint": "0.9 = 90%以上のピクセルが一致したらクリック。見つからないときは 0.85 などに下げてね"
+        }
+      ],
+      "parseDefaults": {
+        "path": "",
+        "threshold": "0.9"
+      },
+      "hideVal": true
+    },
+    "CLICK_TEXT": {
+      "title": "文字でクリック（OCR）",
+      "icon": "🔎",
+      "category": "mouse",
+      "format": "json",
+      "help": "画面から指定した文字を文字認識（OCR）で探して、その文字の真ん中をクリックするキュン。ボタンに名前がなくてオブジェクト認識が効かない画面でも、文字さえ見えていれば押せるよ。見つからないときは1秒おきに3回まで探すよ。",
+      "defaultVal": "{\"text\":\"\",\"area\":\"WINDOW\",\"x\":\"\",\"y\":\"\",\"w\":\"\",\"h\":\"\",\"nth\":\"1\"}",
+      "fields": [
+        {
+          "id": "text",
+          "label": "探す文字（差し込み可）",
+          "type": "text",
+          "placeholder": "例: 登録",
+          "placeholders": true
+        },
+        {
+          "id": "area",
+          "label": "探す範囲",
+          "type": "select",
+          "options": [
+            [
+              "WINDOW",
+              "いま前面のウィンドウ"
+            ],
+            [
+              "FULL",
+              "画面全体"
+            ],
+            [
+              "RECT",
+              "範囲を指定（下の X・Y・幅・高さ）"
+            ]
+          ]
+        },
+        {
+          "id": "rect",
+          "label": "範囲のかんたん取得",
+          "type": "rectcapture"
+        },
+        {
+          "id": "x",
+          "label": "左上のX",
+          "type": "text"
+        },
+        {
+          "id": "y",
+          "label": "左上のY",
+          "type": "text"
+        },
+        {
+          "id": "w",
+          "label": "幅",
+          "type": "text"
+        },
+        {
+          "id": "h",
+          "label": "高さ",
+          "type": "text"
+        },
+        {
+          "id": "nth",
+          "label": "同じ文字が複数あるとき、何番目をクリックするか（上から）",
+          "type": "text",
+          "placeholder": "1"
+        }
+      ],
+      "parseDefaults": {
+        "text": "",
+        "area": "WINDOW",
+        "x": "",
+        "y": "",
+        "w": "",
+        "h": "",
+        "nth": "1"
+      },
+      "hideVal": true
+    },
+    "READ_TEXT": {
+      "title": "文字を読み取る（OCR）",
+      "icon": "🔤",
+      "category": "mouse",
+      "format": "json",
+      "help": "画面の文字を Windows に入っている文字認識（OCR）で読み取って変数に入れるキュン。範囲は「前面のウィンドウ」「画面全体」「範囲を指定」から選べるよ。小さい範囲を指定するほど正確だよ。文字をコピーできない画面（Citrix・画像・PDFの表示）から値を取るのに便利！",
+      "defaultVal": "{\"area\":\"WINDOW\",\"x\":\"\",\"y\":\"\",\"w\":\"\",\"h\":\"\",\"name\":\"\"}",
+      "fields": [
+        {
+          "id": "area",
+          "label": "読み取る範囲",
+          "type": "select",
+          "options": [
+            [
+              "WINDOW",
+              "いま前面のウィンドウ"
+            ],
+            [
+              "FULL",
+              "画面全体"
+            ],
+            [
+              "RECT",
+              "範囲を指定（下の X・Y・幅・高さ）"
+            ]
+          ]
+        },
+        {
+          "id": "rect",
+          "label": "範囲のかんたん取得",
+          "type": "rectcapture"
+        },
+        {
+          "id": "x",
+          "label": "左上のX",
+          "type": "text",
+          "placeholder": "例: 400"
+        },
+        {
+          "id": "y",
+          "label": "左上のY",
+          "type": "text",
+          "placeholder": "例: 300"
+        },
+        {
+          "id": "w",
+          "label": "幅",
+          "type": "text",
+          "placeholder": "例: 200"
+        },
+        {
+          "id": "h",
+          "label": "高さ",
+          "type": "text",
+          "placeholder": "例: 30"
+        },
+        {
+          "id": "name",
+          "label": "入れる変数名",
+          "type": "text",
+          "placeholder": "例: 読んだ文字"
+        }
+      ],
+      "parseDefaults": {
+        "area": "WINDOW",
+        "x": "",
+        "y": "",
+        "w": "",
+        "h": "",
+        "name": ""
+      },
+      "definesVar": "name",
+      "hideVal": true
+    },
+    "SWITCH": {
+      "title": "ウィンドウ切替",
+      "icon": "🪟",
+      "category": "window",
+      "format": "text",
+      "help": "指定した名前のウィンドウを前面化（アクティブ化）して、以降の操作対象にするキュン。タイトルは完全一致→前方一致→後方一致の順で探すよ。",
+      "defaultVal": "",
+      "fields": [
+        {
+          "id": "title",
+          "label": "ウィンドウ名（一部・差し込み可）",
+          "type": "text",
+          "placeholder": "例: メモ帳",
+          "placeholders": true
+        }
+      ]
+    },
+    "RUN": {
+      "title": "アプリ起動",
+      "icon": "🚀",
+      "category": "window",
+      "format": "text",
+      "help": "外部アプリやファイルを開くよ。例: notepad.exe / \"C:\\RPA作業\\台帳.xlsx\" / cmd /c mkdir \"C:\\RPA作業\\{{1}}\"（差し込み可）。スペースを含むパスは \" \" で囲んでね。",
+      "defaultVal": "notepad.exe",
+      "fields": [
+        {
+          "id": "path",
+          "label": "アプリのパス／コマンド（差し込み可）",
+          "type": "text",
+          "placeholder": "notepad.exe",
+          "placeholders": true
+        }
+      ]
+    },
+    "SCREENSHOT": {
+      "title": "画面を撮影して保存",
+      "icon": "📸",
+      "category": "window",
+      "format": "json",
+      "help": "画面をPNGで保存するキュン（証跡・エビデンス用）。保存先は ふじキュンのフォルダ\\evidence\\日付\\ だよ。ファイル名には {{ROW}} や {{氏名}} を差し込めて、最後に時刻が自動で付くよ。",
+      "defaultVal": "{\"name\":\"証跡_{{ROW}}\",\"scope\":\"WINDOW\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "ファイル名（差し込み可・拡張子なし）",
+          "type": "text",
+          "placeholder": "証跡_{{ROW}}",
+          "placeholders": true
+        },
+        {
+          "id": "scope",
+          "label": "撮る範囲",
+          "type": "select",
+          "options": [
+            [
+              "WINDOW",
+              "いま前面のウィンドウだけ"
+            ],
+            [
+              "FULL",
+              "画面全体（全モニター）"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "scope": "WINDOW"
+      },
+      "hideVal": true
+    },
+    "MAIL": {
+      "title": "メールを作る・送る",
+      "icon": "✉",
+      "category": "window",
+      "format": "json",
+      "help": "メールを作るキュン。送り方は2つ：Outlook（下書き保存・画面に表示・すぐ送信）／メールアプリを開くだけ（mailto）。宛先・件名・本文・添付には {{列名}} などを差し込めるよ。いきなり送信せず「下書き」で試してね。",
+      "defaultVal": "{\"method\":\"OUTLOOK\",\"mode\":\"DRAFT\",\"to\":\"\",\"cc\":\"\",\"subject\":\"\",\"body\":\"\",\"attach\":\"\"}",
+      "fields": [
+        {
+          "id": "method",
+          "label": "送り方",
+          "type": "select",
+          "options": [
+            [
+              "OUTLOOK",
+              "Outlook を使う"
+            ],
+            [
+              "MAILTO",
+              "メールアプリを開くだけ（mailto・添付不可）"
+            ]
+          ]
+        },
+        {
+          "id": "mode",
+          "label": "Outlook のとき",
+          "type": "select",
+          "options": [
+            [
+              "DRAFT",
+              "下書きに保存する（おすすめ）"
+            ],
+            [
+              "DISPLAY",
+              "作成画面を表示する（送信は人が押す）"
+            ],
+            [
+              "SEND",
+              "すぐに送信する"
+            ]
+          ]
+        },
+        {
+          "id": "to",
+          "label": "宛先（複数は ; で区切る・差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{メールアドレス}}",
+          "placeholders": true
+        },
+        {
+          "id": "cc",
+          "label": "CC（差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "subject",
+          "label": "件名（差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "body",
+          "label": "本文（差し込み可）",
+          "type": "textarea",
+          "placeholders": true,
+          "raw": true
+        },
+        {
+          "id": "attach",
+          "label": "添付ファイル（フルパス・複数は ; で区切る・差し込み可）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\通知\\{{氏名}}.pdf",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "method": "OUTLOOK",
+        "mode": "DRAFT",
+        "to": "",
+        "cc": "",
+        "subject": "",
+        "body": "",
+        "attach": ""
+      },
+      "hideVal": true
+    },
+    "LOOP_START": {
+      "title": "繰り返し",
+      "icon": "🔁",
+      "category": "flow",
+      "format": "json",
+      "help": "中のコマンドをくり返すキュン。「決めた回数」なら回数を（{{列名}} などの差し込みもOK）、「条件のあいだ」なら条件を決めてね。何回目かは {{$回数}} で使えるよ。途中で抜けるには「繰り返しを抜ける（BREAK）」を使ってね。終わらない繰り返しにならないよう、上限回数で必ず止まるよ。",
+      "defaultVal": "{\"mode\":\"COUNT\",\"count\":\"3\",\"left\":\"\",\"op\":\"NOT_EMPTY\",\"right\":\"\",\"counter\":\"回数\",\"max\":\"1000\"}",
+      "fields": [
+        {
+          "id": "mode",
+          "label": "くり返し方",
+          "type": "select",
+          "options": [
+            [
+              "COUNT",
+              "決めた回数くり返す（for）"
+            ],
+            [
+              "WHILE",
+              "条件を満たすあいだくり返す（while）"
+            ]
+          ]
+        },
+        {
+          "id": "count",
+          "label": "回数（「決めた回数」のとき・差し込み可）",
+          "type": "text",
+          "placeholder": "例: 5 / {{ページ数}}",
+          "placeholders": true
+        },
+        {
+          "id": "left",
+          "label": "条件：調べる値（「条件のあいだ」のとき・差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{$件名}}",
+          "placeholders": true
+        },
+        {
+          "id": "op",
+          "label": "条件：くらべ方",
+          "type": "select",
+          "options": [
+            [
+              "EQ",
+              "と等しい"
+            ],
+            [
+              "NE",
+              "と違う"
+            ],
+            [
+              "CONTAINS",
+              "を含む"
+            ],
+            [
+              "NOT_CONTAINS",
+              "を含まない"
+            ],
+            [
+              "EMPTY",
+              "が空っぽ（くらべる相手は使わない）"
+            ],
+            [
+              "NOT_EMPTY",
+              "が空っぽでない（くらべる相手は使わない）"
+            ],
+            [
+              "GT",
+              "より大きい（数）"
+            ],
+            [
+              "GE",
+              "以上（数）"
+            ],
+            [
+              "LT",
+              "より小さい（数）"
+            ],
+            [
+              "LE",
+              "以下（数）"
+            ],
+            [
+              "REGEX",
+              "が正規表現に一致する"
+            ],
+            [
+              "WINDOW",
+              "というウィンドウがある（調べる値にタイトル）"
+            ],
+            [
+              "NO_WINDOW",
+              "というウィンドウがない"
+            ],
+            [
+              "FILE",
+              "というファイルがある（調べる値にパス）"
+            ],
+            [
+              "NO_FILE",
+              "というファイルがない"
+            ]
+          ]
+        },
+        {
+          "id": "right",
+          "label": "条件：くらべる相手（差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "counter",
+          "label": "何回目かを入れる変数名",
+          "type": "text",
+          "placeholder": "回数"
+        },
+        {
+          "id": "max",
+          "label": "上限回数（これを超えたら止める）",
+          "type": "text",
+          "placeholder": "1000"
+        }
+      ],
+      "parseDefaults": {
+        "mode": "COUNT",
+        "count": "3",
+        "left": "",
+        "op": "NOT_EMPTY",
+        "right": "",
+        "counter": "回数",
+        "max": "1000"
+      },
+      "definesVar": "counter",
+      "hideVal": true
+    },
+    "LOOP_END": {
+      "title": "繰り返しここまで",
+      "icon": "└",
+      "category": "flow",
+      "format": "none",
+      "help": "繰り返しの終わりの目印だよ。ここまで来ると「繰り返し」の先頭に戻るキュン。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "BREAK": {
+      "title": "繰り返しを抜ける",
+      "icon": "⤴",
+      "category": "flow",
+      "format": "none",
+      "help": "いちばん内側の繰り返しを途中で終わらせて、「繰り返しここまで」の次へ進むキュン（break）。「もし〜なら」と組み合わせて使ってね。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "CONTINUE": {
+      "title": "次の繰り返しへ",
+      "icon": "↪",
+      "category": "flow",
+      "format": "none",
+      "help": "残りのコマンドを飛ばして、次の回の繰り返しに進むキュン（continue）。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "IF_START": {
+      "title": "もし〜なら",
+      "icon": "❓",
+      "category": "flow",
+      "format": "json",
+      "help": "条件が合うときだけ中のコマンドを実行するキュン（if）。合わないときの手順は「そうでなければ（ELSE）」の後ろに書いてね。値は {{列名}} {{$変数}} などで差し込めるよ。数の比較は全角数字やカンマがあってもOK。",
+      "defaultVal": "{\"left\":\"\",\"op\":\"EQ\",\"right\":\"\"}",
+      "fields": [
+        {
+          "id": "left",
+          "label": "調べる値（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{金額}}",
+          "placeholders": true
+        },
+        {
+          "id": "op",
+          "label": "くらべ方",
+          "type": "select",
+          "options": [
+            [
+              "EQ",
+              "と等しい"
+            ],
+            [
+              "NE",
+              "と違う"
+            ],
+            [
+              "CONTAINS",
+              "を含む"
+            ],
+            [
+              "NOT_CONTAINS",
+              "を含まない"
+            ],
+            [
+              "EMPTY",
+              "が空っぽ（くらべる相手は使わない）"
+            ],
+            [
+              "NOT_EMPTY",
+              "が空っぽでない（くらべる相手は使わない）"
+            ],
+            [
+              "GT",
+              "より大きい（数）"
+            ],
+            [
+              "GE",
+              "以上（数）"
+            ],
+            [
+              "LT",
+              "より小さい（数）"
+            ],
+            [
+              "LE",
+              "以下（数）"
+            ],
+            [
+              "REGEX",
+              "が正規表現に一致する"
+            ],
+            [
+              "WINDOW",
+              "というウィンドウがある（調べる値にタイトル）"
+            ],
+            [
+              "NO_WINDOW",
+              "というウィンドウがない"
+            ],
+            [
+              "FILE",
+              "というファイルがある（調べる値にパス）"
+            ],
+            [
+              "NO_FILE",
+              "というファイルがない"
+            ]
+          ]
+        },
+        {
+          "id": "right",
+          "label": "くらべる相手（差し込み可）",
+          "type": "text",
+          "placeholder": "例: 100000",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "left": "",
+        "op": "EQ",
+        "right": ""
+      },
+      "hideVal": true
+    },
+    "ELSE": {
+      "title": "そうでなければ",
+      "icon": "↔",
+      "category": "flow",
+      "format": "none",
+      "help": "「もし〜なら」の条件が合わなかったときに、ここから下を実行するキュン（else）。「もし〜なら」の中に1つだけ置けるよ。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "IF_END": {
+      "title": "もし〜ならここまで",
+      "icon": "└",
+      "category": "flow",
+      "format": "none",
+      "help": "「もし〜なら」の終わりの目印だよ。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "TRY_START": {
+      "title": "エラー時の処理",
+      "icon": "🧯",
+      "category": "flow",
+      "format": "text",
+      "help": "この中でエラーが起きても止めずに、「エラーのとき（CATCH）」から下を実行するキュン（try-catch）。エラーの内容は {{$エラー内容}} で使えるよ。ウィンドウ検知の STOP（緊急停止）と ⏹ 停止は受け止めないよ。",
+      "defaultVal": "エラーが出ても止めずに記録する",
+      "fields": [
+        {
+          "id": "name",
+          "label": "表示名",
+          "type": "text",
+          "placeholder": "例: 登録でエラーが出たら記録して次へ"
+        }
+      ],
+      "hideVal": true
+    },
+    "CATCH": {
+      "title": "エラーのとき",
+      "icon": "⚠",
+      "category": "flow",
+      "format": "none",
+      "help": "「エラー時の処理」の中でエラーが起きたら、ここから下を実行するキュン。エラーの内容は {{$エラー内容}} だよ。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "TRY_END": {
+      "title": "エラー時の処理ここまで",
+      "icon": "└",
+      "category": "flow",
+      "format": "none",
+      "help": "「エラー時の処理」の終わりの目印だよ。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "CALL_MACRO": {
+      "title": "マクロを呼び出す",
+      "icon": "📞",
+      "category": "flow",
+      "format": "json",
+      "help": "ほかのマクロを部品（サブルーチン）として呼び出すキュン。呼び出したマクロが最後まで終わる（か「呼び出し元に戻る」に来る）と、ここの次に戻ってくるよ。変数 {{$名前}} とCSVの行は共通だから、値の受け渡しは変数でしてね。ログイン・画面を開く・保存など、何度も使う手順を部品にすると便利！",
+      "defaultVal": "{\"id\":\"\",\"name\":\"\"}",
+      "fields": [
+        {
+          "id": "id",
+          "label": "呼び出すマクロ",
+          "type": "macroselect"
+        }
+      ],
+      "parseDefaults": {
+        "id": "",
+        "name": ""
+      },
+      "hideVal": true
+    },
+    "RETURN": {
+      "title": "呼び出し元に戻る",
+      "icon": "↩",
+      "category": "flow",
+      "format": "none",
+      "help": "呼び出されたマクロの途中で、呼び出し元に戻るキュン（return）。いちばん外側のマクロで使うと、この行の残りを飛ばして次の行に進むよ。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "SET_VAR": {
+      "title": "変数に値を入れる",
+      "icon": "📦",
+      "category": "var",
+      "format": "json",
+      "help": "変数に値を入れるキュン。入れた値は {{$変数名}} でどこでも差し込めるし、実行中は右下の「📊 変数」に表示されるよ。「計算する」にすると + - * / % とかっこで計算できるよ（例: {{単価}}*{{数量}}）。",
+      "defaultVal": "{\"name\":\"\",\"value\":\"\",\"mode\":\"TEXT\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "変数名",
+          "type": "text",
+          "placeholder": "例: 合計"
+        },
+        {
+          "id": "value",
+          "label": "入れる値（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{単価}}*{{数量}}",
+          "placeholders": true
+        },
+        {
+          "id": "mode",
+          "label": "入れ方",
+          "type": "select",
+          "options": [
+            [
+              "TEXT",
+              "文字としてそのまま入れる"
+            ],
+            [
+              "CALC",
+              "計算して入れる（+ - * / % かっこ）"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "value": "",
+        "mode": "TEXT"
+      },
+      "definesVar": "name",
+      "hideVal": true
+    },
+    "STR_OP": {
+      "title": "文字を加工する",
+      "icon": "✂",
+      "category": "var",
+      "format": "json",
+      "help": "文字を加工して変数に入れるキュン。置換・正規表現・切り出し・全角半角・ゼロ埋め・和暦・日付の計算などができるよ。結果は {{$変数名}} で使えるよ。",
+      "defaultVal": "{\"name\":\"\",\"src\":\"\",\"op\":\"REPLACE\",\"a\":\"\",\"b\":\"\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "結果を入れる変数名",
+          "type": "text",
+          "placeholder": "例: 番号7桁"
+        },
+        {
+          "id": "src",
+          "label": "元の文字（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{宛名番号}}",
+          "placeholders": true
+        },
+        {
+          "id": "op",
+          "label": "加工のしかた",
+          "type": "select",
+          "options": [
+            [
+              "REPLACE",
+              "置換：A を B に置きかえる"
+            ],
+            [
+              "REGEX_REPLACE",
+              "正規表現で置換：パターンA を B に（$1 などOK）"
+            ],
+            [
+              "REGEX_EXTRACT",
+              "正規表現で取り出す：パターンA の一致部分（B＝かっこの番号）"
+            ],
+            [
+              "SUBSTR",
+              "切り出し：A 文字目から B 文字（Bが空なら最後まで）"
+            ],
+            [
+              "SPLIT",
+              "区切って取り出す：区切り文字A で分けた B 番目"
+            ],
+            [
+              "TRIM",
+              "前後の空白（全角も）を消す"
+            ],
+            [
+              "ZEN2HAN",
+              "全角の英数字・記号を半角にする"
+            ],
+            [
+              "HAN2ZEN",
+              "半角の英数字・記号を全角にする"
+            ],
+            [
+              "PAD",
+              "ゼロ埋め：A 桁にそろえる（Bで埋める文字、空なら0）"
+            ],
+            [
+              "WAREKI",
+              "日付を和暦にする（令和8年10月1日）"
+            ],
+            [
+              "DATE_ADD",
+              "日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）"
+            ],
+            [
+              "COMMA",
+              "数字に3桁区切りのカンマを付ける"
+            ],
+            [
+              "UNCOMMA",
+              "カンマを消す"
+            ],
+            [
+              "LENGTH",
+              "文字数を数える"
+            ]
+          ]
+        },
+        {
+          "id": "a",
+          "label": "設定A（加工のしかたの説明を見てね・差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "b",
+          "label": "設定B（加工のしかたの説明を見てね・差し込み可）",
+          "type": "text",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "src": "",
+        "op": "REPLACE",
+        "a": "",
+        "b": ""
+      },
+      "definesVar": "name",
+      "hideVal": true
+    },
+    "ASK": {
+      "title": "値を入力してもらう",
+      "icon": "✍",
+      "category": "var",
+      "format": "json",
+      "help": "実行中に入力欄を出して、入力した値を変数に入れるキュン。処理日や担当者名など、実行のたびに変わる値に便利だよ。「最初の1行だけ」グループに入れれば、最初に1回だけ聞けるよ。",
+      "defaultVal": "{\"name\":\"\",\"message\":\"値を入力してね\",\"defaultValue\":\"\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "入れる変数名",
+          "type": "text",
+          "placeholder": "例: 処理日"
+        },
+        {
+          "id": "message",
+          "label": "表示するメッセージ（差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "defaultValue",
+          "label": "最初から入っている値（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{TODAY}}",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "message": "",
+        "defaultValue": ""
+      },
+      "definesVar": "name",
+      "hideVal": true
+    },
+    "RECORD": {
+      "title": "結果に記録する",
+      "icon": "🧾",
+      "category": "var",
+      "format": "json",
+      "help": "値を［↓ 実行結果CSV］の列として記録するキュン。計算した値やチェックの結果を残すのに使ってね。",
+      "defaultVal": "{\"name\":\"\",\"value\":\"\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "列名",
+          "type": "text",
+          "placeholder": "例: 判定"
+        },
+        {
+          "id": "value",
+          "label": "記録する値（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{$合計}}",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "value": ""
+      },
+      "hideVal": true
+    },
+    "EXCEL_READ": {
+      "title": "Excelのセルを読む",
+      "icon": "📗",
+      "category": "var",
+      "format": "json",
+      "help": "Excelの画面を開かずに、ブックのセルの値を読んで変数に入れるキュン（Excelが入っているPCで使えるよ）。セル番地には A{{ROW+1}} のような差し込みもOK。シートは名前か番号（1＝1枚目）で指定してね。",
+      "defaultVal": "{\"path\":\"\",\"sheet\":\"1\",\"cell\":\"A1\",\"name\":\"\"}",
+      "fields": [
+        {
+          "id": "path",
+          "label": "ブックのパス（差し込み可）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\台帳.xlsx",
+          "placeholders": true
+        },
+        {
+          "id": "sheet",
+          "label": "シート（名前か番号・差し込み可）",
+          "type": "text",
+          "placeholder": "1",
+          "placeholders": true
+        },
+        {
+          "id": "cell",
+          "label": "セル番地（差し込み可）",
+          "type": "text",
+          "placeholder": "例: B{{ROW+1}}",
+          "placeholders": true
+        },
+        {
+          "id": "name",
+          "label": "入れる変数名",
+          "type": "text",
+          "placeholder": "例: 金額"
+        }
+      ],
+      "parseDefaults": {
+        "path": "",
+        "sheet": "1",
+        "cell": "A1",
+        "name": ""
+      },
+      "definesVar": "name",
+      "hideVal": true
+    },
+    "EXCEL_WRITE": {
+      "title": "Excelのセルに書く",
+      "icon": "🖊",
+      "category": "var",
+      "format": "json",
+      "help": "Excelの画面を開かずに、ブックのセルに値を書き込んで保存するキュン。書き込むブックは閉じておいてね（ほかで開いていると書き込めないよ）。",
+      "defaultVal": "{\"path\":\"\",\"sheet\":\"1\",\"cell\":\"A1\",\"value\":\"\"}",
+      "fields": [
+        {
+          "id": "path",
+          "label": "ブックのパス（差し込み可）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\台帳.xlsx",
+          "placeholders": true
+        },
+        {
+          "id": "sheet",
+          "label": "シート（名前か番号・差し込み可）",
+          "type": "text",
+          "placeholder": "1",
+          "placeholders": true
+        },
+        {
+          "id": "cell",
+          "label": "セル番地（差し込み可）",
+          "type": "text",
+          "placeholder": "例: D{{ROW+1}}",
+          "placeholders": true
+        },
+        {
+          "id": "value",
+          "label": "書き込む値（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{$結果}}",
+          "placeholders": true
+        }
+      ],
+      "parseDefaults": {
+        "path": "",
+        "sheet": "1",
+        "cell": "A1",
+        "value": ""
+      },
+      "hideVal": true
+    },
+    "GROUP_START": {
+      "title": "グループ",
+      "icon": "📁",
+      "category": "group",
+      "format": "text",
+      "help": "コマンドをまとめるグループだよ。追加すると「グループ」と「グループ終了」がセットで入るキュン。左の▼/▶で折りたためるよ。「実行タイミング」を変えると、アプリ起動などの準備を最初の1行だけ、保存などの後片付けを最後の1行だけにできるよ。",
+      "defaultVal": "新しいグループ",
+      "fields": [
+        {
+          "id": "name",
+          "label": "グループ表示名",
+          "type": "text",
+          "placeholder": "例: 基本情報の入力"
+        },
+        {
+          "id": "when",
+          "label": "実行タイミング",
+          "type": "select",
+          "options": [
+            [
+              "",
+              "毎行（ふつう）"
+            ],
+            [
+              "first",
+              "最初の1行だけ（準備・アプリ起動など）"
+            ],
+            [
+              "last",
+              "最後の1行だけ（保存・後片付けなど）"
+            ]
+          ],
+          "prop": true
+        }
+      ]
+    },
+    "GROUP_END": {
+      "title": "グループ終了",
+      "icon": "└",
+      "category": "group",
+      "format": "none",
+      "help": "グループの終わりの目印だよ。設定する項目はないキュン。",
+      "defaultVal": "",
+      "fields": []
+    },
+    "COMMENT": {
+      "title": "コメント",
+      "icon": "💬",
+      "category": "note",
+      "format": "text",
+      "help": "実行時は無視されるメモだよ。手順の説明を書いておくと後で助かるキュン♡",
+      "defaultVal": "",
+      "fields": [
+        {
+          "id": "memo",
+          "label": "メモ",
+          "type": "textarea",
+          "raw": true
+        }
+      ]
+    }
+  },
+  "palette": [
+    {
+      "category": "input",
+      "label": "入力",
+      "cmds": [
+        "KEY",
+        "TEXT",
+        "CSV",
+        "COPY"
+      ]
+    },
+    {
+      "category": "wait",
+      "label": "待つ・確かめる",
+      "cmds": [
+        "WAIT",
+        "WAIT_FOR",
+        "WINDOW_CHECK",
+        "CONFIRM"
+      ]
+    },
+    {
+      "category": "mouse",
+      "label": "クリック・読み取り",
+      "cmds": [
+        "CLICK_NAME",
+        "CLICK_TEXT",
+        "CLICK_IMG",
+        "CLICK_POS",
+        "READ_TEXT"
+      ]
+    },
+    {
+      "category": "window",
+      "label": "アプリ・画面",
+      "cmds": [
+        "SWITCH",
+        "RUN",
+        "SCREENSHOT",
+        "MAIL"
+      ]
+    },
+    {
+      "category": "flow",
+      "label": "流れ",
+      "cmds": [
+        "LOOP_START",
+        "BREAK",
+        "CONTINUE",
+        "IF_START",
+        "ELSE",
+        "TRY_START",
+        "CALL_MACRO",
+        "RETURN"
+      ]
+    },
+    {
+      "category": "var",
+      "label": "変数・データ",
+      "cmds": [
+        "SET_VAR",
+        "STR_OP",
+        "ASK",
+        "RECORD",
+        "EXCEL_READ",
+        "EXCEL_WRITE"
+      ]
+    },
+    {
+      "category": "group",
+      "label": "整理",
+      "cmds": [
+        "GROUP_START",
+        "COMMENT"
+      ]
+    }
+  ],
+  "blocks": {
+    "pairs": {
+      "GROUP_START": "GROUP_END",
+      "LOOP_START": "LOOP_END",
+      "IF_START": "IF_END",
+      "TRY_START": "TRY_END"
+    },
+    "middles": {
+      "ELSE": "IF_START",
+      "CATCH": "TRY_START"
+    }
+  },
+  "keyPresets": [
+    [
+      "{TAB}",
+      "Tab移動"
+    ],
+    [
+      "+{TAB}",
+      "Shift+Tabで戻る"
+    ],
+    [
+      "{ENTER}",
+      "Enterキー"
+    ],
+    [
+      "{SPACE}",
+      "スペースキー"
+    ],
+    [
+      "{ESC}",
+      "Escキー"
+    ],
+    [
+      "{UP}",
+      "↑キー"
+    ],
+    [
+      "{DOWN}",
+      "↓キー"
+    ],
+    [
+      "{LEFT}",
+      "←キー"
+    ],
+    [
+      "{RIGHT}",
+      "→キー"
+    ],
+    [
+      "{BS}",
+      "BackSpaceキー"
+    ],
+    [
+      "{DELETE}",
+      "Deleteキー"
+    ],
+    [
+      "{HOME}",
+      "Homeキー"
+    ],
+    [
+      "{END}",
+      "Endキー"
+    ],
+    [
+      "{PGUP}",
+      "PageUpキー"
+    ],
+    [
+      "{PGDN}",
+      "PageDownキー"
+    ],
+    [
+      "{F5}",
+      "F5キー"
+    ],
+    [
+      "{F12}",
+      "名前を付けて保存 (F12)"
+    ],
+    [
+      "^{HOME}",
+      "先頭へ (Ctrl+Home)"
+    ],
+    [
+      "^{END}",
+      "末尾へ (Ctrl+End)"
+    ],
+    [
+      "^g",
+      "ジャンプ (Ctrl+G)"
+    ],
+    [
+      "^h",
+      "置換 (Ctrl+H)"
+    ],
+    [
+      "^n",
+      "新規作成 (Ctrl+N)"
+    ],
+    [
+      "^w",
+      "閉じる (Ctrl+W)"
+    ],
+    [
+      "^l",
+      "アドレスバーへ (Ctrl+L)"
+    ],
+    [
+      "^a",
+      "全選択 (Ctrl+A)"
+    ],
+    [
+      "^c",
+      "コピー (Ctrl+C)"
+    ],
+    [
+      "^v",
+      "貼り付け (Ctrl+V)"
+    ],
+    [
+      "^s",
+      "保存 (Ctrl+S)"
+    ],
+    [
+      "%{F4}",
+      "閉じる (Alt+F4)"
+    ],
+    [
+      "%y",
+      "はい (Alt+Y)"
+    ],
+    [
+      "%n",
+      "いいえ (Alt+N)"
+    ]
+  ],
+  "condOps": [
+    [
+      "EQ",
+      "と等しい"
+    ],
+    [
+      "NE",
+      "と違う"
+    ],
+    [
+      "CONTAINS",
+      "を含む"
+    ],
+    [
+      "NOT_CONTAINS",
+      "を含まない"
+    ],
+    [
+      "EMPTY",
+      "が空っぽ（くらべる相手は使わない）"
+    ],
+    [
+      "NOT_EMPTY",
+      "が空っぽでない（くらべる相手は使わない）"
+    ],
+    [
+      "GT",
+      "より大きい（数）"
+    ],
+    [
+      "GE",
+      "以上（数）"
+    ],
+    [
+      "LT",
+      "より小さい（数）"
+    ],
+    [
+      "LE",
+      "以下（数）"
+    ],
+    [
+      "REGEX",
+      "が正規表現に一致する"
+    ],
+    [
+      "WINDOW",
+      "というウィンドウがある（調べる値にタイトル）"
+    ],
+    [
+      "NO_WINDOW",
+      "というウィンドウがない"
+    ],
+    [
+      "FILE",
+      "というファイルがある（調べる値にパス）"
+    ],
+    [
+      "NO_FILE",
+      "というファイルがない"
+    ]
+  ],
+  "strOps": [
+    [
+      "REPLACE",
+      "置換：A を B に置きかえる"
+    ],
+    [
+      "REGEX_REPLACE",
+      "正規表現で置換：パターンA を B に（$1 などOK）"
+    ],
+    [
+      "REGEX_EXTRACT",
+      "正規表現で取り出す：パターンA の一致部分（B＝かっこの番号）"
+    ],
+    [
+      "SUBSTR",
+      "切り出し：A 文字目から B 文字（Bが空なら最後まで）"
+    ],
+    [
+      "SPLIT",
+      "区切って取り出す：区切り文字A で分けた B 番目"
+    ],
+    [
+      "TRIM",
+      "前後の空白（全角も）を消す"
+    ],
+    [
+      "ZEN2HAN",
+      "全角の英数字・記号を半角にする"
+    ],
+    [
+      "HAN2ZEN",
+      "半角の英数字・記号を全角にする"
+    ],
+    [
+      "PAD",
+      "ゼロ埋め：A 桁にそろえる（Bで埋める文字、空なら0）"
+    ],
+    [
+      "WAREKI",
+      "日付を和暦にする（令和8年10月1日）"
+    ],
+    [
+      "DATE_ADD",
+      "日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）"
+    ],
+    [
+      "COMMA",
+      "数字に3桁区切りのカンマを付ける"
+    ],
+    [
+      "UNCOMMA",
+      "カンマを消す"
+    ],
+    [
+      "LENGTH",
+      "文字数を数える"
+    ]
+  ],
+  "placeholderHelp": [
+    [
+      "{{ROW}}",
+      "CSVの行番号（1始まり）"
+    ],
+    [
+      "{{$回数}}",
+      "繰り返しの何回目か（変数）"
+    ],
+    [
+      "{{ROW+1}}",
+      "行番号＋1（Excelの見出し行ぶんずらす時に）"
+    ],
+    [
+      "{{TODAY}}",
+      "今日 2026/09/30 形式"
+    ],
+    [
+      "{{TODAY_JP}}",
+      "今日 2026年9月30日 形式"
+    ],
+    [
+      "{{WAREKI}}",
+      "今日 令和8年9月30日 形式"
+    ],
+    [
+      "{{WAREKI_YEAR}}",
+      "令和8年 形式"
+    ],
+    [
+      "{{YYYYMMDD}}",
+      "今日 20260930 形式"
+    ],
+    [
+      "{{NOW}}",
+      "いまの時刻 14:05 形式"
+    ],
+    [
+      "{{TIMESTAMP}}",
+      "20260930_140512 形式（ファイル名向け）"
+    ],
+    [
+      "{{YEAR}}",
+      "西暦の年"
+    ],
+    [
+      "{{MONTH}}",
+      "月"
+    ],
+    [
+      "{{DAY}}",
+      "日"
+    ]
+  ]
+}
