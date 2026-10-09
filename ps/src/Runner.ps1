@@ -181,7 +181,7 @@ function Expand-FujiRunText {
 }
 
 # WScript-style key codes: {SPACE} and {SPACE n} are not key codes, so they become spaces
-function ConvertTo-FujiSendKeys {
+function ConvertTo-FujiSendKey {
     param([AllowEmptyString()][string]$Keys)
     return [regex]::Replace([string]$Keys, '\{SPACE(?:\s+([0-9]+))?\}', {
             param($m)
@@ -266,7 +266,7 @@ function ConvertTo-FujiErrorCsv {
         foreach ($v in $e.Data) { $cols.Add($v) }
         while ($cols.Count -lt $max) { $cols.Add('') }
         $cols.Add([string]$e.No)
-        $cols.Add($e.Reason)
+        $cols.Add((ConvertTo-FujiSafeCsvValue $e.Reason))
         $cols.Add($e.Time)
         $rows.Add($cols.ToArray())
     }
@@ -283,7 +283,7 @@ function ConvertTo-FujiResultCsv {
     for ($i = 0; $i -lt $max; $i++) {
         if ($null -ne $Run.Header -and $i -lt $Run.Header.Length) { $header.Add($Run.Header[$i]) } else { $header.Add((Get-FujiText 'run.colPrefix' ($i + 1))) }
     }
-    foreach ($c in $Run.ResultColumns) { $header.Add($c) }
+    foreach ($c in $Run.ResultColumns) { $header.Add((ConvertTo-FujiSafeCsvValue $c)) }
     foreach ($k in @('run.colResult', 'run.colNote', 'run.colOrigNo', 'run.colStart')) { $header.Add((Get-FujiText $k)) }
     $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $rows.Add($header.ToArray())
@@ -291,9 +291,9 @@ function ConvertTo-FujiResultCsv {
         $cols = New-Object -TypeName 'System.Collections.Generic.List[string]'
         foreach ($v in $r.Data) { $cols.Add($v) }
         while ($cols.Count -lt $max) { $cols.Add('') }
-        foreach ($c in $Run.ResultColumns) { if ($r.Values.ContainsKey($c)) { $cols.Add([string]$r.Values[$c]) } else { $cols.Add('') } }
+        foreach ($c in $Run.ResultColumns) { if ($r.Values.ContainsKey($c)) { $cols.Add((ConvertTo-FujiSafeCsvValue ([string]$r.Values[$c]))) } else { $cols.Add('') } }
         $cols.Add($r.Status)
-        $cols.Add($r.Note)
+        $cols.Add((ConvertTo-FujiSafeCsvValue $r.Note))
         if ($r.No -gt 0) { $cols.Add([string]$r.No) } else { $cols.Add((Get-FujiText 'run.testRow')) }
         $cols.Add($r.Time)
         $rows.Add($cols.ToArray())
@@ -687,7 +687,7 @@ function Invoke-FujiRunCommand {
         'KEY' {
             $err = Confirm-FujiInputTarget -Run $Run
             if ($err) { return $err }
-            & $Run.Io.SendKeys (ConvertTo-FujiSendKeys $val)
+            & $Run.Io.SendKeys (ConvertTo-FujiSendKey $val)
             Write-FujiRunLog $Run (Get-FujiText 'run.key' $val (Get-FujiKeyName $val))
             return (Get-FujiRunNext)
         }
@@ -894,7 +894,7 @@ function Invoke-FujiWaitFor {
             Write-FujiRunLog $Run (Get-FujiText 'run.appeared' $title) 'ok'
             if ($key) {
                 Wait-FujiRun -Run $Run -Ms 300
-                & $Run.Io.SendKeys (ConvertTo-FujiSendKeys $key)
+                & $Run.Io.SendKeys (ConvertTo-FujiSendKey $key)
                 Write-FujiRunLog $Run (Get-FujiText 'run.pressed' $key)
             }
             return (Get-FujiRunNext)
@@ -918,7 +918,7 @@ function Invoke-FujiWindowCheck {
     Write-FujiRunLog $Run (Get-FujiText 'run.checkFound' $title) 'warn'
     Wait-FujiRun -Run $Run -Ms 300
     if ($key) {
-        & $Run.Io.SendKeys (ConvertTo-FujiSendKeys $key)
+        & $Run.Io.SendKeys (ConvertTo-FujiSendKey $key)
         Write-FujiRunLog $Run (Get-FujiText 'run.pressed' $key)
     }
     switch (Get-FujiCheckMode $Settings['mode']) {

@@ -32,10 +32,11 @@ function Show-FujiMainForm {
     $form.SuspendLayout()
     $bottom = New-FujiBottomPanel
     $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $bottom.Height = Get-FujiScaled 210
+    $bottom.Height = Get-FujiScaled 250
     [void]$form.Controls.Add((New-FujiStepListPanel))
     [void]$form.Controls.Add($bottom)
     $toolbars = @(New-FujiTopPanel)
+    $script:Ui.Toolbars = $toolbars
     # The last added docks first: add from the bottom row up so the first row is at the top
     for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
     $form.ResumeLayout($true)
@@ -265,7 +266,7 @@ function New-FujiStepListPanel {
     $lb.Add_MouseMove({ $e = $_; Invoke-FujiUi { Move-FujiListMouse -MouseEvent $e } })
     $lb.Add_MouseUp({ $script:DragFrom = $null })
     # a double click on the fold mark only folds and unfolds
-    $lb.Add_DoubleClick({ Invoke-FujiUi { if (-not $script:ToggleClicked) { Edit-FujiStepUi } } })
+    $lb.Add_DoubleClick({ Invoke-FujiUi { if (-not $script:ToggleClicked -and -not (Test-FujiEditLocked)) { Edit-FujiStepUi } } })
     $lb.Add_DragOver({ $e = $_; Invoke-FujiUi { Update-FujiDropTarget -DragEvent $e } })
     $lb.Add_DragDrop({ Invoke-FujiUi { Complete-FujiDrop } })
     $lb.Add_DragLeave({ $script:DropRow = -1; $script:Ui.List.Invalidate() })
@@ -334,10 +335,14 @@ function Show-FujiStepRow {
     $back = [System.Drawing.Color]::White
     if ($script:CategoryBack.ContainsKey($cat)) { $back = Get-FujiColor $script:CategoryBack[$cat] }
     if ($selected) { $back = Get-FujiColor '#dcecfd' }
+    $running = Test-FujiRunHighlight -StepIndex $row.Index
+    if ($running) { $back = Get-FujiColor '#fff3c4' }
     $brush = New-Object -TypeName System.Drawing.SolidBrush -ArgumentList $back
     try { $g.FillRectangle($brush, $b) } finally { $brush.Dispose() }
-    if ($selected) {
-        $pen = New-Object -TypeName System.Drawing.Pen -ArgumentList (Get-FujiColor '#2196f3'), 1
+    if ($selected -or $running) {
+        $edge = '#2196f3'
+        if ($running) { $edge = '#fb8c00' }
+        $pen = New-Object -TypeName System.Drawing.Pen -ArgumentList (Get-FujiColor $edge), 1
         try { $g.DrawRectangle($pen, $b.X, $b.Y, $b.Width - 1, $b.Height - 1) } finally { $pen.Dispose() }
     }
     $lay = Get-FujiRowLayout -Depth $row.Depth -Left $b.X
@@ -438,7 +443,7 @@ function Start-FujiListMouse {
 function Move-FujiListMouse {
     param([Parameter(Mandatory)]$MouseEvent)
     $from = $script:DragFrom
-    if ($null -eq $from -or $MouseEvent.Button -ne [System.Windows.Forms.MouseButtons]::Left) { return }
+    if ($null -eq $from -or $MouseEvent.Button -ne [System.Windows.Forms.MouseButtons]::Left -or $script:RunCtl.Running) { return }
     $drag = [System.Windows.Forms.SystemInformation]::DragSize
     if ([Math]::Abs($MouseEvent.X - $from.X) -lt $drag.Width -and [Math]::Abs($MouseEvent.Y - $from.Y) -lt $drag.Height) { return }
     $script:DragFrom = $null
@@ -489,21 +494,10 @@ function Complete-FujiDrop {
 }
 
 # ----------------------------------------------------------------- bottom panel
+# Run controls on top, then the log with the variable panel on its right (hidden until asked)
 function New-FujiBottomPanel {
-    $panel = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $panel.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $panel.ColumnCount = 1
-    Add-FujiFullColumn -Table $panel
-    $panel.RowCount = 2
-    [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize)))
-    [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
+    $panel = New-Object -TypeName System.Windows.Forms.Panel
     $panel.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), 0, (Get-FujiScaled 6), (Get-FujiScaled 6)
-    $row = New-FujiFlow -NoWrap
-    $run = New-FujiButton -Text (Get-FujiText 'gui.run')
-    $run.Font = $script:Ui.BoldFont
-    $run.Add_Click({ Write-FujiUiLog -Message (Get-FujiText 'gui.runNotYet') -Level 'warn' })
-    [void]$row.Controls.Add($run)
-    $panel.Controls.Add($row, 0, 0)
     $log = New-Object -TypeName System.Windows.Forms.RichTextBox
     $log.Dock = [System.Windows.Forms.DockStyle]::Fill
     $log.ReadOnly = $true
@@ -514,7 +508,20 @@ function New-FujiBottomPanel {
     $log.DetectUrls = $false
     $log.HideSelection = $false
     $script:Ui.Log = $log
-    $panel.Controls.Add($log, 0, 1)
+    $watch = New-Object -TypeName System.Windows.Forms.TextBox
+    $watch.Multiline = $true
+    $watch.ReadOnly = $true
+    $watch.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+    $watch.Dock = [System.Windows.Forms.DockStyle]::Right
+    $watch.Width = Get-FujiScaled 340
+    $watch.BackColor = [System.Drawing.Color]::White
+    $watch.Font = $script:Ui.LogFont
+    $watch.Visible = $false
+    $script:Ui.Watch = $watch
+    # fill first, then the docked parts (the last added docks first)
+    [void]$panel.Controls.Add($log)
+    [void]$panel.Controls.Add($watch)
+    [void]$panel.Controls.Add((New-FujiRunBar))
     return $panel
 }
 
@@ -964,6 +971,11 @@ function Save-FujiUi {
 
 function Confirm-FujiClose {
     param([Parameter(Mandatory)]$CloseEvent)
+    if ($script:RunCtl.Running) {
+        $CloseEvent.Cancel = $true
+        Write-FujiUiLog -Message (Get-FujiText 'gui.closeRunning') -Level 'warn'
+        return
+    }
     if (-not $script:Ed.Dirty) { return }
     $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message (Get-FujiText 'gui.closeDirty') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
     if ($answer -ne 0) { $CloseEvent.Cancel = $true }
@@ -973,9 +985,16 @@ function Invoke-FujiShortcut {
     param([Parameter(Mandatory)]$KeyEvent)
     $k = $KeyEvent.KeyCode
     $keys = [System.Windows.Forms.Keys]
-    if ($KeyEvent.Control -and $k -eq $keys::S) {
+    if ($KeyEvent.Control -and $k -eq $keys::S -and -not $script:RunCtl.Running) {
         $KeyEvent.SuppressKeyPress = $true
         Save-FujiUi
+        return
+    }
+    if ($script:RunCtl.Running) {
+        if ($k -eq $keys::Escape) {
+            $script:RunCtl.StopReason = Get-FujiText 'run.stopEsc'
+            $KeyEvent.SuppressKeyPress = $true
+        }
         return
     }
     $active = $script:Ui.Form.ActiveControl

@@ -1206,6 +1206,14 @@ function toHalfWidthDigits(s) {
     });
 }
 
+// A value the app adds to an output CSV (recorded screen text, notes, errors) that Excel would run as
+// a formula (= + - @, tab, CR at the start) gets a leading apostrophe. Plain numbers such as -5 stay.
+// The original CSV columns are never changed: an error-row CSV is read back to re-run those rows.
+function safeCsvValue(v) {
+    v = v == null ? "" : String(v);
+    return /^[=+\-@\t\r]/.test(v) && !/^[+\-]?\d+(\.\d+)?$/.test(v) ? "'" + v : v;
+}
+
 function toCsvField(v) {
     v = v == null ? "" : String(v);
     return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
@@ -5178,7 +5186,7 @@ function exportErrorRows() {
         while (cols.length < maxCols) {
             cols.push("");
         }
-        cols.push(String(errorRows[i].no), errorRows[i].reason, errorRows[i].time);
+        cols.push(String(errorRows[i].no), safeCsvValue(errorRows[i].reason), errorRows[i].time);
         lines.push(cols.map(toCsvField).join(","));
     }
     var path = appFilePath(ERROR_FILE_NAME);
@@ -5256,7 +5264,7 @@ function exportResultRows() {
     for (i = 0; i < maxCols; i++) {
         header.push(runHeader && i < runHeader.length ? runHeader[i] : "列" + (i + 1));
     }
-    header = header.concat(resultColumns).concat(["実行結果", "備考", "元データ行No", "開始日時"]);
+    header = header.concat(resultColumns.map(safeCsvValue)).concat(["実行結果", "備考", "元データ行No", "開始日時"]);
     var lines = [header.map(toCsvField).join(",")];
     for (i = 0; i < resultRows.length; i++) {
         var r = resultRows[i];
@@ -5265,9 +5273,9 @@ function exportResultRows() {
             cols.push("");
         }
         for (var c = 0; c < resultColumns.length; c++) {
-            cols.push(r.values.hasOwnProperty(resultColumns[c]) ? r.values[resultColumns[c]] : "");
+            cols.push(r.values.hasOwnProperty(resultColumns[c]) ? safeCsvValue(r.values[resultColumns[c]]) : "");
         }
-        cols.push(r.status, r.note, r.no > 0 ? String(r.no) : "テスト", r.time);
+        cols.push(r.status, safeCsvValue(r.note), r.no > 0 ? String(r.no) : "テスト", r.time);
         lines.push(cols.map(toCsvField).join(","));
     }
     var path = appFilePath(RESULT_FILE_NAME);

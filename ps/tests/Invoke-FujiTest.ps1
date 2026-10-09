@@ -476,7 +476,7 @@ function New-FakeIo {
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
-        Wait = { param($Ms) $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
+        Wait = { $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
         Activate = { param($Title) $script:Fake.Calls.Add('ACT ' + $Title); return ($script:Fake.Windows -contains $Title) }
         WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
         SelfHasFocus = { return $script:Fake.Self }
@@ -487,18 +487,18 @@ function New-FakeIo {
         Start = { param($CommandLine) $script:Fake.Calls.Add('START ' + $CommandLine); return '' }
         ClickAt = { param($X, $Y, $Kind) $script:Fake.Calls.Add(('CLICK {0},{1} {2}' -f $X, $Y, $Kind)) }
         Screenshot = { param($Path, $Full) $script:Fake.Calls.Add('SHOT ' + $Path + ' ' + $Full); return '10x10' }
-        ClickName = { param($Name, $WindowTitle) $script:Fake.Calls.Add('NAME ' + $Name); return 'Invoke' }
-        ClickImage = { param($Path, $Threshold) $script:Fake.Calls.Add('IMG ' + $Path); return @{ X = 5; Y = 6; Score = 0.95 } }
-        Ocr = { param($Settings, $Find, $Nth) $script:Fake.Calls.Add('OCR ' + $Find); return "read`n" }
+        ClickName = { param($Name) $script:Fake.Calls.Add('NAME ' + $Name); return 'Invoke' }
+        ClickImage = { param($Path) $script:Fake.Calls.Add('IMG ' + $Path); return @{ X = 5; Y = 6; Score = 0.95 } }
+        Ocr = { param($Settings, $Find) $null = $Settings; $script:Fake.Calls.Add('OCR ' + $Find); return "read`n" }
         Excel = { param($Request) $script:Fake.Calls.Add(('EXCEL {0} {1} {2}' -f $Request.Write, $Request.Cell, $Request.Value)); return $script:Fake.ExcelValue }
         Outlook = { param($Mail) $script:Fake.Calls.Add('OUTLOOK ' + $Mail.Mode + ' ' + $Mail.To); return $Mail.Mode }
         OpenUrl = { param($Url) $script:Fake.Calls.Add('URL ' + $Url) }
         FileExists = { param($Path) return ($script:Fake.Files -contains $Path) }
         Now = { return [datetime]'2026-10-09 14:05:12' }
-        Confirm = { param($Caption, $Message) $script:Fake.Calls.Add('CONFIRM ' + $Message); return $script:Fake.Answers.Dequeue() }
-        Ask = { param($Caption, $Message, $Default) $script:Fake.Calls.Add('ASK ' + $Message); return $script:Fake.Answers.Dequeue() }
-        Progress = { param($Text) }
-        Highlight = { param($StepIndex) }
+        Confirm = { param($Caption, $Message) $null = $Caption; $script:Fake.Calls.Add('CONFIRM ' + $Message); return $script:Fake.Answers.Dequeue() }
+        Ask = { param($Caption, $Message) $null = $Caption; $script:Fake.Calls.Add('ASK ' + $Message); return $script:Fake.Answers.Dequeue() }
+        Progress = { }
+        Highlight = { }
         Watch = { }
         Alarm = { $script:Fake.Calls.Add('ALARM') }
         Notify = { $script:Fake.Calls.Add('NOTIFY') }
@@ -670,13 +670,21 @@ Assert-True ((Get-FakeCall 'CLICK') -eq 'CLICK 10,20 DOUBLE' -and (Get-FakeCall 
 $run = New-TestRun -Steps @(@('CLICK_IMG', '{"path":"none.png","threshold":"0.9"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing reference image'
 
+# output CSVs: values the app adds never start a formula; original columns stay as they were
+$run = New-TestRun -Steps @(@('RECORD', '{"name":"v","value":"=HYPERLINK(1)"}'), @('RECORD', '{"name":"n","value":"-5"}')) -Rows @(, [string[]]@('=A1'))
+[void](Invoke-FujiRun -Run $run)
+$res = ConvertFrom-FujiCsv -Text (ConvertTo-FujiResultCsv -Run $run)
+Assert-True ($res.Records[1][0] -eq '=A1' -and $res.Records[1][1] -eq "'=HYPERLINK(1)" -and $res.Records[1][2] -eq '-5') 'result CSV: recorded formula neutralised, number and original column kept'
+foreach ($v in @('@x', '+x', "`tx", '-x')) { Assert-Equal ("'" + $v) (ConvertTo-FujiSafeCsvValue $v) ('safe CSV value ' + [int][char]$v[0]) }
+Assert-Equal '+1.5' (ConvertTo-FujiSafeCsvValue '+1.5') 'safe CSV value: signed number kept'
+
 # rows to run
 $rr = Get-FujiRunRow -CsvRows @([string[]]@('a'), [string[]]@(''), [string[]]@('c'), [string[]]@('d')) -StartText ([string][char]0xFF12) -EndText '3'
 Assert-True ($rr.Rows.Count -eq 1 -and $rr.Rows[0].No -eq 3 -and $rr.Logs.Count -eq 1) 'run rows: range (full-width digits), blank row skipped'
 Assert-True ([bool](Get-FujiRunRow -CsvRows @(, [string[]]@('a')) -StartText 'x').Error) 'run rows: a typo is refused, not "all rows"'
 Assert-True ((Get-FujiRunRow -CsvRows @(, [string[]]@('a')) -StartText '3').Logs[0][1] -eq 'warn') 'run rows: start after end'
 Assert-True ((Get-FujiRunRow).Rows[0].No -eq 0) 'run rows: no CSV = one test row'
-Assert-Equal '   a ' (ConvertTo-FujiSendKeys '{SPACE 3}a{space}') 'SendKeys: {SPACE n}'
+Assert-Equal '   a ' (ConvertTo-FujiSendKey '{SPACE 3}a{space}') 'SendKeys: {SPACE n}'
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"v","value":"1","mode":"TEXT"}')) -Rows @(, [string[]]@('a')) -Header @('H')
 [void](Invoke-FujiRun -Run $run)
 $watch = Get-FujiRunWatch -Run $run
@@ -690,6 +698,12 @@ Assert-True $true 'expand-value check survives compilation'
 $native = Get-FujiNativeType
 Assert-True ($null -ne $native.GetMethod('SetProcessDPIAware') -and $null -ne $native.GetMethod('SendMessage')) 'native functions declared without a compiler'
 Assert-True ([object]::ReferenceEquals($native, (Get-FujiNativeType))) 'native type made once'
+Assert-True ($null -ne $native.GetMethod('GetWindowRect') -and $null -ne $native.GetMethod('GetCurrentThreadId') -and $null -ne $native.GetMethod('mouse_event')) 'window, keyboard and mouse functions declared'
+$wins = @(@{ Handle = 1; Title = 'Book1 - Excel' }, @{ Handle = 2; Title = 'Notepad' }, @{ Handle = 3; Title = 'notepad memo' })
+Assert-Equal 2 (Select-FujiWindow -Windows $wins -Title 'NOTEPAD').Handle 'window title: exact match first (case ignored)'
+Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Book1').Handle 'window title: prefix'
+Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Excel').Handle 'window title: suffix'
+Assert-True ($null -eq (Select-FujiWindow -Windows $wins -Title 'memo pad') -and $null -eq (Select-FujiWindow -Windows $wins -Title '')) 'window title: no match'
 
 # ----------------------------------------------------------------- source rules
 # The app file handed out must be the current build of the sources

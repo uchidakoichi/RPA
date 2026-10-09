@@ -320,7 +320,6 @@
     "off": "無効",
     "whenFirst": "最初の1行だけ",
     "whenLast": "最後の1行だけ",
-    "runNotYet": "▶ 実行はまだ準備中だキュン（次の更新で使えるようになるよ）",
     "run": "▶ 実行",
     "ok": "OK",
     "yes": "はい",
@@ -438,7 +437,8 @@
     "exportResults": "↓ 実行結果CSV ({0})",
     "exportResultsTip": "各行の実行結果と、COPY・RECORD で記録した値をCSVに保存します",
     "exportErrors": "↓ エラー行をCSV保存 ({0})",
-    "idle": "待機中キュン♡"
+    "idle": "待機中キュン♡",
+    "closeRunning": "実行中は閉じられないキュン。⏹ 停止してからね♡"
   },
   "run": {
     "noSteps": "実行できるコマンドがないキュン。まずはコマンドを追加してね♡",
