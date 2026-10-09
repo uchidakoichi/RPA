@@ -10,7 +10,13 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 - 外部ソフト不要: Windows 標準の機能（HTA・WScript・PowerShell）だけで動作
 - 初心者向け: 67種類のテンプレートと見本CSVを内蔵（Excel・Word・文書起案・財務会計・グループウェア・福祉・国保／介護保険／税務／住民情報／住民基本台帳／収納管理／滞納管理・庶務事務・変数／繰り返し／分岐・文字認識／メール など）
 
-## ダウンロードと起動
+## PowerShell 版（おすすめ）
+
+HTA（mshta.exe）は開発の終わった Internet Explorer の部品で動くため、同じ機能を **Windows PowerShell 5.1 ＋ Windows Forms** で作り直した PowerShell 版を用意しています（`ps` フォルダ。SMTP 送信のみ廃止）。マクロのファイルは共通です。
+
+`ps` フォルダの `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json` の5つを同じフォルダに置き（JSON は UTF-8 で保存）、`fujikyun.bat` をダブルクリックします。詳しくは [PowerShell版の説明](docs/src/powershell.md) を見てください。
+
+## ダウンロードと起動（HTA 版）
 
 1. `fujikyun_rpa_builder.hta` を、ローカルフォルダに置きます。
    自治体セキュリティクラウドのダウンロード機能では**ダウンロードしないでください**。GitHubでRAW表示してコードを丸ごとメモ帳アプリなどに貼り付け後、`fujikyun_rpa_builder.hta`など拡張子をhtaに変更してください。
@@ -62,7 +68,7 @@ Windows のオフライン環境で動く、1ファイルだけの RPA（パソ�
 | `tools/test_runner.js` | 保守用: 実行ループ・CSV・保存・変数・繰り返し・分岐などのテスト（Windows を模擬して動かす） |
 | `tools/check_templates.js` | 保守用: HTA のスクリプト（ES5）と全テンプレートの検証（コマンドの値・ブロックの対応・差し込み・CSV） |
 | `tools/hta_context.js` | 保守用: 上の各ツールが HTA のスクリプトを読み込むための共通部品 |
-| `ps/` | PowerShell 版（移植中。[ps/README.md](ps/README.md)） |
+| `ps/` | PowerShell 版（[説明](docs/src/powershell.md)・保守向け [ps/README.md](ps/README.md)） |
 | `tools/make_ps_golden.js` | 保守用: PowerShell 版のテストに使う期待値を HTA 版の関数から作る |
 | `tools/export_ps_templates.js` | 保守用: HTA 版のテンプレートを PowerShell 版用の JSON に書き出す |
 | `RPA.md` | 要件定義書 |

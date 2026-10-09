@@ -20,6 +20,16 @@ for (const t of templates) {
         }
     }
 }
+// Texts that mention SMTP: the PowerShell edition sends with Outlook or the mail app only
+const TEXT_FIXES = [["（または送り方を SMTP に変える）", "（または送り方をメールアプリ（mailto）に変える）"]];
+for (const t of templates) {
+    for (const key of ["summary", "useCase", "prepare", "customize", "ideas"]) {
+        const fix = s => TEXT_FIXES.reduce((acc, f) => acc.split(f[0]).join(f[1]), s);
+        if (Array.isArray(t[key])) { t[key] = t[key].map(fix); } else if (typeof t[key] === "string") { t[key] = fix(t[key]); }
+    }
+}
+const left = JSON.stringify(templates).match(/SMTP/g);
+if (left) { throw new Error("templates still mention SMTP: add a fix to TEXT_FIXES"); }
 const out = { _about: "PowerShell 版の内蔵テンプレート。HTA 版から tools/export_ps_templates.js で書き出したもの（直接編集しない）", categories, templates };
 const file = path.join(__dirname, "..", "ps", "fujikyun_templates.json");
 fs.writeFileSync(file, JSON.stringify(out, null, 1) + "\n", "utf8");

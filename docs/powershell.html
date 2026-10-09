@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PowerShell版 - ふじキュン♡のRPAマクロビルダー</title>
+<style>
+:root { --fg: #2f2a33; --muted: #6d6470; --accent: #c2185b; --line: #ead7e2; --bg: #ffffff; --soft: #fdf5f9; --code: #f4eef2; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Meiryo UI", "Yu Gothic UI", "Segoe UI", sans-serif; font-size: 16px; line-height: 1.75; color: var(--fg); background: var(--soft); }
+header { position: sticky; top: 0; z-index: 2; background: linear-gradient(90deg, #f48fb1, #f7b6d2 55%, #b3d9ff); color: #fff; padding: 8px 16px; }
+header .title { font-weight: bold; margin-right: 16px; text-shadow: 0 1px 2px rgba(120, 30, 80, .35); }
+header nav a { color: #fff; margin-right: 12px; text-decoration: none; font-size: 15px; white-space: nowrap; }
+header nav a.current { text-decoration: underline; font-weight: bold; }
+main { max-width: 1000px; margin: 0 auto; padding: 16px 24px 48px; background: var(--bg); min-height: 100vh; }
+h1, h2, h3 { scroll-margin-top: 64px; }
+h1 { font-size: 26px; color: var(--accent); border-bottom: 3px solid var(--line); padding-bottom: 6px; }
+h2 { font-size: 22px; margin-top: 36px; border-left: 6px solid #f48fb1; padding-left: 10px; }
+h3 { font-size: 18px; margin-top: 26px; color: #8e3b66; }
+a { color: #1565c0; }
+code { font-family: Consolas, "MS Gothic", monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: #2d2733; color: #ece6f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; color: inherit; padding: 0; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; margin: 10px 0; min-width: 60%; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; text-align: left; }
+th { background: #fce4ef; }
+tr:nth-child(even) td { background: #fffafd; }
+blockquote { margin: 12px 0; padding: 8px 14px; background: #fff8e1; border-left: 4px solid #ffb300; }
+hr { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+@media print { header { position: static; } main { max-width: none; } }
+</style>
+</head>
+<body>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a><a href="powershell.html" class="current">PowerShell版</a></nav></header>
+<main>
+<h1 id="powershell版">PowerShell版</h1>
+<p>ふじキュン♡のRPAマクロビルダーには、HTA 版（<code>fujikyun_rpa_builder.hta</code>）と PowerShell 版の2つがあります。どちらも同じマクロ・同じコマンド・同じテンプレートで動き、マクロのファイル（<code>fujikyun_macros.json</code>）もそのまま使えます。</p>
+<h2 id="どちらを使えばいい">どちらを使えばいい？</h2>
+<div class="table-wrap"><table><thead><tr><th></th><th>HTA 版</th><th>PowerShell 版</th></tr></thead><tbody><tr><td>動かすもの</td><td>mshta.exe（古い Internet Explorer の部品）</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong></td></tr><tr><td>画面</td><td>HTML（Trident）</td><td>Windows Forms</td></tr><tr><td>ファイル</td><td>1つ</td><td>5つ</td></tr><tr><td>メール</td><td>Outlook・SMTP・mailto</td><td>Outlook・mailto（<strong>SMTP は廃止</strong>）</td></tr><tr><td>これから</td><td>現状のまま残す</td><td>こちらを中心に育てる</td></tr></tbody></table></div>
+<p>HTA（mshta.exe）は、Microsoft がすでに開発を終えた Internet Explorer の部品で動いていて、組織のセキュリティ方針で止められることが増えています。PowerShell 版は、その古い部品や VBScript 流の書き方を使わずに作り直したものです。新しく使い始めるなら PowerShell 版をおすすめします。</p>
+<h2 id="準備">準備</h2>
+<ol><li>次の5つのファイルを、<strong>同じフォルダ</strong> に置きます。<ul><li><code>fujikyun.bat</code></li><li><code>fujikyun.ps1</code></li><li><code>fujikyun_ja.json</code></li><li><code>fujikyun_commands.json</code></li><li><code>fujikyun_templates.json</code></li></ul>
+<p>GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにし、<strong>JSON は文字コード「UTF-8」で保存</strong> します（<code>ps</code> フォルダの中にあります）。</p></li><li><code>fujikyun.bat</code> をダブルクリックします。</li><li><strong>［🩺 環境チェック］</strong> で、この端末で使える機能を確認します。</li><li><strong>［📚 テンプレート］</strong> からお手本マクロを作って、動かしてみましょう。</li></ol>
+<p>マクロのファイル（<code>fujikyun_macros.json</code>）・見本CSV（<code>samples</code>）・参照画像（<code>rpa_images</code>）・証跡（<code>evidence</code>）・書き出したマクロ（<code>macro_export</code>）・予定（<code>fujikyun_settings.json</code>）は、このフォルダに作られます。HTA 版で作ったマクロを使うときは、HTA 版の <code>fujikyun_macros.json</code> をこのフォルダにコピーします。</p>
+<h3 id="起動のしくみ">起動のしくみ</h3>
+<p><code>fujikyun.bat</code> は、PowerShell 5.1 を STA モード（Windows Forms に必要）・コンソールなしで起動します。<code>-ExecutionPolicy Bypass</code> の指定はその1回の起動にだけ効き、端末の設定は変えません。グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。</p>
+<h2 id="hta-版との違い">HTA 版との違い</h2>
+<p>使い方は <a href="manual.html">操作マニュアル</a> のとおりで、HTA 版と同じです。違うのは次の点です。</p>
+<ul><li><strong>メールの SMTP 送信はありません。</strong> Outlook か、メールアプリ（mailto）を使います。テンプレートのメールも Outlook／mailto で動きます。</li><li><strong>実行の止め方</strong>：Esc か ⏹。ほかの画面が前にあるときは <strong>Esc を1秒ほど長押し</strong> します。</li><li><strong>画像でクリック・⏺ 記録</strong> は、最初に使うときだけ準備（小さな C# のコンパイル）に数秒かかります。</li><li>名前・画像・文字（OCR）での検索は別のスレッドで動くので、検索中も画面が固まらず、停止できます。</li><li><strong>⏰ 予定の Windows 登録</strong> は、Windows のタスク スケジューラに「<code>fujikyun.ps1</code> を <code>-AutoRun &lt;予定のID&gt;</code> で起動する」タスクを作ります。タスクの名前は <code>FujikyunRPA_PS_</code> で始まります。</li><li>実行結果CSV・エラー行CSVで、ツールが付け足す列（記録した値・備考・エラー内容）が <code>=</code> などで始まるときは、Excel で数式として動かないよう先頭に <code>'</code> を付けます（元データの列はそのまま）。</li><li>EXCEL_WRITE で、差し込みで入った値が <code>=</code> などで始まるときは文字として書きます。ステップに直接書いた数式（<code>=SUM(A1:A3)</code> など）は数式のままです。Excel のブックはマクロを無効にして開きます。</li></ul>
+<h2 id="困ったとき">困ったとき</h2>
+<div class="table-wrap"><table><thead><tr><th>こんなとき</th><th>どうする</th></tr></thead><tbody><tr><td>ボタンなどが <code>gui.schedule</code> のような英字の名前で表示される</td><td><code>fujikyun_ja.json</code> が古いままです。<code>fujikyun.ps1</code> と同じ版の <code>fujikyun_ja.json</code> に置き換えてください（起動時にもお知らせが出ます）</td></tr><tr><td>起動すると「起動できなかったキュン」と出る</td><td>メッセージの内容を確認します。JSON を UTF-8 以外（Shift_JIS など）で保存すると読み込めません</td></tr><tr><td>画面が出ない・すぐ消える</td><td>［🩺 環境チェック］を開けない場合は、<code>fujikyun.bat</code> を右クリック→［編集］で中身を確認し、PowerShell が組織の設定で止められていないか情報担当に確認します</td></tr><tr><td>起動に時間がかかる</td><td>ログの「⏱ 起動にかかった時間」の内訳を見ます</td></tr><tr><td>予定が動かない</td><td>PC がスリープ・画面ロック中でないか、ログインしたままか、［⏰ 予定］で「✅ 有効」になっているかを確認します</td></tr></tbody></table></div>
+<p>そのほかは <a href="faq.html">Q&amp;A</a> も参考にしてください（HTA 版向けの項目もあります）。</p>
+<h2 id="保守する人向け">保守する人向け</h2>
+<p>ソースは <code>ps</code> フォルダにあり、<code>.ps1</code> は英数字（ASCII）だけで書いています。Windows PowerShell 5.1 は BOM のない <code>.ps1</code> を Shift_JIS として読むためで、日本語の文言はすべて UTF-8 の <code>fujikyun_ja.json</code> に分けています。</p>
+<ul><li><code>fujikyun.ps1</code> は <code>ps/build/Build-FujiBundle.ps1</code> が <code>ps/build/Main.ps1</code>・<code>ps/src</code>・<code>ps/gui</code> から作る1ファイルです（直接編集しない）。</li><li>テスト：<code>ps/tests/Invoke-FujiTest.ps1</code>（Windows では <code>ps\tests\run_tests.bat</code>）。画面に依存しない部分（編集・実行の決まり・CSV・計算・和暦・予定・記録の変換・画像照合・OCR 結果の処理など）を、偽の画面操作で確かめます。</li><li>詳しくは <a href="https://github.com/uchidakoichi/RPA/blob/master/ps/README.md"><code>ps/README.md</code></a> を見てください。</li></ul>
+<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>
+</main>
+</body>
+</html>
