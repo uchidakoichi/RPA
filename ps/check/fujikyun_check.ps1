@@ -154,6 +154,47 @@ public static class FujiCheckNative {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int max);
+
+    // "process.exe 'title'" of a window, for the report
+    public static string Describe(IntPtr h) {
+        if (h == IntPtr.Zero) { return "(none)"; }
+        uint pid;
+        GetWindowThreadProcessId(h, out pid);
+        string name = "?";
+        try { name = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { }
+        var sb = new System.Text.StringBuilder(256);
+        GetWindowText(h, sb, sb.Capacity);
+        return name + " '" + sb.ToString() + "'";
+    }
+
+    // Brings a window to the front, trying the plain call first and then the two usual ways around
+    // the foreground lock. Returns the name of the way that worked, or "" when none did.
+    public static string BringToFront(IntPtr h) {
+        if (IsIconic(h)) { ShowWindow(h, 9); }
+        SetForegroundWindow(h);
+        if (GetForegroundWindow() == h) { return "SetForegroundWindow"; }
+        uint pid;
+        uint fgThread = GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+        uint me = GetCurrentThreadId();
+        if (fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true)) {
+            try { BringWindowToTop(h); SetForegroundWindow(h); } finally { AttachThreadInput(me, fgThread, false); }
+            if (GetForegroundWindow() == h) { return "AttachThreadInput"; }
+        }
+        keybd_event(0x12, 0, 0, UIntPtr.Zero);      // Alt down: the system then allows a foreground change
+        keybd_event(0x12, 0, 2, UIntPtr.Zero);      // Alt up
+        SetForegroundWindow(h);
+        if (GetForegroundWindow() == h) { return "AltKey"; }
+        return "";
+    }
 }
 '@
     }
@@ -384,9 +425,19 @@ $form.Add_Shown({
     [System.Windows.Forms.Application]::DoEvents()
 
     Invoke-Check 'foreground' {
+        # Also the ability SWITCH needs: bring a window to the front despite the foreground lock
         if (-not $nativeReady) { return @('SKIP', 'C#') }
-        $fg = [FujiCheckNative]::GetForegroundWindow()
-        @($(if ($fg -eq $form.Handle) { 'OK' } else { 'NG' }), ('0x{0:X}' -f $fg.ToInt64()))
+        $before = [FujiCheckNative]::GetForegroundWindow()
+        if ($before -eq $form.Handle) { return @('OK', 'already in front') }
+        $how = [FujiCheckNative]::BringToFront($form.Handle)
+        [System.Windows.Forms.Application]::DoEvents()
+        $parent = ''
+        try {
+            $ppid = (Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = {0}' -f $PID)).ParentProcessId
+            $parent = (Get-Process -Id $ppid -ErrorAction Stop).ProcessName
+        } catch { $parent = '?' }
+        $detail = 'front before: {0} / started from: {1} / brought by: {2}' -f [FujiCheckNative]::Describe($before), $parent, $(if ($how) { $how } else { '-' })
+        @($(if ($how) { 'OK' } else { 'NG' }), $detail)
     }
 
     Invoke-Check 'clipboard' {
