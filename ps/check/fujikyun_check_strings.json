@@ -39,7 +39,7 @@
     "dpi": "画面の拡大率（参考）",
     "clipboard": "クリップボードの読み書き",
     "sendKeys": "キー送信（SendKeys）",
-    "foreground": "前面ウィンドウの判定"
+    "foreground": "ウィンドウを前面に出す（SWITCH に必要）"
   },
   "advice": {
     "psVersion": "Windows PowerShell 5.1 で動かしてね。bat から起動すると 5.1 で動くよ。",
@@ -58,6 +58,6 @@
     "scheduledTasks": "Windows への予定の登録が使えないよ（ふじキュンを開いているときの予定実行は使える）。",
     "clipboard": "TEXT・CSV・COPY が使えないよ。ほかのソフトがクリップボードを使っていないか確認してね。",
     "sendKeys": "キー送信が使えないよ。チェックの途中で別の画面をクリックしなかったか確認して、もう一度試してね。",
-    "foreground": "前面ウィンドウの判定ができないと、誤入力防止が働かないよ。"
+    "foreground": "ウィンドウを前面に出せないと、ウィンドウ切替（SWITCH）や対象ウィンドウへの入力ができないよ。詳細の「front before」に出ている画面の名前を教えてね。"
   }
 }

@@ -18,11 +18,11 @@ function el() {
         appendChild() {}, removeChild() {}, getElementsByTagName() { return []; }, setAttribute() {}, getAttribute() { return null; } };
 }
 
-// Returns R(code): evaluates code inside the HTA's global scope
-function loadHta(script) {
+// Returns R(code): evaluates code inside the HTA's global scope. globals: extra globals (e.g. a fixed Date)
+function loadHta(script, globals) {
     const els = {};
-    const ctx = { window: {}, location: { href: "" }, screen: {}, setTimeout, clearTimeout,
-        document: { getElementById: id => (els[id] = els[id] || el()), createElement: el, createTextNode: () => ({}), title: "t" } };
+    const ctx = Object.assign({ window: {}, location: { href: "" }, screen: {}, setTimeout, clearTimeout,
+        document: { getElementById: id => (els[id] = els[id] || el()), createElement: el, createTextNode: () => ({}), title: "t" } }, globals || {});
     vm.createContext(ctx);
     vm.runInContext(script || htaScript(), ctx);
     return code => vm.runInContext(code, ctx);
