@@ -15,7 +15,7 @@ function New-FujiRunBar {
     $run = New-FujiButton -Text (Get-FujiText 'gui.run')
     $run.Font = $script:Ui.BoldFont
     $run.BackColor = Get-FujiColor '#c8f0cf'
-    $run.Add_Click({ Invoke-FujiUi { Start-FujiRunUi } })
+    $run.Add_Click({ Invoke-FujiUi { [void](Start-FujiRunUi) } })
     $pause = New-FujiButton -Text (Get-FujiText 'gui.pause')
     $pause.Enabled = $false
     $pause.Add_Click({ Invoke-FujiUi { Switch-FujiRunPause } })
@@ -116,8 +116,15 @@ function Switch-FujiRunPause {
 }
 
 # ----------------------------------------------------------------- starting a run
+# Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
+# ('done', 'stopped', 'error') or '' when it did not start.
 function Start-FujiRunUi {
-    if ($script:RunCtl.Running) { return }
+    param([switch]$Unattended)
+    if ($script:RunCtl.Running) { return '' }
+    if ($null -ne $script:Rec) {
+        Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
+        return ''
+    }
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
     $executable = 0
@@ -128,24 +135,28 @@ function Start-FujiRunUi {
     }
     if ($executable -eq 0) {
         Write-FujiUiLog -Message (Get-FujiText 'run.noSteps') -Level 'warn'
-        return
+        return ''
     }
     if (-not (Test-FujiBlockBalanced -Steps $steps)) {
         Show-FujiMessage -Title (Get-FujiText 'run.unbalancedTitle') -Message (Get-FujiText 'run.unbalanced')
-        return
+        return ''
     }
     $csvRows = $script:Ed.Csv.Rows
     if ($csvRows.Count -eq 0 -and $usesCsv) {
+        if ($Unattended) {
+            Write-FujiUiLog -Message (Get-FujiText 'run.noCsvUnattended') -Level 'error'
+            return ''
+        }
         $answer = Show-FujiChoice -Title (Get-FujiText 'gui.run') -Message (Get-FujiText 'run.noCsvAsk') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
-        if ($answer -ne 0) { return }
+        if ($answer -ne 0) { return '' }
     }
     $rr = Get-FujiRunRow -CsvRows $csvRows -Header $script:Ed.Csv.Header -StartText $script:Ui.StartRow.Text -EndText $script:Ui.EndRow.Text
     foreach ($l in $rr.Logs) { Write-FujiUiLog -Message $l[0] -Level $l[1] }
     if ($rr.Error) {
         Show-FujiMessage -Title (Get-FujiText 'run.rangeTitle') -Message $rr.Error
-        return
+        return ''
     }
-    if ($rr.Rows.Count -eq 0) { return }
+    if ($rr.Rows.Count -eq 0) { return '' }
     $interval = [Math]::Max(0, (Get-FujiInt -Text $script:Ui.Interval.Text -Default 300))
     $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rr.Rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
         -Interval $interval -SafeMode $script:Ui.SafeCheck.Checked -Directory $script:Ed.Directory `
@@ -159,8 +170,9 @@ function Start-FujiRunUi {
     Set-FujiRunUi -Running $true
     Update-FujiRunButton
     Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rr.Rows.Count $rr.Range $interval) -Level 'run'
+    $status = ''
     try {
-        [void](Invoke-FujiRun -Run $script:Run)
+        $status = Invoke-FujiRun -Run $script:Run
     } finally {
         $c.Running = $false
         $c.Paused = $false
@@ -171,6 +183,7 @@ function Start-FujiRunUi {
         Update-FujiWatchPanel
         $script:Ui.List.Invalidate()
     }
+    return $status
 }
 
 # ----------------------------------------------------------------- waiting (keeps the window alive)

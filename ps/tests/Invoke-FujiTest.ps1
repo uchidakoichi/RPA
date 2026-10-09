@@ -715,6 +715,49 @@ Assert-True ((Get-FujiOcrRect -Settings @{ area = 'RECT'; x = '1'; y = '2'; w = 
 Assert-Equal 2.0 (Get-FujiOcrScale -Width 300 -Height 100 -MaxDimension 2600) 'OCR scale: up to 2x'
 Assert-Equal 1.3 (Get-FujiOcrScale -Width 2000 -Height 100 -MaxDimension 2600) 'OCR scale: within the engine limit'
 
+# schedules
+$sch = [ordered]@{ id = 's1'; time = '9:05'; repeat = 'WEEKDAYS'; enabled = $true; lastRun = '' }
+$mon = [datetime]'2026-10-12 09:07:00'
+Assert-True (Test-FujiScheduleDue $sch $mon) 'schedule: due on a weekday within 10 minutes'
+Assert-True (-not (Test-FujiScheduleDue $sch $mon.AddMinutes(10)) -and -not (Test-FujiScheduleDue $sch $mon.AddMinutes(-3))) 'schedule: not before the time, not 10 minutes after'
+Assert-True (-not (Test-FujiScheduleDue $sch ([datetime]'2026-10-11 09:07:00'))) 'schedule: weekdays only'
+$sch.lastRun = '2026/10/12'
+Assert-True (-not (Test-FujiScheduleDue $sch $mon)) 'schedule: once a day'
+$next = Get-FujiNextSchedule -Schedules @($sch) -Now $mon
+Assert-Equal '2026/10/13' (Format-FujiDate -Date $next.Day) 'schedule: next run tomorrow after today ran'
+$sat = Get-FujiNextSchedule -Schedules @($sch) -Now ([datetime]'2026-10-10 12:00:00')
+Assert-Equal '2026/10/12' (Format-FujiDate -Date $sat.Day) 'schedule: next weekday after a weekend'
+$r = New-FujiSchedule -MacroId 'm' -MacroName 'n' -CsvPath ' "C:\a.csv" ' -Header $true -Time ([string][char]0xFF18 + [char]0xFF1A + '05') -Repeat 'ONCE' -DateText '2026-10-31' -CloseAfter $false
+Assert-True ($r.Schedule.time -eq '08:05' -and $r.Schedule.date -eq '2026/10/31' -and $r.Schedule.csvPath -eq 'C:\a.csv') 'schedule: full-width time, date and path normalised'
+Assert-True ((New-FujiSchedule -Time '25:00' -Repeat 'DAILY').ContainsKey('Error') -and (New-FujiSchedule -Time '8:00' -Repeat 'ONCE' -DateText 'x').ContainsKey('Error')) 'schedule: bad time or date refused'
+$once = $r.Schedule
+Assert-True ((Test-FujiScheduleDue $once ([datetime]'2026-10-31 08:06')) -and -not (Test-FujiScheduleDue $once ([datetime]'2026-11-01 08:06'))) 'schedule: once on its date'
+$work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_set_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $work)
+try {
+    Assert-Equal 0 (Read-FujiSetting -Directory $work).schedules.Count 'settings: none yet'
+    Save-FujiSetting -Directory $work -Settings ([ordered]@{ schedules = @($once, [ordered]@{ id = ''; time = '1:00' }) })
+    $back = Read-FujiSetting -Directory $work
+    Assert-True ($back.schedules.Count -eq 1 -and $back.schedules[0].time -eq '08:05' -and $back.schedules[0].header -eq $true) 'settings: saved and read back, broken entries left out'
+    Write-FujiTextFile -Path (Join-Path $work 'fujikyun_settings.json') -Text '{ bad'
+    Assert-Equal 0 (Read-FujiSetting -Directory $work).schedules.Count 'settings: a broken file means no schedules'
+} finally {
+    Remove-Item -LiteralPath $work -Recurse -Force
+}
+
+# recording -> steps
+$payload = "S`tmemo.txt - Notepad`nT`tabc`nK`t{TAB}`nK`t{TAB}`nK`t{TAB}`nW`t1500`nC`t10`t20`tDOUBLE`nN`tSave`t1`t2`nS`tother.txt - Notepad`nJ`nK`t^s`nW`t3000"
+$rec = ConvertFrom-FujiRecording -Payload $payload
+Assert-Equal 'SWITCH TEXT KEY WAIT CLICK_POS CLICK_NAME COMMENT KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: commands (same app switch once, trailing wait dropped)'
+Assert-True ($rec[0].val -eq 'Notepad' -and $rec[2].val -eq '{TAB 3}' -and $rec[3].val -eq '1500' -and $rec[4].val -eq '{"x":"10","y":"20","kind":"DOUBLE"}' -and $rec[7].val -eq '^s') 'recording: values ({TAB}x3 -> {TAB 3})'
+Assert-Equal (Get-FujiStepLabel -Cmd 'KEY' -Value '{TAB 3}') $rec[2].label 'recording: label follows the merged key'
+$e3 = New-TestEditor @('KEY', 'WAIT')
+Assert-Equal 8 (Add-FujiRecordedStep -Editor $e3 -MacroId 'a' -At 1 -Payload $payload) 'recording: steps added'
+Assert-Equal 'KEY GROUP_START SWITCH TEXT KEY WAIT CLICK_POS CLICK_NAME COMMENT KEY GROUP_END WAIT' (Get-TestCmd $e3) 'recording: one group at the insertion point'
+Assert-True (Test-FujiBlockBalanced -Steps (Get-FujiCurrentStepList $e3)) 'recording: balanced'
+Assert-Equal 0 (Add-FujiRecordedStep -Editor $e3 -MacroId 'gone' -At 0 -Payload $payload) 'recording: macro gone'
+Assert-Equal 0 (Add-FujiRecordedStep -Editor $e3 -MacroId 'a' -At 0 -Payload "W`t2000") 'recording: nothing to add'
+
 # rows to run
 $rr = Get-FujiRunRow -CsvRows @([string[]]@('a'), [string[]]@(''), [string[]]@('c'), [string[]]@('d')) -StartText ([string][char]0xFF12) -EndText '3'
 Assert-True ($rr.Rows.Count -eq 1 -and $rr.Rows[0].No -eq 3 -and $rr.Logs.Count -eq 1) 'run rows: range (full-width digits), blank row skipped'

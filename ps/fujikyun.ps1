@@ -15,7 +15,10 @@
         powershell -NoProfile -File ps\build\Build-FujiBundle.ps1
 #>
 [CmdletBinding()]
-param()
+param(
+    # Set by a Windows scheduled task: the id of the schedule to run
+    [string]$AutoRun = ''
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -2042,6 +2045,104 @@ function Expand-FujiPlaceholder {
     return $sb.ToString()
 }
 
+# ===== src/Recording.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Recording: the recorder's event lines -> steps (the HTA's rules)
+#  Lines (tab separated): S title = window came to the front, W ms = pause, C x y kind = click at,
+#  N name x y = click on a named button, K keys = key with Ctrl / Alt / named key, T text = typed
+#  text, J = typing through the Japanese input method (not recordable as keys)
+# ---------------------------------------------------------------------------------------------
+
+function ConvertFrom-FujiRecording {
+    param([AllowEmptyString()][string]$Payload)
+    $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $lastSwitch = ''
+    foreach ($line in ([string]$Payload).Split("`n")) {
+        $f = $line.TrimEnd("`r").Split("`t")
+        $step = $null
+        switch ($f[0]) {
+            'S' {
+                if ($f.Count -lt 2) { break }
+                $title = $f[1].Trim()
+                # "document - App" -> "App": the document part changes, the app name does not
+                $parts = $title -split ' - '
+                $target = $title
+                if ($parts.Count -gt 1) { $target = $parts[$parts.Count - 1].Trim() }
+                if ($target -ne '' -and $target -ne $lastSwitch) {
+                    $step = @{ cmd = 'SWITCH'; val = $target }
+                    $lastSwitch = $target
+                }
+            }
+            'W' { if ($f.Count -ge 2) { $step = @{ cmd = 'WAIT'; val = [string](Get-FujiInt -Text $f[1] -Default 1000) } } }
+            'C' {
+                if ($f.Count -ge 3) {
+                    $kind = 'LEFT'
+                    if ($f.Count -ge 4 -and $f[3]) { $kind = $f[3] }
+                    $step = @{ cmd = 'CLICK_POS'; val = (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $f[1]; y = $f[2]; kind = $kind })) }
+                }
+            }
+            'N' { if ($f.Count -ge 2) { $step = @{ cmd = 'CLICK_NAME'; val = $f[1] } } }
+            'K' {
+                if ($f.Count -lt 2) { break }
+                # {TAB}{TAB} -> {TAB 2}
+                if ($steps.Count -gt 0 -and $steps[$steps.Count - 1].cmd -eq 'KEY') {
+                    $prev = $steps[$steps.Count - 1]
+                    $m = [regex]::Match($prev.val, '^(\{[A-Z0-9]+)( ([0-9]+))?\}$')
+                    if ($m.Success -and $f[1] -ceq ($m.Groups[1].Value + '}')) {
+                        $n = 1
+                        if ($m.Groups[3].Success) { $n = [int]$m.Groups[3].Value }
+                        $prev.val = $m.Groups[1].Value + ' ' + ($n + 1) + '}'
+                        $prev.label = Get-FujiStepLabel -Cmd 'KEY' -Value $prev.val
+                        break
+                    }
+                }
+                $step = @{ cmd = 'KEY'; val = $f[1] }
+            }
+            'T' {
+                $v = ''
+                if ($f.Count -ge 2) { $v = $f[1] }
+                $step = @{ cmd = 'TEXT'; val = $v }
+            }
+            'J' { $step = @{ cmd = 'COMMENT'; val = (Get-FujiText 'rec.imeNote') } }
+        }
+        if ($null -ne $step) {
+            $steps.Add([ordered]@{ cmd = $step.cmd; val = $step.val; label = (Get-FujiStepLabel -Cmd $step.cmd -Value $step.val) })
+        }
+    }
+    while ($steps.Count -gt 0 -and $steps[$steps.Count - 1].cmd -eq 'WAIT') { $steps.RemoveAt($steps.Count - 1) }
+    return , $steps
+}
+
+# Puts the recorded steps into the macro they were recorded for, as one group at At.
+# Returns the number of steps (0 when nothing was recorded or the macro is gone).
+function Add-FujiRecordedStep {
+    param([Parameter(Mandatory)][hashtable]$Editor, [string]$MacroId, [int]$At, [AllowEmptyString()][string]$Payload)
+    $steps = ConvertFrom-FujiRecording -Payload $Payload
+    if ($steps.Count -eq 0) {
+        Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.nothing') -Level 'warn'
+        return 0
+    }
+    $index = -1
+    for ($i = 0; $i -lt $Editor.Data.macros.Count; $i++) { if ($Editor.Data.macros[$i].id -eq $MacroId) { $index = $i } }
+    if ($index -lt 0) {
+        Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.macroGone') -Level 'error'
+        return 0
+    }
+    $Editor.MacroIndex = $index
+    $target = Get-FujiCurrentStepList $Editor
+    $at = [Math]::Min([Math]::Max(0, $At), $target.Count)
+    $name = Get-FujiText 'rec.groupName' (Get-Date -Format 'yyyy/MM/dd HH:mm:ss')
+    $block = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $block.Add([ordered]@{ cmd = 'GROUP_START'; val = $name; label = (Get-FujiStepLabel -Cmd 'GROUP_START' -Value $name) })
+    $block.AddRange($steps)
+    $block.Add([ordered]@{ cmd = 'GROUP_END'; val = ''; label = [string](Get-FujiCommandDef 'GROUP_END')['title'] })
+    $target.InsertRange($at, $block)
+    $Editor.Selected = $at
+    Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'rec.history' $steps.Count)
+    Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.done' $steps.Count) -Level 'ok'
+    return $steps.Count
+}
+
 # ===== src/Runner.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Runner: runs a macro over the CSV rows (the HTA's runner, same rules)
@@ -3227,6 +3328,120 @@ function Invoke-FujiExcel {
     return (Get-FujiRunNext 0)
 }
 
+# ===== src/Schedule.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Schedules (the HTA's rules) and the per-PC settings file
+#  A schedule: [ordered]@{ id; macroId; macroName; csvPath; header; time 'HH:mm';
+#  repeat 'DAILY'|'WEEKDAYS'|'ONCE'; date 'yyyy/MM/dd' (ONCE); enabled; closeAfter; lastRun; taskName }
+#  This window runs a due schedule while it is open; a Windows scheduled task can also start the
+#  app with -AutoRun <id> at the time.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiSettingsFile = 'fujikyun_settings.json'
+$script:FujiScheduleRepeats = @('DAILY', 'WEEKDAYS', 'ONCE')
+
+function Read-FujiSetting {
+    param([Parameter(Mandatory)][string]$Directory)
+    $settings = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+    $path = Join-Path $Directory $script:FujiSettingsFile
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $settings }
+    try {
+        $s = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $path)
+    } catch {
+        # a broken settings file only means no schedules
+        return $settings
+    }
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
+        foreach ($x in $s['schedules']) {
+            if ($x -is [System.Collections.IDictionary] -and $x.Contains('id') -and $x['id'] -and $x.Contains('time') -and $x['time']) { $settings.schedules.Add($x) }
+        }
+    }
+    return $settings
+}
+
+function Save-FujiSetting {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    Write-FujiTextFile -Path (Join-Path $Directory $script:FujiSettingsFile) -Text (ConvertTo-FujiJson -InputObject $Settings -Indent 2)
+}
+
+function Get-FujiScheduleValue {
+    param([System.Collections.IDictionary]$Schedule, [string]$Key, $Default = '')
+    if ($Schedule.Contains($Key) -and $null -ne $Schedule[$Key]) { return $Schedule[$Key] }
+    return $Default
+}
+
+# Minutes after midnight, -1 when the time is not HH:mm
+function Get-FujiScheduleMinute {
+    param([System.Collections.IDictionary]$Schedule)
+    $m = [regex]::Match((ConvertTo-FujiHalfWidthDigit -Text ([string](Get-FujiScheduleValue $Schedule 'time'))).Trim(), '^([0-9]{1,2}):([0-9]{2})$')
+    if (-not $m.Success) { return -1 }
+    return [int]$m.Groups[1].Value * 60 + [int]$m.Groups[2].Value
+}
+
+function Test-FujiScheduleDay {
+    param([System.Collections.IDictionary]$Schedule, [datetime]$Date)
+    switch ([string](Get-FujiScheduleValue $Schedule 'repeat')) {
+        'WEEKDAYS' { return ($Date.DayOfWeek -ge [DayOfWeek]::Monday -and $Date.DayOfWeek -le [DayOfWeek]::Friday) }
+        'ONCE' { return ([string](Get-FujiScheduleValue $Schedule 'date') -eq (Format-FujiDate -Date $Date)) }
+    }
+    return $true
+}
+
+# Due when today is a run day, the time passed less than 10 minutes ago and it has not run today
+function Test-FujiScheduleDue {
+    param([System.Collections.IDictionary]$Schedule, [datetime]$Now)
+    $mins = Get-FujiScheduleMinute $Schedule
+    $nowMins = $Now.Hour * 60 + $Now.Minute
+    return ([bool](Get-FujiScheduleValue $Schedule 'enabled' $false) -and $mins -ge 0 -and (Test-FujiScheduleDay $Schedule $Now) -and
+        $nowMins -ge $mins -and $nowMins - $mins -lt 10 -and [string](Get-FujiScheduleValue $Schedule 'lastRun') -ne (Format-FujiDate -Date $Now))
+}
+
+# The next run within a week: @{ Schedule; Day } or $null
+function Get-FujiNextSchedule {
+    param([AllowEmptyCollection()][System.Collections.IList]$Schedules, [datetime]$Now)
+    for ($offset = 0; $offset -lt 8; $offset++) {
+        $day = $Now.Date.AddDays($offset)
+        $best = $null
+        $bestMins = 0
+        foreach ($s in $Schedules) {
+            $mins = Get-FujiScheduleMinute $s
+            if (-not (Get-FujiScheduleValue $s 'enabled' $false) -or $mins -lt 0 -or -not (Test-FujiScheduleDay $s $day)) { continue }
+            if ($offset -eq 0 -and ($mins -le $Now.Hour * 60 + $Now.Minute - 10 -or [string](Get-FujiScheduleValue $s 'lastRun') -eq (Format-FujiDate -Date $Now))) { continue }
+            if ($null -eq $best -or $mins -lt $bestMins) { $best = $s; $bestMins = $mins }
+        }
+        if ($null -ne $best) { return @{ Schedule = $best; Day = $day } }
+    }
+    return $null
+}
+
+# A new schedule from the dialog's fields. Returns @{ Schedule } or @{ Error }.
+function New-FujiSchedule {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates an in-memory value only')]
+    param([string]$MacroId, [string]$MacroName, [AllowEmptyString()][string]$CsvPath, [bool]$Header, [AllowEmptyString()][string]$Time,
+        [string]$Repeat, [AllowEmptyString()][string]$DateText, [bool]$CloseAfter)
+    $t = ((ConvertTo-FujiHalfWidthDigit -Text $Time).Trim()).Replace([string][char]0xFF1A, ':')
+    $m = [regex]::Match($t, '^([0-9]{1,2}):([0-9]{2})$')
+    if (-not $m.Success -or [int]$m.Groups[1].Value -ge 24 -or [int]$m.Groups[2].Value -ge 60) { return @{ Error = (Get-FujiText 'schedule.badTime') } }
+    $t = '{0:00}:{1}' -f [int]$m.Groups[1].Value, $m.Groups[2].Value
+    if ($script:FujiScheduleRepeats -notcontains $Repeat) { $Repeat = 'DAILY' }
+    $date = ''
+    if ($Repeat -eq 'ONCE') {
+        $d = ConvertFrom-FujiDateText -Text $DateText
+        if ($null -eq $d) { return @{ Error = (Get-FujiText 'schedule.badDate') } }
+        $date = Format-FujiDate -Date $d
+    }
+    return @{ Schedule = [ordered]@{
+            id = (New-FujiId); macroId = $MacroId; macroName = $MacroName; csvPath = $CsvPath.Trim().Trim('"'); header = $Header
+            time = $t; repeat = $Repeat; date = $date; enabled = $true; closeAfter = $CloseAfter; lastRun = ''
+        }
+    }
+}
+
+function Get-FujiScheduleRepeatName {
+    param([string]$Repeat)
+    return [string](Get-FujiText ('schedule.repeats.' + $Repeat))
+}
+
 # ===== src/Text.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Text resources
@@ -4093,6 +4308,131 @@ function Open-FujiFolder {
     Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') -ArgumentList ('/select,"' + $Path + '"')
 }
 
+# ===== gui/Diagnostics.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Environment check: what this PC lets the app do (shown in a list, also written to the log)
+# ---------------------------------------------------------------------------------------------
+
+# Each check: @(ok, name key, detail); returns @{ Items; Hints }
+function Get-FujiDiagnostic {
+    $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $hints = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $add = { param($Ok, $Key, $Detail) $items.Add(@([bool]$Ok, (Get-FujiText ('diag.' + $Key)), [string]$Detail)) }
+
+    $mode = [string]$ExecutionContext.SessionState.LanguageMode
+    & $add $true 'powershell' ('{0} {1}' -f $PSVersionTable.PSEdition, $PSVersionTable.PSVersion)
+    & $add ($mode -eq 'FullLanguage') 'languageMode' $mode
+    if ($mode -ne 'FullLanguage') { $hints.Add((Get-FujiText 'diag.hintLanguage' $mode)) }
+
+    $probe = Join-Path $script:Ed.Directory ('fujikyun_probe_' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        Write-FujiTextFile -Path $probe -Text 'ok'
+        Remove-Item -LiteralPath $probe -Force
+        & $add $true 'folder' $script:Ed.Directory
+    } catch {
+        & $add $false 'folder' ($script:Ed.Directory + ' ... ' + $_.Exception.Message)
+        $hints.Add((Get-FujiText 'diag.hintFolder'))
+    }
+
+    # clipboard round trip; the user's text is put back
+    $before = Get-FujiClipboard
+    $ok = (Set-FujiClipboard -Text 'fujikyun') -and (Get-FujiClipboard) -eq 'fujikyun'
+    if ($before) { [void](Set-FujiClipboard -Text $before) } else { [void](Set-FujiClipboard -Text '') }
+    & $add $ok 'clipboard' ''
+
+    foreach ($wav in @('Alarm01.wav', 'tada.wav')) {
+        $p = Join-Path $env:SystemRoot ('Media\' + $wav)
+        & $add (Test-Path -LiteralPath $p -PathType Leaf) 'sound' $p
+    }
+
+    # registered, without starting the program
+    foreach ($app in @(@('Excel.Application', 'excel'), @('Outlook.Application', 'outlook'))) {
+        $found = Test-Path -LiteralPath ('Registry::HKEY_CLASSES_ROOT\' + $app[0])
+        & $add $found $app[1] $app[0]
+    }
+
+    try {
+        Add-Type -AssemblyName UIAutomationClient
+        Add-Type -AssemblyName UIAutomationTypes
+        & $add $true 'uia' ''
+    } catch {
+        & $add $false 'uia' $_.Exception.Message
+    }
+
+    # image click and recording compile a small C# class on first use
+    try {
+        if (-not ('FujiDiagProbe' -as [type])) { Add-Type -TypeDefinition 'public static class FujiDiagProbe { public static int One() { return 1; } }' -Language CSharp }
+        & $add ([FujiDiagProbe]::One() -eq 1) 'csharp' ''
+    } catch {
+        & $add $false 'csharp' $_.Exception.Message
+        $hints.Add((Get-FujiText 'diag.hintCsharp'))
+    }
+
+    try {
+        $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+        $langs = @([Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages | ForEach-Object { $_.DisplayName })
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+        & $add ($null -ne $engine) 'ocr' ($langs -join ', ')
+        if ($null -eq $engine) { $hints.Add((Get-FujiText 'diag.hintOcr')) }
+    } catch {
+        & $add $false 'ocr' $_.Exception.Message
+        $hints.Add((Get-FujiText 'diag.hintOcr'))
+    }
+
+    $tasks = $null -ne (Get-Module -ListAvailable -Name ScheduledTasks)
+    & $add $tasks 'tasks' ''
+
+    $vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    & $add $true 'screen' ('{0}x{1} ({2}%)' -f $vs.Width, $vs.Height, [int]($script:Ui.Scale * 100))
+    & $add $true 'windows' (Get-FujiText 'diag.windowCount' (Get-FujiTopWindow).Count)
+    return @{ Items = $items; Hints = $hints }
+}
+
+function Show-FujiDiagnostic {
+    Write-FujiUiLog -Message (Get-FujiText 'diag.running')
+    $r = Get-FujiDiagnostic
+    $ngCount = 0
+    $f = New-FujiDialogForm -Title (Get-FujiText 'diag.title') -Width (Get-FujiScaled 820) -Height (Get-FujiScaled 560)
+    $lv = New-Object -TypeName System.Windows.Forms.ListView
+    $lv.View = [System.Windows.Forms.View]::Details
+    $lv.FullRowSelect = $true
+    $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    [void]$lv.Columns.Add((Get-FujiText 'diag.colResult'), (Get-FujiScaled 70))
+    [void]$lv.Columns.Add((Get-FujiText 'diag.colItem'), (Get-FujiScaled 300))
+    [void]$lv.Columns.Add((Get-FujiText 'diag.colDetail'), (Get-FujiScaled 420))
+    foreach ($i in $r.Items) {
+        $mark = 'OK'
+        if (-not $i[0]) { $mark = 'NG'; $ngCount++ }
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList $mark
+        [void]$item.SubItems.Add($i[1])
+        [void]$item.SubItems.Add($i[2])
+        if (-not $i[0]) { $item.ForeColor = Get-FujiColor '#c62828' }
+        [void]$lv.Items.Add($item)
+        $level = 'info'
+        if (-not $i[0]) { $level = 'warn' }
+        Write-FujiUiLog -Message ('{0} {1} {2}' -f $mark, $i[1], $i[2]) -Level $level
+    }
+    $text = Get-FujiText 'diag.allOk'
+    if ($r.Hints.Count -gt 0) { $text = [string]::Join("`r`n`r`n", $r.Hints.ToArray()) } elseif ($ngCount -gt 0) { $text = Get-FujiText 'diag.someNg' }
+    $hint = New-Object -TypeName System.Windows.Forms.TextBox
+    $hint.Multiline = $true
+    $hint.ReadOnly = $true
+    $hint.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+    $hint.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $hint.Height = Get-FujiScaled 110
+    $hint.Text = $text
+    $bar = New-FujiButtonBar
+    $close = New-FujiButton -Text (Get-FujiText 'gui.close')
+    $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    [void]$bar.Controls.Add($close)
+    $f.CancelButton = $close
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($hint)
+    [void]$f.Controls.Add($bar)
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+}
+
 # ===== gui/MainForm.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Main window: macro and CSV toolbars, command palette, step list, log
@@ -4146,11 +4486,13 @@ function Show-FujiMainForm {
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
                 Write-FujiStartupTime
+                Start-FujiAutoRun
                 if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
                 $script:Ui.List.Focus()
             }
         })
     Update-FujiAll
+    Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
 }
@@ -4188,8 +4530,14 @@ function New-FujiTopPanel {
     $state = New-FujiLabel -Text ''
     $state.Font = $script:Ui.BoldFont
     $script:Ui.SaveState = $state
-    [void]$row.Controls.Add($save)
-    [void]$row.Controls.Add($state)
+    $sched = New-FujiButton -Text (Get-FujiText 'gui.schedule') -Tip (Get-FujiText 'gui.scheduleTip')
+    $sched.Add_Click({ Invoke-FujiUi { Show-FujiScheduleDialog } })
+    $next = New-FujiLabel -Text ''
+    $next.ForeColor = Get-FujiColor '#6a1b9a'
+    $script:Ui.ScheduleState = $next
+    $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
+    $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
+    foreach ($c in @($save, $state, $sched, $diag, $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -4319,6 +4667,10 @@ function New-FujiTopPanel {
         $btn.Add_Click($b[2])
         [void]$row.Controls.Add($btn)
     }
+    $recBtn = New-FujiButton -Text (Get-FujiText 'rec.button') -Tip (Get-FujiText 'rec.buttonTip')
+    $recBtn.Add_Click({ Invoke-FujiUi { Switch-FujiRecording } })
+    $script:Ui.RecordButton = $recBtn
+    [void]$row.Controls.Add($recBtn)
     $hint = New-FujiLabel -Text ''
     $hint.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.InsertHint = $hint
@@ -5072,6 +5424,7 @@ function Confirm-FujiClose {
         Write-FujiUiLog -Message (Get-FujiText 'gui.closeRunning') -Level 'warn'
         return
     }
+    if ($null -ne $script:Rec) { [FujiRecorder]::StopRequested = $true }
     if (-not $script:Ed.Dirty) { return }
     $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message (Get-FujiText 'gui.closeDirty') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
     if ($answer -ne 0) { $CloseEvent.Cancel = $true }
@@ -5112,6 +5465,219 @@ function Invoke-FujiShortcut {
     if ($handled) { $KeyEvent.SuppressKeyPress = $true; $KeyEvent.Handled = $true }
 }
 
+# ===== gui/Recorder.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Recording: normal work on the PC becomes steps (clicks, keys, typed text, window switches)
+#  The recorder (the HTA's) is a small C# class compiled on the first recording only. It watches
+#  the keyboard / mouse state and the window in front from a second runspace; this app's own
+#  windows are never recorded. ConvertFrom-FujiRecording (src/Recording.ps1) turns its lines into steps.
+# ---------------------------------------------------------------------------------------------
+
+$script:Rec = $null
+
+$script:FujiRecorderSource = @'
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading;
+using System.Runtime.InteropServices;
+using System.Windows.Automation;
+public struct FujiRecPoint { public int X; public int Y; }
+public class FujiRecorder {
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out FujiRecPoint p);
+    [DllImport("user32.dll")] static extern IntPtr GetKeyboardLayout(uint thread);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern uint MapVirtualKey(uint code, uint type);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int ToUnicodeEx(uint vk, uint scan, byte[] state, StringBuilder buf, int size, uint flags, IntPtr hkl);
+    public static volatile bool StopRequested;
+    public static volatile int Count;
+    List<string> ev = new List<string>();
+    StringBuilder text = new StringBuilder();
+    int lastTick = Environment.TickCount;
+    int lastClickTick = 0, lastClickX = -9999, lastClickY = -9999, lastClickIndex = -1;
+    bool imeNoted = false;
+    int textStart = 0;
+    static string Clean(string s) { return (s ?? "").Replace("\t", " ").Replace("\r", " ").Replace("\n", " "); }
+    static string Title(IntPtr h) { StringBuilder sb = new StringBuilder(512); GetWindowText(h, sb, 512); return sb.ToString(); }
+    void Add(string line) { AddAt(line, Environment.TickCount); }
+    void AddAt(string line, int when) {
+        int gap = when - lastTick;
+        if (gap > 1200 && ev.Count > 0) { ev.Add("W\t" + Math.Min(10000, (gap / 100) * 100)); }
+        ev.Add(line);
+        lastTick = Environment.TickCount;
+        Count = ev.Count;
+    }
+    void FlushText() { if (text.Length > 0) { AddAt("T\t" + Clean(text.ToString()), textStart); text.Length = 0; } }
+    static string Named(int vk) {
+        switch (vk) {
+            case 8: return "{BS}"; case 9: return "{TAB}"; case 13: return "{ENTER}"; case 27: return "{ESC}";
+            case 33: return "{PGUP}"; case 34: return "{PGDN}"; case 35: return "{END}"; case 36: return "{HOME}";
+            case 37: return "{LEFT}"; case 38: return "{UP}"; case 39: return "{RIGHT}"; case 40: return "{DOWN}";
+            case 45: return "{INSERT}"; case 46: return "{DELETE}";
+        }
+        if (vk >= 112 && vk <= 123) { return "{F" + (vk - 111) + "}"; }
+        return null;
+    }
+    // The name of a button under the point, when it can be pressed by name
+    static string InvokableName(int x, int y) {
+        try {
+            AutomationElement el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
+            if (el == null) { return ""; }
+            object p;
+            if (!el.TryGetCurrentPattern(InvokePattern.Pattern, out p)) { return ""; }
+            string n = el.Current.Name;
+            return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
+        } catch { return ""; }
+    }
+    void Click(bool right) {
+        FujiRecPoint p; GetCursorPos(out p);
+        FlushText(); imeNoted = false;
+        int now = Environment.TickCount;
+        if (!right && now - lastClickTick < 500 && Math.Abs(p.X - lastClickX) < 5 && Math.Abs(p.Y - lastClickY) < 5 && lastClickIndex == ev.Count - 1) {
+            ev[lastClickIndex] = "C\t" + lastClickX + "\t" + lastClickY + "\tDOUBLE"; lastClickTick = 0; return;
+        }
+        string name = right ? "" : InvokableName(p.X, p.Y);
+        Add(name != "" ? "N\t" + name + "\t" + p.X + "\t" + p.Y : "C\t" + p.X + "\t" + p.Y + "\t" + (right ? "RIGHT" : "LEFT"));
+        lastClickTick = now; lastClickX = p.X; lastClickY = p.Y; lastClickIndex = ev.Count - 1;
+    }
+    void Key(int vk, IntPtr fg) {
+        bool shift = (GetAsyncKeyState(0x10) & 0x8000) != 0, ctrl = (GetAsyncKeyState(0x11) & 0x8000) != 0, alt = (GetAsyncKeyState(0x12) & 0x8000) != 0;
+        if (vk == 229) { if (!imeNoted) { FlushText(); Add("J"); imeNoted = true; } return; }
+        string named = Named(vk);
+        if (ctrl || alt) {
+            string k = named;
+            if (k == null && vk >= 65 && vk <= 90) { k = ((char)(vk + 32)).ToString(); }
+            if (k == null && vk >= 48 && vk <= 57) { k = ((char)vk).ToString(); }
+            if (k == null && vk == 32) { k = " "; }
+            if (k == null) { return; }
+            FlushText(); imeNoted = false;
+            Add("K\t" + (ctrl ? "^" : "") + (alt ? "%" : "") + (shift ? "+" : "") + k);
+            return;
+        }
+        if (named != null) { FlushText(); imeNoted = false; Add("K\t" + (shift ? "+" : "") + named); return; }
+        byte[] state = new byte[256];
+        if (shift) { state[0x10] = 0x80; state[0xA0] = 0x80; }
+        StringBuilder buf = new StringBuilder(8);
+        uint ignored;
+        IntPtr hkl = GetKeyboardLayout(GetWindowThreadProcessId(fg, out ignored));
+        int n = ToUnicodeEx((uint)vk, MapVirtualKey((uint)vk, 0), state, buf, 8, 0, hkl);
+        if (n > 0) { string s = buf.ToString(0, n); if (s[0] >= ' ') { if (text.Length == 0) { textStart = Environment.TickCount; } text.Append(s); imeNoted = false; } }
+    }
+    // Records until StopRequested (or maxMinutes); windows of process ownPid are ignored
+    public static string Run(int ownPid, int maxMinutes) {
+        FujiRecorder r = new FujiRecorder();
+        Count = 0;
+        bool[] down = new bool[256];
+        IntPtr lastWin = IntPtr.Zero;
+        DateTime start = DateTime.Now;
+        for (int vk = 1; vk < 255; vk++) { down[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0; }
+        while (!StopRequested && (DateTime.Now - start).TotalMinutes <= maxMinutes) {
+            IntPtr fg = GetForegroundWindow();
+            uint pid;
+            GetWindowThreadProcessId(fg, out pid);
+            bool ignore = pid == (uint)ownPid;
+            string title = Title(fg);
+            if (fg != lastWin && !ignore && title.Length > 0) { r.FlushText(); r.imeNoted = false; r.Add("S\t" + Clean(title)); lastWin = fg; }
+            for (int vk = 1; vk < 255; vk++) {
+                bool now = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                if (now && !down[vk] && !ignore) {
+                    if (vk == 1) { r.Click(false); }
+                    else if (vk == 2) { r.Click(true); }
+                    else if (vk < 7 || (vk >= 16 && vk <= 18) || vk == 20 || vk == 91 || vk == 92 || (vk >= 160 && vk <= 165)) { }
+                    else { r.Key(vk, fg); }
+                }
+                down[vk] = now;
+            }
+            Thread.Sleep(15);
+        }
+        r.FlushText();
+        return string.Join("\n", r.ev.ToArray());
+    }
+}
+'@
+
+$script:FujiRecordScript = @'
+param($State, $OwnId)
+try { $State.Result = [FujiRecorder]::Run($OwnId, 240) } catch { $State.Error = $_.Exception.Message } finally { $State.Ready = $true }
+'@
+
+function Initialize-FujiRecorder {
+    if ('FujiRecorder' -as [type]) { return }
+    Write-FujiUiLog -Message (Get-FujiText 'rec.prepare')
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+    Add-Type -AssemblyName WindowsBase
+    $refs = @([System.Windows.Automation.AutomationElement].Assembly.Location, [System.Windows.Automation.ControlType].Assembly.Location, [System.Windows.Point].Assembly.Location)
+    Add-Type -ReferencedAssemblies $refs -TypeDefinition $script:FujiRecorderSource -Language CSharp
+}
+
+function Switch-FujiRecording {
+    if ($null -ne $script:Rec) {
+        [FujiRecorder]::StopRequested = $true
+        Write-FujiUiLog -Message (Get-FujiText 'rec.stopping')
+        return
+    }
+    if ($script:RunCtl.Running) { return }
+    Initialize-FujiRecorder
+    [FujiRecorder]::StopRequested = $false
+    $state = [hashtable]::Synchronized(@{ Ready = $false; Result = $null; Error = '' })
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.Open()
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript($script:FujiRecordScript).AddArgument($state).AddArgument($PID)
+    $handle = $ps.BeginInvoke()
+    $macro = Get-FujiCurrentMacro $script:Ed
+    $script:Rec = @{ State = $state; Ps = $ps; Rs = $rs; Handle = $handle; MacroId = [string]$macro.id; At = (Get-FujiInsertionIndex $script:Ed); Timer = $null }
+    $t = New-Object -TypeName System.Windows.Forms.Timer
+    $t.Interval = 500
+    $t.Add_Tick({ Invoke-FujiUi { Update-FujiRecording } })
+    $script:Rec.Timer = $t
+    $t.Start()
+    Update-FujiRecordUi
+    Write-FujiUiLog -Message (Get-FujiText 'rec.start') -Level 'run'
+}
+
+function Update-FujiRecording {
+    $r = $script:Rec
+    if ($null -eq $r) { return }
+    if (-not $r.State.Ready -and -not $r.Handle.IsCompleted) {
+        $n = [FujiRecorder]::Count
+        $count = ''
+        if ($n -gt 0) { $count = Get-FujiText 'rec.count' $n }
+        $script:Ui.RecordButton.Text = Get-FujiText 'rec.stopButton' $count
+        return
+    }
+    $r.Timer.Stop()
+    $r.Timer.Dispose()
+    $script:Rec = $null
+    $payload = [string]$r.State.Result
+    $failure = [string]$r.State.Error
+    if ($r.Handle.IsCompleted) { $r.Ps.Dispose(); $r.Rs.Dispose() }
+    Update-FujiRecordUi
+    if ($failure) {
+        Write-FujiUiLog -Message (Get-FujiText 'rec.failed' $failure) -Level 'error'
+        return
+    }
+    if ((Add-FujiRecordedStep -Editor $script:Ed -MacroId $r.MacroId -At $r.At -Payload $payload) -gt 0) { Update-FujiAll }
+}
+
+function Update-FujiRecordUi {
+    $recording = $null -ne $script:Rec
+    $b = $script:Ui.RecordButton
+    if ($recording) {
+        $b.Text = Get-FujiText 'rec.stopButton' ''
+        $b.BackColor = Get-FujiColor '#ffd6dc'
+    } else {
+        $b.Text = Get-FujiText 'rec.button'
+        $b.UseVisualStyleBackColor = $true
+    }
+    $script:Ui.RunButton.Enabled = -not $recording -and -not $script:RunCtl.Running
+}
+
 # ===== gui/RunUi.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Running from the window: run controls, and the Windows side (Io) of Runner.ps1
@@ -5130,7 +5696,7 @@ function New-FujiRunBar {
     $run = New-FujiButton -Text (Get-FujiText 'gui.run')
     $run.Font = $script:Ui.BoldFont
     $run.BackColor = Get-FujiColor '#c8f0cf'
-    $run.Add_Click({ Invoke-FujiUi { Start-FujiRunUi } })
+    $run.Add_Click({ Invoke-FujiUi { [void](Start-FujiRunUi) } })
     $pause = New-FujiButton -Text (Get-FujiText 'gui.pause')
     $pause.Enabled = $false
     $pause.Add_Click({ Invoke-FujiUi { Switch-FujiRunPause } })
@@ -5231,8 +5797,15 @@ function Switch-FujiRunPause {
 }
 
 # ----------------------------------------------------------------- starting a run
+# Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
+# ('done', 'stopped', 'error') or '' when it did not start.
 function Start-FujiRunUi {
-    if ($script:RunCtl.Running) { return }
+    param([switch]$Unattended)
+    if ($script:RunCtl.Running) { return '' }
+    if ($null -ne $script:Rec) {
+        Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
+        return ''
+    }
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
     $executable = 0
@@ -5243,24 +5816,28 @@ function Start-FujiRunUi {
     }
     if ($executable -eq 0) {
         Write-FujiUiLog -Message (Get-FujiText 'run.noSteps') -Level 'warn'
-        return
+        return ''
     }
     if (-not (Test-FujiBlockBalanced -Steps $steps)) {
         Show-FujiMessage -Title (Get-FujiText 'run.unbalancedTitle') -Message (Get-FujiText 'run.unbalanced')
-        return
+        return ''
     }
     $csvRows = $script:Ed.Csv.Rows
     if ($csvRows.Count -eq 0 -and $usesCsv) {
+        if ($Unattended) {
+            Write-FujiUiLog -Message (Get-FujiText 'run.noCsvUnattended') -Level 'error'
+            return ''
+        }
         $answer = Show-FujiChoice -Title (Get-FujiText 'gui.run') -Message (Get-FujiText 'run.noCsvAsk') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
-        if ($answer -ne 0) { return }
+        if ($answer -ne 0) { return '' }
     }
     $rr = Get-FujiRunRow -CsvRows $csvRows -Header $script:Ed.Csv.Header -StartText $script:Ui.StartRow.Text -EndText $script:Ui.EndRow.Text
     foreach ($l in $rr.Logs) { Write-FujiUiLog -Message $l[0] -Level $l[1] }
     if ($rr.Error) {
         Show-FujiMessage -Title (Get-FujiText 'run.rangeTitle') -Message $rr.Error
-        return
+        return ''
     }
-    if ($rr.Rows.Count -eq 0) { return }
+    if ($rr.Rows.Count -eq 0) { return '' }
     $interval = [Math]::Max(0, (Get-FujiInt -Text $script:Ui.Interval.Text -Default 300))
     $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rr.Rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
         -Interval $interval -SafeMode $script:Ui.SafeCheck.Checked -Directory $script:Ed.Directory `
@@ -5274,8 +5851,9 @@ function Start-FujiRunUi {
     Set-FujiRunUi -Running $true
     Update-FujiRunButton
     Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rr.Rows.Count $rr.Range $interval) -Level 'run'
+    $status = ''
     try {
-        [void](Invoke-FujiRun -Run $script:Run)
+        $status = Invoke-FujiRun -Run $script:Run
     } finally {
         $c.Running = $false
         $c.Paused = $false
@@ -5286,6 +5864,7 @@ function Start-FujiRunUi {
         Update-FujiWatchPanel
         $script:Ui.List.Invalidate()
     }
+    return $status
 }
 
 # ----------------------------------------------------------------- waiting (keeps the window alive)
@@ -5711,6 +6290,364 @@ function Export-FujiRunCsvUi {
     Write-FujiUiLog -Message (Get-FujiText $savedKey $count $path) -Level 'ok'
     $answer = Show-FujiChoice -Title $title -Message (Get-FujiText $doneKey $path) -Buttons @((Get-FujiText 'gui.openFolder'), (Get-FujiText 'gui.close'))
     if ($answer -eq 0) { Open-FujiFolder -Path $path }
+}
+
+# ===== gui/Schedule.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Schedules from the window: the list dialog, the 20-second check while the app is open, Windows
+#  scheduled tasks (ScheduledTasks module) that start the app with -AutoRun <id>
+# ---------------------------------------------------------------------------------------------
+
+$script:Settings = $null
+$script:AutoRunId = ''
+$script:AutoClose = @{ Timer = $null; Elapsed = 0; Enabled = $false }
+
+function Initialize-FujiSchedule {
+    $script:Settings = Read-FujiSetting -Directory $script:Ed.Directory
+    $t = New-Object -TypeName System.Windows.Forms.Timer
+    $t.Interval = 20000
+    $t.Add_Tick({ Invoke-FujiUi { Invoke-FujiScheduleCheck } })
+    $t.Start()
+    $script:Ui.ScheduleTimer = $t
+    Update-FujiScheduleState
+}
+
+function Save-FujiScheduleSetting {
+    try {
+        Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'editor.saveFailed' $_.Exception.Message) -Level 'error'
+    }
+    Update-FujiScheduleState
+}
+
+function Get-FujiScheduleMacro {
+    param([System.Collections.IDictionary]$Schedule)
+    foreach ($m in $script:Ed.Data.macros) { if ($m.id -eq [string](Get-FujiScheduleValue $Schedule 'macroId')) { return $m } }
+    foreach ($m in $script:Ed.Data.macros) { if ($m.name -eq [string](Get-FujiScheduleValue $Schedule 'macroName')) { return $m } }
+    return $null
+}
+
+function Update-FujiScheduleState {
+    $label = $script:Ui['ScheduleState']
+    if ($null -eq $label -or $null -eq $script:Settings) { return }
+    $now = Get-Date
+    $next = Get-FujiNextSchedule -Schedules $script:Settings.schedules -Now $now
+    if ($null -eq $next) { $label.Text = ''; return }
+    $day = Get-FujiText 'schedule.today'
+    if ($next.Day.Date -ne $now.Date) { $day = Get-FujiText 'schedule.dayFormat' $next.Day.Month $next.Day.Day }
+    $m = Get-FujiScheduleMacro -Schedule $next.Schedule
+    $name = [string](Get-FujiScheduleValue $next.Schedule 'macroName')
+    if ($null -ne $m) { $name = $m.name }
+    $label.Text = Get-FujiText 'schedule.next' $day $next.Schedule.time (Format-FujiShort $name 16)
+}
+
+function Test-FujiDialogOpen {
+    return ([System.Windows.Forms.Application]::OpenForms.Count -gt 1)
+}
+
+function Invoke-FujiScheduleCheck {
+    Update-FujiScheduleState
+    if ($script:RunCtl.Running -or $null -ne $script:Rec) { return }
+    $now = Get-Date
+    foreach ($s in $script:Settings.schedules) {
+        if (Test-FujiScheduleDue -Schedule $s -Now $now) {
+            if (Test-FujiDialogOpen) {
+                Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn'
+                return
+            }
+            [void](Invoke-FujiSchedule -Schedule $s)
+            return
+        }
+    }
+}
+
+# Runs a schedule now. Returns the run status, or '' when it did not start.
+function Invoke-FujiSchedule {
+    param([System.Collections.IDictionary]$Schedule)
+    $Schedule['lastRun'] = Format-FujiDate -Date (Get-Date)
+    Save-FujiScheduleSetting
+    $macro = Get-FujiScheduleMacro -Schedule $Schedule
+    if ($null -eq $macro) {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.macroMissing' (Get-FujiScheduleValue $Schedule 'macroName')) -Level 'error'
+        return ''
+    }
+    $script:Ed.MacroIndex = $script:Ed.Data.macros.IndexOf($macro)
+    $script:Ed.Selected = -1
+    Update-FujiAll
+    $csv = [string](Get-FujiScheduleValue $Schedule 'csvPath')
+    if ($csv.Trim()) {
+        $script:Refreshing = $true
+        try {
+            $script:Ui.CsvPath.Text = $csv
+            $script:Ui.CsvHeader.Checked = [bool](Get-FujiScheduleValue $Schedule 'header' $true)
+        } finally {
+            $script:Refreshing = $false
+        }
+        Import-FujiCsvUi
+        if ($script:Ed.Csv.Path -ne $csv.Trim().Trim('"')) {
+            Write-FujiUiLog -Message (Get-FujiText 'schedule.csvFailed' $csv) -Level 'error'
+            return ''
+        }
+    } else {
+        $script:Ed.Csv = New-FujiCsvState
+        Update-FujiCsvInfo
+    }
+    $script:Ui.StartRow.Text = '1'
+    $script:Ui.EndRow.Text = ''
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.starting' $macro.name) -Level 'run'
+    $status = Start-FujiRunUi -Unattended
+    Update-FujiScheduleState
+    return $status
+}
+
+# ----------------------------------------------------------------- started by a Windows task
+function Start-FujiAutoRun {
+    if (-not $script:AutoRunId) { return }
+    $s = $null
+    foreach ($x in $script:Settings.schedules) { if ($x.id -eq $script:AutoRunId) { $s = $x } }
+    if ($null -eq $s) {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.autoMissing' $script:AutoRunId) -Level 'warn'
+        return
+    }
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.autoStart') -Level 'run'
+    $t = New-Object -TypeName System.Windows.Forms.Timer
+    $t.Interval = 5000
+    $t.Tag = $s
+    $t.Add_Tick({
+            $this.Stop()
+            $sched = $this.Tag
+            Invoke-FujiUi {
+                if ($script:RunCtl.Running -or (Test-FujiDialogOpen)) {
+                    Write-FujiUiLog -Message (Get-FujiText 'schedule.autoBusy') -Level 'warn'
+                    return
+                }
+                $status = Invoke-FujiSchedule -Schedule $sched
+                if ($status -eq 'done' -and [bool](Get-FujiScheduleValue $sched 'closeAfter' $false)) { Start-FujiAutoClose }
+            }
+        })
+    $t.Start()
+}
+
+# Closes the app 10 seconds after a scheduled run finished, unless someone clicks meanwhile
+function Start-FujiAutoClose {
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.autoClose') -Level 'warn'
+    $c = $script:AutoClose
+    $c.Elapsed = 0
+    $c.Enabled = $true
+    if ($null -eq $c.Timer) {
+        $c.Timer = New-Object -TypeName System.Windows.Forms.Timer
+        $c.Timer.Interval = 250
+        $c.Timer.Add_Tick({
+                $a = $script:AutoClose
+                if ([System.Windows.Forms.Control]::MouseButtons -ne [System.Windows.Forms.MouseButtons]::None) {
+                    $a.Enabled = $false
+                    $this.Stop()
+                    return
+                }
+                $a.Elapsed += 250
+                if ($a.Elapsed -ge 10000) {
+                    $this.Stop()
+                    if (-not $script:RunCtl.Running -and -not $script:Ed.Dirty) { $script:Ui.Form.Close() }
+                }
+            })
+    }
+    $c.Timer.Start()
+}
+
+# ----------------------------------------------------------------- Windows scheduled tasks
+function Get-FujiTaskName {
+    param([System.Collections.IDictionary]$Schedule)
+    return ('FujikyunRPA_PS_' + $Schedule.id)
+}
+
+function Register-FujiScheduleTask {
+    param([System.Collections.IDictionary]$Schedule)
+    $name = Get-FujiTaskName -Schedule $Schedule
+    try {
+        $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -AutoRun {1}' -f $script:AppScriptPath, $Schedule.id
+        $action = New-ScheduledTaskAction -Execute $exe -Argument $arguments -WorkingDirectory $script:Ed.Directory
+        $mins = Get-FujiScheduleMinute $Schedule
+        $at = [datetime]::Today.AddMinutes($mins)
+        switch ([string](Get-FujiScheduleValue $Schedule 'repeat')) {
+            'WEEKDAYS' { $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $at }
+            'ONCE' { $trigger = New-ScheduledTaskTrigger -Once -At ((ConvertFrom-FujiDateText -Text ([string](Get-FujiScheduleValue $Schedule 'date'))).AddMinutes($mins)) }
+            default { $trigger = New-ScheduledTaskTrigger -Daily -At $at }
+        }
+        # A task of the signed-in user: it runs only while that user is signed in (the robot needs the screen)
+        [void](Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Description (Get-FujiText 'schedule.taskDescription') -Force -ErrorAction Stop)
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.registerFailed' $_.Exception.Message) -Level 'error'
+        return
+    }
+    $Schedule['taskName'] = $name
+    Save-FujiScheduleSetting
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.registered2' $name) -Level 'ok'
+}
+
+function Unregister-FujiScheduleTask {
+    param([System.Collections.IDictionary]$Schedule)
+    $name = [string](Get-FujiScheduleValue $Schedule 'taskName')
+    if (-not $name) { return }
+    try {
+        Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.unregistered') -Level 'ok'
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.unregisterFailed' $_.Exception.Message) -Level 'warn'
+    }
+    $Schedule.Remove('taskName')
+    Save-FujiScheduleSetting
+}
+
+# ----------------------------------------------------------------- the dialog
+function Show-FujiScheduleDialog {
+    $width = Get-FujiScaled 940
+    $f = New-FujiDialogForm -Title (Get-FujiText 'schedule.title') -Width $width -Height (Get-FujiScaled 640)
+    $f.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 640), (Get-FujiScaled 480)
+    $help = New-FujiLabel -Text (Get-FujiText 'schedule.help') -MaxWidth ($width - (Get-FujiScaled 30))
+    $help.Dock = [System.Windows.Forms.DockStyle]::Top
+    $help.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6)
+    $lv = New-Object -TypeName System.Windows.Forms.ListView
+    $lv.View = [System.Windows.Forms.View]::Details
+    $lv.FullRowSelect = $true
+    $lv.MultiSelect = $false
+    $lv.HideSelection = $false
+    $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    foreach ($c in @(@('schedule.colTime', 70), @('schedule.colRepeat', 150), @('schedule.colMacro', 240), @('schedule.colCsv', 260), @('schedule.colState', 170))) {
+        [void]$lv.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1]))
+    }
+    # buttons for the selected schedule
+    $actions = New-FujiFlow
+    $actions.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    foreach ($b in @(@('toggle', 'schedule.toggleOff'), @('register', 'schedule.register'), @('unregister', 'schedule.unregister'), @('delete', 'schedule.delete'))) {
+        $btn = New-FujiButton -Text (Get-FujiText $b[1]) -Tag $b[0]
+        $btn.Add_Click({ $what = [string]$this.Tag; Invoke-FujiUi { Invoke-FujiScheduleAction -Action $what } })
+        [void]$actions.Controls.Add($btn)
+    }
+    # the add form
+    $add = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $add.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $add.AutoSize = $true
+    $add.ColumnCount = 2
+    $add.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
+    $title = New-FujiLabel -Text (Get-FujiText 'schedule.addTitle')
+    $title.Font = $script:Ui.BoldFont
+    $add.Controls.Add($title, 0, 0)
+    $add.SetColumnSpan($title, 2)
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($m in $script:Ed.Data.macros) { $labels.Add([string]$m.name); $values.Add([string]$m.id) }
+    $macro = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 420)
+    if ($macro.Items.Count -gt 0) { $macro.SelectedIndex = [Math]::Max(0, $script:Ed.MacroIndex) }
+    $csv = New-FujiTextBox -Text ([string]$script:Ed.Csv.Path) -Width (Get-FujiScaled 560)
+    $header = New-FujiCheck -Text (Get-FujiText 'schedule.header') -Checked $true
+    $time = New-FujiTextBox -Width (Get-FujiScaled 90)
+    $repLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($r in $script:FujiScheduleRepeats) { $repLabels.Add((Get-FujiScheduleRepeatName $r)) }
+    $repeat = New-FujiComboBox -Items $repLabels.ToArray() -Values $script:FujiScheduleRepeats -Width (Get-FujiScaled 200)
+    $repeat.SelectedIndex = 0
+    $date = New-FujiTextBox -Width (Get-FujiScaled 130)
+    $close = New-FujiCheck -Text (Get-FujiText 'schedule.closeAfter') -Checked $false
+    $err = New-FujiLabel -Text ''
+    $err.ForeColor = Get-FujiColor '#c62828'
+    $row = 1
+    foreach ($pair in @(@('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close), @('', $err))) {
+        if ($pair[0]) { $add.Controls.Add((New-FujiLabel -Text (Get-FujiText $pair[0])), 0, $row) }
+        $add.Controls.Add($pair[1], 1, $row)
+        $row++
+    }
+    $addButton = New-FujiButton -Text (Get-FujiText 'schedule.add')
+    $addButton.Font = $script:Ui.BoldFont
+    $addButton.Add_Click({ Invoke-FujiUi { Add-FujiScheduleFromDialog } })
+    $add.Controls.Add($addButton, 1, $row)
+    $bar = New-FujiButtonBar
+    $closeButton = New-FujiButton -Text (Get-FujiText 'gui.close')
+    $closeButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    [void]$bar.Controls.Add($closeButton)
+    $f.CancelButton = $closeButton
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($help)
+    [void]$f.Controls.Add($actions)
+    [void]$f.Controls.Add($add)
+    [void]$f.Controls.Add($bar)
+    $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0] }
+    $f.Add_Shown({ $native = Get-FujiNativeType; [void]$native::SendMessage($script:Ui.SchedDlg.Time.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.timeCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Date.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.dateCue')) })
+    $lv.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleToggleText } })
+    Update-FujiScheduleList
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+    $script:Ui.SchedDlg = $null
+}
+
+function Update-FujiScheduleList {
+    $d = $script:Ui.SchedDlg
+    $lv = $d.List
+    $lv.BeginUpdate()
+    $lv.Items.Clear()
+    foreach ($s in $script:Settings.schedules) {
+        $m = Get-FujiScheduleMacro -Schedule $s
+        $macroText = Get-FujiText 'schedule.missingMacro' (Get-FujiScheduleValue $s 'macroName')
+        if ($null -ne $m) { $macroText = $m.name }
+        $csv = [string](Get-FujiScheduleValue $s 'csvPath')
+        if (-not $csv) { $csv = Get-FujiText 'schedule.noCsv' }
+        $state = Get-FujiText 'schedule.disabled'
+        if (Get-FujiScheduleValue $s 'enabled' $false) { $state = Get-FujiText 'schedule.enabled' }
+        if (Get-FujiScheduleValue $s 'taskName') { $state += Get-FujiText 'schedule.registered' }
+        $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $s 'repeat'))
+        if (Get-FujiScheduleValue $s 'date') { $repeat += ' ' + $s.date }
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList ([string]$s.time)
+        foreach ($sub in @($repeat, $macroText, $csv, $state)) { [void]$item.SubItems.Add([string]$sub) }
+        $item.Tag = $s
+        [void]$lv.Items.Add($item)
+    }
+    $lv.EndUpdate()
+    if ($lv.Items.Count -gt 0) { $lv.Items[0].Selected = $true }
+    Update-FujiScheduleToggleText
+}
+
+function Get-FujiSelectedSchedule {
+    $lv = $script:Ui.SchedDlg.List
+    if ($lv.SelectedItems.Count -eq 0) { return $null }
+    return $lv.SelectedItems[0].Tag
+}
+
+function Update-FujiScheduleToggleText {
+    $s = Get-FujiSelectedSchedule
+    $key = 'schedule.toggleOff'
+    if ($null -ne $s -and -not (Get-FujiScheduleValue $s 'enabled' $false)) { $key = 'schedule.toggleOn' }
+    $script:Ui.SchedDlg.Toggle.Text = Get-FujiText $key
+}
+
+function Invoke-FujiScheduleAction {
+    param([string]$Action)
+    $s = Get-FujiSelectedSchedule
+    if ($null -eq $s) { return }
+    switch ($Action) {
+        'toggle' { $s['enabled'] = -not [bool](Get-FujiScheduleValue $s 'enabled' $false); Save-FujiScheduleSetting }
+        'register' { Register-FujiScheduleTask -Schedule $s }
+        'unregister' { Unregister-FujiScheduleTask -Schedule $s }
+        'delete' {
+            Unregister-FujiScheduleTask -Schedule $s
+            [void]$script:Settings.schedules.Remove($s)
+            Save-FujiScheduleSetting
+        }
+    }
+    Update-FujiScheduleList
+}
+
+function Add-FujiScheduleFromDialog {
+    $d = $script:Ui.SchedDlg
+    if ($d.Macro.SelectedIndex -lt 0) { return }
+    $macroId = [string]([object[]]$d.Macro.Tag)[$d.Macro.SelectedIndex]
+    $repeat = [string]([object[]]$d.Repeat.Tag)[$d.Repeat.SelectedIndex]
+    $r = New-FujiSchedule -MacroId $macroId -MacroName ([string]$d.Macro.SelectedItem) -CsvPath $d.Csv.Text -Header $d.Header.Checked -Time $d.Time.Text -Repeat $repeat -DateText $d.Date.Text -CloseAfter $d.Close.Checked
+    if ($r.ContainsKey('Error')) { $d.Error.Text = $r.Error; return }
+    $d.Error.Text = ''
+    $script:Settings.schedules.Add($r.Schedule)
+    Save-FujiScheduleSetting
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.added' (Get-FujiScheduleRepeatName $repeat) $r.Schedule.time $r.Schedule.macroName) -Level 'ok'
+    Update-FujiScheduleList
 }
 
 # ===== gui/StepDialog.ps1 =====
@@ -6469,6 +7406,8 @@ function Invoke-FujiNameClick {
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     Initialize-FujiUi
+    $script:AutoRunId = $AutoRun
+    $script:AppScriptPath = $PSCommandPath
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names

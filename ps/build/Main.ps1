@@ -13,7 +13,10 @@
         powershell -NoProfile -File ps\build\Build-FujiBundle.ps1
 #>
 [CmdletBinding()]
-param()
+param(
+    # Set by a Windows scheduled task: the id of the schedule to run
+    [string]$AutoRun = ''
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -29,6 +32,8 @@ try {
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     Initialize-FujiUi
+    $script:AutoRunId = $AutoRun
+    $script:AppScriptPath = $PSCommandPath
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names
