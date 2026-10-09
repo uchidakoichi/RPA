@@ -670,6 +670,14 @@ Assert-True ((Get-FakeCall 'CLICK') -eq 'CLICK 10,20 DOUBLE' -and (Get-FakeCall 
 $run = New-TestRun -Steps @(@('CLICK_IMG', '{"path":"none.png","threshold":"0.9"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing reference image'
 
+# Excel: a formula only when typed in the step; inserted text never becomes one
+$run = New-TestRun -Steps @(@('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A1","value":"{{1}}"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A2","value":"=SUM(B1:B2)"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A3","value":"{{2}}"}')) -Rows @(, [string[]]@('=cmd|x', '-12'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal "EXCEL True A1 '=cmd|x | EXCEL True A2 =SUM(B1:B2) | EXCEL True A3 -12" (Get-FakeCall 'EXCEL') 'Excel write: inserted formula as text, typed formula kept, number kept'
+$run = New-TestRun -Steps @(@('MAIL', '{"method":"MAILTO","mode":"DRAFT","to":"{{1}}","cc":"","subject":"s","body":"b","attach":""}')) -Rows @(, [string[]]@('a@x.jp?bcc=evil@y.jp'))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ((Get-FakeCall 'URL').StartsWith('URL mailto:a@x.jp%3Fbcc%3Devil@y.jp?subject=')) 'mailto: an inserted address cannot add fields'
+
 # output CSVs: values the app adds never start a formula; original columns stay as they were
 $run = New-TestRun -Steps @(@('RECORD', '{"name":"v","value":"=HYPERLINK(1)"}'), @('RECORD', '{"name":"n","value":"-5"}')) -Rows @(, [string[]]@('=A1'))
 [void](Invoke-FujiRun -Run $run)
@@ -677,6 +685,78 @@ $res = ConvertFrom-FujiCsv -Text (ConvertTo-FujiResultCsv -Run $run)
 Assert-True ($res.Records[1][0] -eq '=A1' -and $res.Records[1][1] -eq "'=HYPERLINK(1)" -and $res.Records[1][2] -eq '-5') 'result CSV: recorded formula neutralised, number and original column kept'
 foreach ($v in @('@x', '+x', "`tx", '-x')) { Assert-Equal ("'" + $v) (ConvertTo-FujiSafeCsvValue $v) ('safe CSV value ' + [int][char]$v[0]) }
 Assert-Equal '+1.5' (ConvertTo-FujiSafeCsvValue '+1.5') 'safe CSV value: signed number kept'
+
+# image matching (the compiled matcher) and OCR results
+[void](Initialize-FujiImageMatch)
+Assert-True (-not (Initialize-FujiImageMatch)) 'matcher compiled once'
+$sw = 40; $sh = 30
+$screen = New-Object -TypeName 'int[]' -ArgumentList ($sw * $sh)
+for ($i = 0; $i -lt $screen.Length; $i++) { $screen[$i] = [int](0xFF000000 -bor (($i * 2654435761) -band 0xFFFFFF)) }
+$tw = 6; $th = 5
+$tpl = New-Object -TypeName 'int[]' -ArgumentList ($tw * $th)
+for ($y = 0; $y -lt $th; $y++) { for ($x = 0; $x -lt $tw; $x++) { $tpl[$y * $tw + $x] = $screen[(12 + $y) * $sw + 21 + $x] } }
+$hit = Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 0.9 -Left 100 -Top 200
+Assert-True ($hit.X -eq 124 -and $hit.Y -eq 214 -and $hit.Score -eq 1.0) 'image match: exact place, centre, screen offset'
+$tpl[0] = 0x00FFFFFF
+$tpl[1] = [int](0xFF000000 -bor ((($tpl[1] -band 0xFFFFFF) -bxor 0x808080)))
+$hit = Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 0.9
+Assert-True ($hit.X -eq 24 -and $hit.Y -eq 14 -and [Math]::Abs($hit.Score - (28 / 29.0)) -lt 0.001) 'image match: transparent pixel ignored, one wrong pixel lowers the score'
+Assert-True ($null -eq (Find-FujiTemplate -Screen $screen -ScreenWidth $sw -ScreenHeight $sh -Template $tpl -TemplateWidth $tw -TemplateHeight $th -Threshold 1.0)) 'image match: nothing at 100%'
+$line1 = @{ Words = @(@{ Text = 'Save'; X = 0; Y = 0; W = 40; H = 10 }, @{ Text = 'all'; X = 50; Y = 0; W = 30; H = 10 }) }
+$jp = -join ([char[]](0x767B, 0x9332))
+$line2 = @{ Words = @(@{ Text = [string]$jp[0]; X = 10; Y = 40; W = 20; H = 20 }, @{ Text = [string]$jp[1]; X = 30; Y = 40; W = 20; H = 20 }, @{ Text = ([string][char]0xFF2F + [char]0xFF2B); X = 60; Y = 40; W = 20; H = 20 }) }
+Assert-Equal ("Save all`r`n" + $jp + [char]0xFF2F + [char]0xFF2B) (ConvertTo-FujiOcrText -Lines @($line1, $line2)) 'OCR text: a space only where a word is ASCII on either side'
+$p = Find-FujiOcrText -Lines @($line1, $line2) -Find $jp -OffsetX 100 -OffsetY 200 -Scale 2
+Assert-True ($p.X -eq 115 -and $p.Y -eq 225) 'OCR find: text across words, back to screen pixels'
+Assert-True ((Find-FujiOcrText -Lines @($line1, $line2) -Find 'OK').X -eq 70) 'OCR find: full-width letters match half-width (case kept)'
+Assert-True ((Find-FujiOcrText -Lines @($line1, $line2) -Find 'eal').X -eq 40 -and $null -eq (Find-FujiOcrText -Lines @($line1, $line2) -Find 'Save' -Nth 2)) 'OCR find: spaces ignored, Nth place'
+$scr = @{ X = 0; Y = 0; Width = 1920; Height = 1080 }
+Assert-True ((Get-FujiOcrRect -Settings @{ area = 'RECT'; x = '1'; y = '2'; w = '3'; h = '4' } -Screen $scr).Height -eq 4 -and (Get-FujiOcrRect -Settings @{ area = 'WINDOW' } -Screen $scr).Width -eq 1920) 'OCR rect: given, or whole screen without a window'
+Assert-Equal 2.0 (Get-FujiOcrScale -Width 300 -Height 100 -MaxDimension 2600) 'OCR scale: up to 2x'
+Assert-Equal 1.3 (Get-FujiOcrScale -Width 2000 -Height 100 -MaxDimension 2600) 'OCR scale: within the engine limit'
+
+# schedules
+$sch = [ordered]@{ id = 's1'; time = '9:05'; repeat = 'WEEKDAYS'; enabled = $true; lastRun = '' }
+$mon = [datetime]'2026-10-12 09:07:00'
+Assert-True (Test-FujiScheduleDue $sch $mon) 'schedule: due on a weekday within 10 minutes'
+Assert-True (-not (Test-FujiScheduleDue $sch $mon.AddMinutes(10)) -and -not (Test-FujiScheduleDue $sch $mon.AddMinutes(-3))) 'schedule: not before the time, not 10 minutes after'
+Assert-True (-not (Test-FujiScheduleDue $sch ([datetime]'2026-10-11 09:07:00'))) 'schedule: weekdays only'
+$sch.lastRun = '2026/10/12'
+Assert-True (-not (Test-FujiScheduleDue $sch $mon)) 'schedule: once a day'
+$next = Get-FujiNextSchedule -Schedules @($sch) -Now $mon
+Assert-Equal '2026/10/13' (Format-FujiDate -Date $next.Day) 'schedule: next run tomorrow after today ran'
+$sat = Get-FujiNextSchedule -Schedules @($sch) -Now ([datetime]'2026-10-10 12:00:00')
+Assert-Equal '2026/10/12' (Format-FujiDate -Date $sat.Day) 'schedule: next weekday after a weekend'
+$r = New-FujiSchedule -MacroId 'm' -MacroName 'n' -CsvPath ' "C:\a.csv" ' -Header $true -Time ([string][char]0xFF18 + [char]0xFF1A + '05') -Repeat 'ONCE' -DateText '2026-10-31' -CloseAfter $false
+Assert-True ($r.Schedule.time -eq '08:05' -and $r.Schedule.date -eq '2026/10/31' -and $r.Schedule.csvPath -eq 'C:\a.csv') 'schedule: full-width time, date and path normalised'
+Assert-True ((New-FujiSchedule -Time '25:00' -Repeat 'DAILY').ContainsKey('Error') -and (New-FujiSchedule -Time '8:00' -Repeat 'ONCE' -DateText 'x').ContainsKey('Error')) 'schedule: bad time or date refused'
+$once = $r.Schedule
+Assert-True ((Test-FujiScheduleDue $once ([datetime]'2026-10-31 08:06')) -and -not (Test-FujiScheduleDue $once ([datetime]'2026-11-01 08:06'))) 'schedule: once on its date'
+$work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_set_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $work)
+try {
+    Assert-Equal 0 (Read-FujiSetting -Directory $work).schedules.Count 'settings: none yet'
+    Save-FujiSetting -Directory $work -Settings ([ordered]@{ schedules = @($once, [ordered]@{ id = ''; time = '1:00' }) })
+    $back = Read-FujiSetting -Directory $work
+    Assert-True ($back.schedules.Count -eq 1 -and $back.schedules[0].time -eq '08:05' -and $back.schedules[0].header -eq $true) 'settings: saved and read back, broken entries left out'
+    Write-FujiTextFile -Path (Join-Path $work 'fujikyun_settings.json') -Text '{ bad'
+    Assert-Equal 0 (Read-FujiSetting -Directory $work).schedules.Count 'settings: a broken file means no schedules'
+} finally {
+    Remove-Item -LiteralPath $work -Recurse -Force
+}
+
+# recording -> steps
+$payload = "S`tmemo.txt - Notepad`nT`tabc`nK`t{TAB}`nK`t{TAB}`nK`t{TAB}`nW`t1500`nC`t10`t20`tDOUBLE`nN`tSave`t1`t2`nS`tother.txt - Notepad`nJ`nK`t^s`nW`t3000"
+$rec = ConvertFrom-FujiRecording -Payload $payload
+Assert-Equal 'SWITCH TEXT KEY WAIT CLICK_POS CLICK_NAME COMMENT KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: commands (same app switch once, trailing wait dropped)'
+Assert-True ($rec[0].val -eq 'Notepad' -and $rec[2].val -eq '{TAB 3}' -and $rec[3].val -eq '1500' -and $rec[4].val -eq '{"x":"10","y":"20","kind":"DOUBLE"}' -and $rec[7].val -eq '^s') 'recording: values ({TAB}x3 -> {TAB 3})'
+Assert-Equal (Get-FujiStepLabel -Cmd 'KEY' -Value '{TAB 3}') $rec[2].label 'recording: label follows the merged key'
+$e3 = New-TestEditor @('KEY', 'WAIT')
+Assert-Equal 8 (Add-FujiRecordedStep -Editor $e3 -MacroId 'a' -At 1 -Payload $payload) 'recording: steps added'
+Assert-Equal 'KEY GROUP_START SWITCH TEXT KEY WAIT CLICK_POS CLICK_NAME COMMENT KEY GROUP_END WAIT' (Get-TestCmd $e3) 'recording: one group at the insertion point'
+Assert-True (Test-FujiBlockBalanced -Steps (Get-FujiCurrentStepList $e3)) 'recording: balanced'
+Assert-Equal 0 (Add-FujiRecordedStep -Editor $e3 -MacroId 'gone' -At 0 -Payload $payload) 'recording: macro gone'
+Assert-Equal 0 (Add-FujiRecordedStep -Editor $e3 -MacroId 'a' -At 0 -Payload "W`t2000") 'recording: nothing to add'
 
 # rows to run
 $rr = Get-FujiRunRow -CsvRows @([string[]]@('a'), [string[]]@(''), [string[]]@('c'), [string[]]@('d')) -StartText ([string][char]0xFF12) -EndText '3'
@@ -704,6 +784,25 @@ Assert-Equal 2 (Select-FujiWindow -Windows $wins -Title 'NOTEPAD').Handle 'windo
 Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Book1').Handle 'window title: prefix'
 Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Excel').Handle 'window title: suffix'
 Assert-True ($null -eq (Select-FujiWindow -Windows $wins -Title 'memo pad') -and $null -eq (Select-FujiWindow -Windows $wins -Title '')) 'window title: no match'
+
+# ----------------------------------------------------------------- every text the scripts ask for exists
+Assert-Equal '' (Test-FujiTextVersion) 'fujikyun_ja.json has the text version the scripts need'
+$keyFiles = @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'gui') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $psRoot 'build/Main.ps1'))
+$missing = New-Object -TypeName 'System.Collections.Generic.List[string]'
+$seen = 0
+foreach ($f in $keyFiles) {
+    $text = [System.IO.File]::ReadAllText($f.FullName)
+    # Get-FujiText 'a.b' and the keys of label / key lists written as 'gui.x' / 'run.x' ...
+    foreach ($m in [regex]::Matches($text, "'((?:gui|run|editor|schedule|rec|diag|calc|csv|data|validate|label|placeholder|date|strOp)\.[A-Za-z0-9_.]+)'")) {
+        $key = $m.Groups[1].Value
+        if ($key.EndsWith('.')) { continue }
+        $seen++
+        $value = Get-FujiText $key
+        if ($value -is [string] -and $value -eq $key) { $missing.Add($f.Name + ': ' + $key) }
+    }
+}
+Assert-True ($seen -gt 300) ('text keys found in the sources ({0})' -f $seen)
+Assert-True ($missing.Count -eq 0) ('every text key exists in fujikyun_ja.json: ' + ($missing -join ', '))
 
 # ----------------------------------------------------------------- source rules
 # The app file handed out must be the current build of the sources

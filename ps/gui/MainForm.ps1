@@ -50,11 +50,13 @@ function Show-FujiMainForm {
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
                 Write-FujiStartupTime
+                Start-FujiAutoRun
                 if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
                 $script:Ui.List.Focus()
             }
         })
     Update-FujiAll
+    Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
 }
@@ -92,8 +94,14 @@ function New-FujiTopPanel {
     $state = New-FujiLabel -Text ''
     $state.Font = $script:Ui.BoldFont
     $script:Ui.SaveState = $state
-    [void]$row.Controls.Add($save)
-    [void]$row.Controls.Add($state)
+    $sched = New-FujiButton -Text (Get-FujiText 'gui.schedule') -Tip (Get-FujiText 'gui.scheduleTip')
+    $sched.Add_Click({ Invoke-FujiUi { Show-FujiScheduleDialog } })
+    $next = New-FujiLabel -Text ''
+    $next.ForeColor = Get-FujiColor '#6a1b9a'
+    $script:Ui.ScheduleState = $next
+    $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
+    $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
+    foreach ($c in @($save, $state, $sched, $diag, $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -223,6 +231,10 @@ function New-FujiTopPanel {
         $btn.Add_Click($b[2])
         [void]$row.Controls.Add($btn)
     }
+    $recBtn = New-FujiButton -Text (Get-FujiText 'rec.button') -Tip (Get-FujiText 'rec.buttonTip')
+    $recBtn.Add_Click({ Invoke-FujiUi { Switch-FujiRecording } })
+    $script:Ui.RecordButton = $recBtn
+    [void]$row.Controls.Add($recBtn)
     $hint = New-FujiLabel -Text ''
     $hint.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.InsertHint = $hint
@@ -976,6 +988,7 @@ function Confirm-FujiClose {
         Write-FujiUiLog -Message (Get-FujiText 'gui.closeRunning') -Level 'warn'
         return
     }
+    if ($null -ne $script:Rec) { [FujiRecorder]::StopRequested = $true }
     if (-not $script:Ed.Dirty) { return }
     $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message (Get-FujiText 'gui.closeDirty') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
     if ($answer -ne 0) { $CloseEvent.Cancel = $true }

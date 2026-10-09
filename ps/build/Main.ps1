@@ -13,7 +13,10 @@
         powershell -NoProfile -File ps\build\Build-FujiBundle.ps1
 #>
 [CmdletBinding()]
-param()
+param(
+    # Set by a Windows scheduled task: the id of the schedule to run
+    [string]$AutoRun = ''
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -29,11 +32,18 @@ try {
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     Initialize-FujiUi
+    $script:AutoRunId = $AutoRun
+    $script:AppScriptPath = $PSCommandPath
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
+    $textOld = Test-FujiTextVersion
+    if ($textOld) {
+        Write-FujiUiLog -Message $textOld -Level 'error'
+        $script:Ed.Notices.Add($textOld)
+    }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
         (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
