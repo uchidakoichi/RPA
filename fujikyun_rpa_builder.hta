@@ -5210,7 +5210,10 @@ function setRowResult(status, note) {
     var r = runState && runState.currentResult;
     if (r && r.status === "実行中") {
         r.status = status;
-        r.note = note || "";
+        // A note already there (an error caught by "エラー時の処理") is kept
+        if (note) {
+            r.note = r.note ? r.note + " / " + note : note;
+        }
     }
 }
 

@@ -466,6 +466,226 @@ Assert-Equal '0,1077,10,2' ('{0},{1},{2},{3}' -f $cr.X, $cr.Y, $cr.Width, $cr.He
 $cr = Get-FujiCaptureRect -X -100 -Y 10 -Width 60 -Height 30 -Screen @{ X = -1920; Y = 0; Width = 3840; Height = 1080 }
 Assert-Equal '-130,0,60,20' ('{0},{1},{2},{3}' -f $cr.X, $cr.Y, $cr.Width, $cr.Height) 'capture rect on a left monitor'
 
+# ----------------------------------------------------------------- runner (fake Io: records what would be done)
+$script:Fake = $null
+function New-FakeIo {
+    $script:Fake = @{
+        Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
+        Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
+        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'
+    }
+    return @{
+        Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
+        Wait = { param($Ms) $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
+        Activate = { param($Title) $script:Fake.Calls.Add('ACT ' + $Title); return ($script:Fake.Windows -contains $Title) }
+        WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
+        SelfHasFocus = { return $script:Fake.Self }
+        FocusSelf = { $script:Fake.Calls.Add('SELF') }
+        SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq '^c') { $script:Fake.Clipboard = $script:Fake.CopySource } }
+        SetClipboard = { param($Text) $script:Fake.Clipboard = $Text; if ($Text -ne '') { $script:Fake.Calls.Add('CLIP ' + $Text) }; return $true }
+        GetClipboard = { return $script:Fake.Clipboard }
+        Start = { param($CommandLine) $script:Fake.Calls.Add('START ' + $CommandLine); return '' }
+        ClickAt = { param($X, $Y, $Kind) $script:Fake.Calls.Add(('CLICK {0},{1} {2}' -f $X, $Y, $Kind)) }
+        Screenshot = { param($Path, $Full) $script:Fake.Calls.Add('SHOT ' + $Path + ' ' + $Full); return '10x10' }
+        ClickName = { param($Name, $WindowTitle) $script:Fake.Calls.Add('NAME ' + $Name); return 'Invoke' }
+        ClickImage = { param($Path, $Threshold) $script:Fake.Calls.Add('IMG ' + $Path); return @{ X = 5; Y = 6; Score = 0.95 } }
+        Ocr = { param($Settings, $Find, $Nth) $script:Fake.Calls.Add('OCR ' + $Find); return "read`n" }
+        Excel = { param($Request) $script:Fake.Calls.Add(('EXCEL {0} {1} {2}' -f $Request.Write, $Request.Cell, $Request.Value)); return $script:Fake.ExcelValue }
+        Outlook = { param($Mail) $script:Fake.Calls.Add('OUTLOOK ' + $Mail.Mode + ' ' + $Mail.To); return $Mail.Mode }
+        OpenUrl = { param($Url) $script:Fake.Calls.Add('URL ' + $Url) }
+        FileExists = { param($Path) return ($script:Fake.Files -contains $Path) }
+        Now = { return [datetime]'2026-10-09 14:05:12' }
+        Confirm = { param($Caption, $Message) $script:Fake.Calls.Add('CONFIRM ' + $Message); return $script:Fake.Answers.Dequeue() }
+        Ask = { param($Caption, $Message, $Default) $script:Fake.Calls.Add('ASK ' + $Message); return $script:Fake.Answers.Dequeue() }
+        Progress = { param($Text) }
+        Highlight = { param($StepIndex) }
+        Watch = { }
+        Alarm = { $script:Fake.Calls.Add('ALARM') }
+        Notify = { $script:Fake.Calls.Add('NOTIFY') }
+        EndRun = { $script:Fake.Calls.Add('END') }
+    }
+}
+
+# Steps: @(cmd, val[, props]); Rows: string arrays (none = test run without CSV)
+function New-TestRun {
+    param([object[]]$Steps, [object[]]$Rows = @(), [string]$Target = 'App', [object[]]$Other = @(), [string[]]$Header = $null)
+    # @(@('KEY', 'a')) arrives as @('KEY', 'a'): one step
+    if ($Steps.Count -gt 0 -and $Steps[0] -is [string]) { $Steps = @(, $Steps) }
+    $io = New-FakeIo
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($s in $Steps) {
+        $step = [ordered]@{ cmd = $s[0]; val = [string]$s[1]; label = '' }
+        if ($s.Count -gt 2) { foreach ($k in $s[2].Keys) { $step[$k] = $s[2][$k] } }
+        $list.Add($step)
+    }
+    $macros = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $macro = [ordered]@{ id = 'main'; name = 'main'; targetWindow = $Target; steps = $list }
+    $macros.Add($macro)
+    foreach ($o in $Other) { $macros.Add($o) }
+    $rows = (Get-FujiRunRow -CsvRows $Rows -Header $Header).Rows
+    return (New-FujiRun -Macro $macro -Macros $macros -Rows $rows -Header $Header -Io $io -Interval 0 -Directory 'D')
+}
+function Get-FakeCall { param([string]$Prefix) return (@($script:Fake.Calls | Where-Object { $_.StartsWith($Prefix) }) -join ' | ') }
+
+$J = { param($o) ConvertTo-FujiJson -InputObject $o -Indent 0 }
+
+# rows, paste, keys, placeholders
+$run = New-TestRun -Steps @(@('CSV', '1'), @('KEY', '{TAB}'), @('TEXT', '{{2}}-{{ROW}}'), @('KEY', '{SPACE 2}'), @('CSV', '5')) -Rows @(, [string[]]@('a', 'b'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: done'
+Assert-Equal 'CLIP a | KEYS ^v | KEYS {TAB} | CLIP b-1 | KEYS ^v | KEYS   ' ((@($script:Fake.Calls | Where-Object { $_ -match '^(CLIP|KEYS)' })) -join ' | ') 'run: paste, keys, placeholders, {SPACE n}, empty CSV cell not pasted'
+Assert-True ($script:Fake.Calls[0] -eq 'ACT App' -and $script:Fake.Calls[$script:Fake.Calls.Count - 1] -eq 'END' -and $script:Fake.Calls.Contains('NOTIFY')) 'run: target activated first, end and finish sound'
+Assert-True ($run.DoneRows -eq 1 -and $run.ResultRows[0].Status -eq (Get-FujiText 'run.resultDone')) 'run: row result'
+Assert-True (@($script:Fake.Logs | Where-Object { $_ -like ('warn*' + (Get-FujiText 'run.csvMissingCol' 5 2)) }).Count -eq 1) 'run: missing CSV column warned'
+
+# first / last row groups, disabled block
+$run = New-TestRun -Steps @(@('GROUP_START', 'g1', @{ when = 'first' }), @('KEY', 'a'), @('GROUP_END', ''), @('KEY', 'b'), @('GROUP_START', 'g2', @{ when = 'last' }), @('KEY', 'c'), @('GROUP_END', ''),
+    @('GROUP_START', 'off', @{ disabled = $true }), @('KEY', 'z'), @('GROUP_END', '')) -Rows @([string[]]@('1'), [string[]]@('2'), [string[]]@('3'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal 'KEYS a | KEYS b | KEYS b | KEYS b | KEYS c' (Get-FakeCall 'KEYS') 'run: first-row group, last-row group, disabled group'
+Assert-Equal 3 $run.DoneRows 'run: three rows done'
+
+# loops, BREAK, CONTINUE, IF / ELSE
+$run = New-TestRun -Target '' -Steps @(@('LOOP_START', '{"mode":"COUNT","count":"4","counter":"i"}'),
+    @('IF_START', '{"left":"{{$i}}","op":"EQ","right":"2"}'), @('CONTINUE', ''), @('IF_END', ''),
+    @('IF_START', '{"left":"{{$i}}","op":"GE","right":"4"}'), @('BREAK', ''), @('ELSE', ''), @('KEY', '{{$i}}'), @('IF_END', ''),
+    @('LOOP_END', ''), @('KEY', 'end'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal 'KEYS {{$i}} | KEYS {{$i}} | KEYS end' (Get-FakeCall 'KEYS') 'run: KEY values are sent as typed (no placeholders in KEY)'
+Assert-Equal '4' $run.Vars['i'] 'run: loop counter at BREAK (no row: test run, no target)'
+$run = New-TestRun -Steps @(@('LOOP_START', '{"mode":"COUNT","count":"3"}'), @('SET_VAR', '{"name":"s","value":"{{$s}}x","mode":"TEXT"}'), @('LOOP_END', ''))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['s'] -eq 'xxx' -and $run.Vars[(Get-FujiCommandDef 'LOOP_START')['parseDefaults']['counter']] -eq '3') 'run: loop count, default counter variable'
+$run = New-TestRun -Steps @(@('LOOP_START', '{"mode":"WHILE","left":"a","op":"EQ","right":"a","max":"5"}'), @('LOOP_END', ''))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: endless loop stopped at its limit'
+Assert-True ($run.Summary -ne '' -and $script:Fake.Calls.Contains('ALARM')) 'run: error rings the alarm'
+
+# try / catch, error variable, uncaught error, error rows
+$run = New-TestRun -Steps @(@('TRY_START', 't'), @('SWITCH', 'Missing'), @('KEY', 'never'), @('CATCH', ''), @('SET_VAR', ('{"name":"e","value":"{{$' + (Get-FujiText 'data.errorVar') + '}}","mode":"TEXT"}')), @('TRY_END', ''), @('KEY', 'after')) -Rows @(, [string[]]@('x'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: caught error does not stop'
+Assert-Equal 'KEYS after' (Get-FakeCall 'KEYS') 'run: CATCH section, then after the block'
+Assert-Equal ((Get-FujiText 'run.switchNotFound' 'Missing') -replace '^\S+\s', '') $run.Vars['e'] 'run: error text in the error variable (without the mark)'
+Assert-True ($run.ResultRows[0].Note.Contains('Missing') -and $run.ErrorRows.Count -eq 0) 'run: caught error noted, no error row'
+$run = New-TestRun -Steps @(@('KEY', 'a'), @('SWITCH', 'Missing'), @('KEY', 'b')) -Rows @([string[]]@('x', 'y'), [string[]]@('z', 'w'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: uncaught error stops'
+Assert-True ((Get-FakeCall 'KEYS') -eq 'KEYS a' -and $run.ErrorRows.Count -eq 1 -and $run.ResultRows.Count -eq 1 -and $run.ResultRows[0].Status -eq (Get-FujiText 'run.resultError')) 'run: error row and result recorded'
+Assert-Equal 3 @($script:Fake.Calls | Where-Object { $_ -eq 'ACT Missing' }).Count 'run: window searched three times'
+$csv = ConvertFrom-FujiCsv -Text (ConvertTo-FujiErrorCsv -Run $run)
+Assert-Equal (& $J @((Get-FujiText 'run.colPrefix' 1), (Get-FujiText 'run.colPrefix' 2), (Get-FujiText 'run.colOrigNo'), (Get-FujiText 'run.colError'), (Get-FujiText 'run.colTime'))) (& $J $csv.Records[0]) 'error CSV header without a CSV header'
+Assert-True ($csv.Records[1][0] -eq 'x' -and $csv.Records[1][2] -eq '1') 'error CSV row'
+$rerun = Get-FujiRunRow -CsvRows @(, [string[]]@($csv.Records[1])) -Header ([string[]]$csv.Records[0])
+Assert-True ($rerun.Rows[0].No -eq 1 -and $rerun.Logs.Count -eq 1) 'error CSV re-run keeps the original row number'
+$res = ConvertFrom-FujiCsv -Text (ConvertTo-FujiResultCsv -Run $run)
+Assert-Equal (& $J @((Get-FujiText 'run.colPrefix' 1), (Get-FujiText 'run.colPrefix' 2), (Get-FujiText 'run.colResult'), (Get-FujiText 'run.colNote'), (Get-FujiText 'run.colOrigNo'), (Get-FujiText 'run.colStart'))) (& $J $res.Records[0]) 'result CSV header'
+$catchErr = New-TestRun -Steps @(@('TRY_START', 't'), @('KEY', 'a'), @('CATCH', ''), @('SWITCH', 'Missing'), @('TRY_END', ''))
+$script:Fake.Windows = @('App')
+Assert-Equal 'done' (Invoke-FujiRun -Run $catchErr) 'run: CATCH section skipped without an error'
+$run = New-TestRun -Steps @(@('TRY_START', 't'), @('SWITCH', 'Missing'), @('CATCH', ''), @('SWITCH', 'Missing2'), @('TRY_END', ''))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: an error inside CATCH goes outward'
+
+# window check: skip the row, last row still runs "last row only" groups; stop is not caught
+$run = New-TestRun -Steps @(@('WINDOW_CHECK', '{"title":"Popup","key":"{ENTER}","mode":"SKIP"}'), @('KEY', 'a'), @('GROUP_START', 'save', @{ when = 'last' }), @('KEY', 'save'), @('GROUP_END', '')) -Rows @([string[]]@('1'), [string[]]@('2'))
+$script:Fake.Windows = @('App', 'Popup')
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: skipped rows finish the run'
+Assert-Equal 'KEYS {ENTER} | KEYS {ENTER} | KEYS save' (Get-FakeCall 'KEYS') 'run: skipped last row still saves'
+Assert-True ($run.SkippedRows -eq 2 -and $run.ErrorRows.Count -eq 2 -and $run.DoneRows -eq 0) 'run: skipped rows counted and recorded'
+$run = New-TestRun -Steps @(@('TRY_START', 't'), @('WINDOW_CHECK', '{"title":"Popup","key":"","mode":"STOP"}'), @('CATCH', ''), @('TRY_END', ''))
+$script:Fake.Windows = @('App', 'Popup')
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: emergency stop is never caught'
+$run = New-TestRun -Steps @(@('WAIT_FOR', '{"title":"Later","key":"","timeout":"3"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: wait-for timeout'
+Assert-Equal 3 @($script:Fake.Calls | Where-Object { $_ -eq 'ACT Later' }).Count 'run: wait-for polls once a second'
+
+# called macros, RETURN, unbalanced or missing macro
+$sub = [ordered]@{ id = 'sub'; name = 'Sub'; targetWindow = ''; steps = [System.Collections.Generic.List[object]]@(
+        [ordered]@{ cmd = 'KEY'; val = 'b1'; label = '' }, [ordered]@{ cmd = 'RETURN'; val = ''; label = '' }, [ordered]@{ cmd = 'KEY'; val = 'b2'; label = '' }) }
+$run = New-TestRun -Steps @(@('CALL_MACRO', '{"id":"sub","name":"Sub"}'), @('KEY', 'after')) -Other @($sub)
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: call'
+Assert-Equal 'KEYS b1 | KEYS after' (Get-FakeCall 'KEYS') 'run: called macro, RETURN, back to the caller'
+$run = New-TestRun -Steps @(@('CALL_MACRO', '{"id":"none","name":"None"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing macro'
+$self = [ordered]@{ id = 'loop'; name = 'Loop'; targetWindow = ''; steps = [System.Collections.Generic.List[object]]@([ordered]@{ cmd = 'CALL_MACRO'; val = '{"id":"loop","name":"Loop"}'; label = '' }) }
+$run = New-TestRun -Steps @(@('CALL_MACRO', '{"id":"loop","name":"Loop"}')) -Other @($self)
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: endless calls stopped'
+Assert-True ($script:Fake.Logs[$script:Fake.Logs.Count - 2].Contains([string]$script:FujiRunLimits.CallDepthMax)) 'run: call depth message'
+
+# confirm / ask: continue, skip, stop
+$run = New-TestRun -Steps @(@('CONFIRM', 'ok?'), @('KEY', 'a')) -Rows @([string[]]@('1'), [string[]]@('2'))
+$script:Fake.Answers.Enqueue('skip'); $script:Fake.Answers.Enqueue('continue')
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: confirm'
+Assert-True ((Get-FakeCall 'KEYS') -eq 'KEYS a' -and $run.SkippedRows -eq 1 -and $run.ResultRows[0].Note -eq (Get-FujiText 'run.confirmSkipNote')) 'run: confirm skip, then continue'
+$run = New-TestRun -Steps @(@('ASK', '{"name":"v","message":"name?","defaultValue":"{{1}}"}'), @('TEXT', '{{$v}}'), @('CONFIRM', 'stop?')) -Rows @(, [string[]]@('d'))
+$script:Fake.Answers.Enqueue(@{ Choice = 'continue'; Value = 'typed' }); $script:Fake.Answers.Enqueue('stop')
+Assert-Equal 'stopped' (Invoke-FujiRun -Run $run) 'run: stop from a dialog'
+Assert-True ($run.Vars['v'] -eq 'typed' -and (Get-FakeCall 'CLIP') -eq 'CLIP typed' -and $run.ResultRows[0].Status -eq (Get-FujiText 'run.resultStopped')) 'run: asked value used, row marked stopped'
+$run = New-TestRun -Steps @(@('KEY', 'a'), @('KEY', 'b')) -Rows @([string[]]@('1'), [string[]]@('2'))
+$script:Fake.StopAtWait = 3
+Assert-Equal 'stopped' (Invoke-FujiRun -Run $run) 'run: stop during a wait'
+Assert-True ($script:Fake.Calls[$script:Fake.Calls.Count - 1] -eq 'END' -and -not $script:Fake.Calls.Contains('NOTIFY')) 'run: stopped run ends without the finish sound'
+
+# RUN refuses inserted values that mean something on a command line
+$run = New-TestRun -Steps @(@('RUN', 'notepad.exe {{1}}')) -Rows @([string[]]@('a&b'), [string[]]@('ok.txt'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: unsafe RUN skips the row only'
+Assert-True ((Get-FakeCall 'START') -eq 'START notepad.exe ok.txt' -and $run.ErrorRows.Count -eq 1 -and $run.SkippedRows -eq 1) 'run: unsafe row recorded, safe row started'
+
+# variables: calculation, string operations, copy, record, Excel
+$run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"{{1}}*2","mode":"CALC"}'), @('STR_OP', '{"name":"t","src":"  {{2}} ","op":"TRIM","a":"","b":""}'),
+    @('COPY', 'c'), @('RECORD', '{"name":"r","value":"{{$n}}/{{$t}}"}'), @('EXCEL_READ', '{"path":"b.xlsx","sheet":"","cell":"A1","name":"x"}'),
+    @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"B{{ROW}}","value":"{{$x}}"}')) -Rows @(, [string[]]@('21', 'ab'))
+$null = $script:Fake
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['n'] -eq '42' -and $run.Vars['t'] -eq 'ab' -and $run.Vars['x'] -eq 'cell') 'run: calc, trim, Excel read'
+Assert-True ((Get-FakeCall 'EXCEL True') -eq 'EXCEL True B1 cell' -and $run.ResultRows[0].Values['r'] -eq '42/ab') 'run: Excel write with placeholders, recorded value'
+$run = New-TestRun -Steps @(@('COPY', 'c'))
+$script:Fake.CopySource = "copied`r`n"
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['c'] -eq 'copied' -and $run.ResultColumns.Contains('c')) 'run: copy to a variable (trailing line break dropped)'
+$run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"1/0","mode":"CALC"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: calculation error stops'
+
+# keystrokes never land in this app
+$run = New-TestRun -Target '' -Steps @(@('KEY', 'a'))
+$script:Fake.Self = $true
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: no target and this app in front: stop'
+Assert-Equal '' (Get-FakeCall 'KEYS') 'run: no key sent to this app'
+$run = New-TestRun -Steps @(@('KEY', 'a'))
+$script:Fake.Self = $true
+[void](Invoke-FujiRun -Run $run)
+Assert-True ((Get-FakeCall 'KEYS') -eq 'KEYS a' -and @($script:Fake.Calls | Where-Object { $_ -eq 'ACT App' }).Count -eq 2) 'run: target brought back before the key'
+
+# mail, screenshot, clicks
+$run = New-TestRun -Steps @(@('MAIL', ('{"method":"MAILTO","mode":"DRAFT","to":"a@x.jp, b@x.jp","cc":"","subject":"Subj {{1}}","body":"L1' + "\n" + '2","attach":""}'))) -Rows @(, [string[]]@('7'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal ('URL mailto:a@x.jp,b@x.jp?subject=' + [uri]::EscapeDataString('Subj 7') + '&body=' + [uri]::EscapeDataString("L1`r`n2")) (Get-FakeCall 'URL') 'run: mailto URL'
+$run = New-TestRun -Steps @(@('MAIL', '{"method":"OUTLOOK","mode":"SEND","to":"a@x.jp","cc":"","subject":"s","body":"b","attach":"C:\\no.pdf"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing attachment stops before mailing'
+$run = New-TestRun -Steps @(@('MAIL', ('{"method":"OUTLOOK","mode":"SEND","to":"a@x.jp' + [char]0xFF1B + 'b@x.jp","cc":"","subject":"s","body":"b","attach":"C:\\a.pdf"}')))
+$script:Fake.Files = @('C:\a.pdf')
+[void](Invoke-FujiRun -Run $run)
+Assert-True ((Get-FakeCall 'OUTLOOK') -eq 'OUTLOOK SEND a@x.jp; b@x.jp' -and $run.ResultRows[0].Values[(Get-FujiText 'run.mailColumn')] -eq (Get-FujiText 'run.mailSentValue')) 'run: Outlook send, full-width separator'
+$run = New-TestRun -Steps @(@('SCREENSHOT', '{"name":"Recv{{1}}","scope":"FULL"}'), @('CLICK_POS', ('{"x":"10","y":"' + [char]0xFF12 + [char]0xFF10 + '","kind":"DOUBLE"}')), @('CLICK_NAME', 'Save'),
+    @('READ_TEXT', '{"area":"FULL","x":"","y":"","w":"","h":"","name":"o"}'), @('CLICK_TEXT', '{"text":"OK","area":"WINDOW","x":"","y":"","w":"","h":"","nth":"2"}')) -Rows @(, [string[]]@('/1'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal ('SHOT ' + (Join-Path (Join-Path (Join-Path 'D' 'evidence') '20261009') ('Recv_1_140512.png')) + ' True') (Get-FakeCall 'SHOT') 'run: evidence path (unsafe characters replaced)'
+Assert-True ((Get-FakeCall 'CLICK') -eq 'CLICK 10,20 DOUBLE' -and (Get-FakeCall 'NAME') -eq 'NAME Save' -and $run.Vars['o'] -eq 'read' -and (Get-FakeCall 'OCR') -eq 'OCR  | OCR OK') 'run: clicks and OCR'
+$run = New-TestRun -Steps @(@('CLICK_IMG', '{"path":"none.png","threshold":"0.9"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing reference image'
+
+# rows to run
+$rr = Get-FujiRunRow -CsvRows @([string[]]@('a'), [string[]]@(''), [string[]]@('c'), [string[]]@('d')) -StartText ([string][char]0xFF12) -EndText '3'
+Assert-True ($rr.Rows.Count -eq 1 -and $rr.Rows[0].No -eq 3 -and $rr.Logs.Count -eq 1) 'run rows: range (full-width digits), blank row skipped'
+Assert-True ([bool](Get-FujiRunRow -CsvRows @(, [string[]]@('a')) -StartText 'x').Error) 'run rows: a typo is refused, not "all rows"'
+Assert-True ((Get-FujiRunRow -CsvRows @(, [string[]]@('a')) -StartText '3').Logs[0][1] -eq 'warn') 'run rows: start after end'
+Assert-True ((Get-FujiRunRow).Rows[0].No -eq 0) 'run rows: no CSV = one test row'
+Assert-Equal '   a ' (ConvertTo-FujiSendKeys '{SPACE 3}a{space}') 'SendKeys: {SPACE n}'
+$run = New-TestRun -Steps @(@('SET_VAR', '{"name":"v","value":"1","mode":"TEXT"}')) -Rows @(, [string[]]@('a')) -Header @('H')
+[void](Invoke-FujiRun -Run $run)
+$watch = Get-FujiRunWatch -Run $run
+Assert-True ($watch.Count -eq 2 -and $watch[0][1][0][0] -eq '$v' -and $watch[1][1][0][0] -eq 'ROW' -and $watch[1][1][1][0] -eq 'H') 'variable panel: vars and CSV row with header names'
+# A PowerShell engine fault this code avoids: "@(...)" around a generic List, once compiled, fails
+# on an empty List. Many runs in a row with empty and full lists must keep working.
+for ($i = 0; $i -lt 40; $i++) { [void](Test-FujiExpandValue (Get-FujiCommandDef 'TEXT')); [void](Test-FujiExpandValue (Get-FujiCommandDef 'ELSE')) }
+Assert-True $true 'expand-value check survives compilation'
+
 # ----------------------------------------------------------------- Windows API declarations (built, not called here)
 $native = Get-FujiNativeType
 Assert-True ($null -ne $native.GetMethod('SetProcessDPIAware') -and $null -ne $native.GetMethod('SendMessage')) 'native functions declared without a compiler'
