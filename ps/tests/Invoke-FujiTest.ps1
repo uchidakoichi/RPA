@@ -323,6 +323,8 @@ try {
     Assert-Equal $tpl['csv'][0].Count (Get-FujiCsvMaxColumn $ed) 'CSV columns'
     $choices = Get-FujiPlaceholderChoice -Editor $ed
     Assert-Equal ('{{' + $tpl['csv'][0][0] + '}}') $choices[0][0] 'placeholder by header name'
+    Assert-True (@($choices | Where-Object { @($_).Count -ne 2 }).Count -eq 0) 'every placeholder choice is (token, description)'
+    Assert-True (@($choices | Where-Object { $_[0] -eq ('{{$' + (Get-FujiText 'data.errorVar') + '}}') }).Count -eq 1) 'variable placeholder offered'
     Set-FujiCsvHeader -Editor $ed -HasHeader $false
     Assert-Equal $tpl['csv'].Count @($ed.Csv.Rows).Count 'header off: all records are rows'
     Write-FujiTextFile -Path (Join-Path $work 'err.csv') -Text ("a," + (Get-FujiText 'editor.csv.resultHeaderName') + "`r`n1,2`r`n")

@@ -149,7 +149,7 @@ function Add-FujiStepField {
     $id = [string]$Field['id']
     $type = [string]$Field['type']
     [void]$Panel.Controls.Add((New-FujiFieldLabel -Text ([string]$Field['label']) -Width $Width))
-    $row = New-FujiFlow
+    $row = New-FujiFlow -NoWrap
     $inputControl = $null
     switch ($type) {
         'textarea' {
@@ -200,7 +200,7 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($inputControl)
             [void]$row.Controls.Add($browse)
             [void]$Panel.Controls.Add($row)
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             $cap = New-FujiButton -Text (Get-FujiText 'gui.imgCapture') -Tag 'img'
             $cap.Add_Click({ Invoke-FujiUi { Start-FujiStepCapture -Mode 'img' } })
             $d.ImgW = New-FujiTextBox -Text '60' -Width (Get-FujiScaled 50)
@@ -218,7 +218,7 @@ function Add-FujiStepField {
             $pic.Size = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 240), (Get-FujiScaled 90)
             $pic.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
             $d.Preview = $pic
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($pic)
         }
         'capture' {
@@ -234,7 +234,7 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($b)
             $d.Status['rect'] = New-FujiHintLabel -Text '' -Width $Width
             [void]$Panel.Controls.Add($row)
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($d.Status['rect'])
         }
         'macroselect' {

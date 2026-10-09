@@ -1669,7 +1669,7 @@ function Get-FujiPlaceholderChoice {
     }
     if ($cols -eq 0) { $list.Add(@('{{1}}', (Get-FujiText 'editor.placeholder.csvFirst'))) }
     foreach ($n in (Get-FujiDefinedVarName -Steps (Get-FujiCurrentStepList $Editor) -ErrorVarName (Get-FujiText 'data.errorVar'))) {
-        $list.Add(@('{{$' + $n + '}}', (Get-FujiText 'editor.placeholder.var' $n)))
+        $list.Add(@(('{{$' + $n + '}}'), (Get-FujiText 'editor.placeholder.var' $n)))
     }
     foreach ($p in $script:FujiCommands['placeholderHelp']) { $list.Add(@([string]$p[0], [string]$p[1])) }
     return , $list
@@ -2373,8 +2373,10 @@ function Invoke-FujiUi {
     try {
         & $Action
     } catch {
+        # The innermost place in the script (InvocationInfo only names the outermost call)
         $where = ''
-        if ($_.InvocationInfo) { $where = ' [' + $_.InvocationInfo.ScriptName + ':' + $_.InvocationInfo.ScriptLineNumber + ']' }
+        $trace = [string]$_.ScriptStackTrace
+        if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
         Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $_.Exception.Message) + $where) -Level 'error'
     }
 }
@@ -2470,11 +2472,13 @@ function Add-FujiFullColumn {
     [void]$Table.ColumnStyles.Add((New-Object -TypeName System.Windows.Forms.ColumnStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
 }
 
+# NoWrap: one line (its preferred height is then exact inside a TableLayoutPanel)
 function New-FujiFlow {
+    param([switch]$NoWrap)
     $f = New-Object -TypeName System.Windows.Forms.FlowLayoutPanel
     $f.AutoSize = $true
     $f.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
-    $f.WrapContents = $true
+    $f.WrapContents = -not $NoWrap
     $f.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList 0
     $f.Dock = [System.Windows.Forms.DockStyle]::Fill
     return $f
@@ -2640,18 +2644,16 @@ function Show-FujiMainForm {
     $form.BackColor = Get-FujiColor '#fdf7fb'
     $script:Ui.Form = $form
 
-    $root = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $root.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $root.ColumnCount = 1
-    Add-FujiFullColumn -Table $root
-    $root.RowCount = 3
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize)))
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Absolute), (Get-FujiScaled 210)))
-    $root.Controls.Add((New-FujiTopPanel), 0, 0)
-    $root.Controls.Add((New-FujiStepListPanel), 0, 1)
-    $root.Controls.Add((New-FujiBottomPanel), 0, 2)
-    [void]$form.Controls.Add($root)
+    # Docking, not a TableLayoutPanel: a docked FlowLayoutPanel gets its height from wrapping at the
+    # real window width (an auto-sized table row measured the toolbars far too tall)
+    $bottom = New-FujiBottomPanel
+    $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $bottom.Height = Get-FujiScaled 210
+    [void]$form.Controls.Add((New-FujiStepListPanel))
+    [void]$form.Controls.Add($bottom)
+    $toolbars = @(New-FujiTopPanel)
+    # The last added docks first: add from the bottom row up so the first row is at the top
+    for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
 
     $form.Add_KeyDown({ $e = $_; Invoke-FujiUi { Invoke-FujiShortcut -KeyEvent $e } })
     $form.Add_FormClosing({ $e = $_; Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e } })
@@ -2678,12 +2680,7 @@ function New-FujiRowLabel {
 }
 
 function New-FujiTopPanel {
-    $top = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $top.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $top.AutoSize = $true
-    $top.ColumnCount = 1
-    Add-FujiFullColumn -Table $top
-    $top.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 4), (Get-FujiScaled 6), 0
+    $top = New-Object -TypeName 'System.Collections.Generic.List[object]'
 
     # save
     $row = New-FujiFlow
@@ -2695,7 +2692,7 @@ function New-FujiTopPanel {
     $script:Ui.SaveState = $state
     [void]$row.Controls.Add($save)
     [void]$row.Controls.Add($state)
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # macro
     $row = New-FujiFlow
@@ -2732,7 +2729,7 @@ function New-FujiTopPanel {
     $wl = New-FujiButton -Text (Get-FujiText 'gui.windowList') -Tip (Get-FujiText 'gui.windowListTip')
     $wl.Add_Click({ Invoke-FujiUi { Select-FujiWindowUi } })
     [void]$row.Controls.Add($wl)
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # CSV
     $row = New-FujiFlow
@@ -2766,7 +2763,7 @@ function New-FujiTopPanel {
     $info.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.CsvInfo = $info
     foreach ($c in @($browse, $load, $header, $enc, $info)) { [void]$row.Controls.Add($c) }
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # palette
     $row = New-FujiFlow
@@ -2788,7 +2785,7 @@ function New-FujiTopPanel {
             [void]$row.Controls.Add($btn)
         }
     }
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # edit
     $row = New-FujiFlow
@@ -2824,8 +2821,15 @@ function New-FujiTopPanel {
     $hint.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.InsertHint = $hint
     [void]$row.Controls.Add($hint)
-    [void]$top.Controls.Add($row)
-    return $top
+    $top.Add((Set-FujiToolbarRow $row))
+    return $top.ToArray()
+}
+
+function Set-FujiToolbarRow {
+    param([Parameter(Mandatory)]$Row)
+    $Row.Dock = [System.Windows.Forms.DockStyle]::Top
+    $Row.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 1), (Get-FujiScaled 6), (Get-FujiScaled 1)
+    return $Row
 }
 
 # Color mixed with white (Amount 0 = the colour, 1 = white)
@@ -3088,7 +3092,7 @@ function New-FujiBottomPanel {
     [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize)))
     [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
     $panel.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), 0, (Get-FujiScaled 6), (Get-FujiScaled 6)
-    $row = New-FujiFlow
+    $row = New-FujiFlow -NoWrap
     $run = New-FujiButton -Text (Get-FujiText 'gui.run')
     $run.Font = $script:Ui.BoldFont
     $run.Add_Click({ Write-FujiUiLog -Message (Get-FujiText 'gui.runNotYet') -Level 'warn' })
@@ -3712,7 +3716,7 @@ function Add-FujiStepField {
     $id = [string]$Field['id']
     $type = [string]$Field['type']
     [void]$Panel.Controls.Add((New-FujiFieldLabel -Text ([string]$Field['label']) -Width $Width))
-    $row = New-FujiFlow
+    $row = New-FujiFlow -NoWrap
     $inputControl = $null
     switch ($type) {
         'textarea' {
@@ -3763,7 +3767,7 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($inputControl)
             [void]$row.Controls.Add($browse)
             [void]$Panel.Controls.Add($row)
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             $cap = New-FujiButton -Text (Get-FujiText 'gui.imgCapture') -Tag 'img'
             $cap.Add_Click({ Invoke-FujiUi { Start-FujiStepCapture -Mode 'img' } })
             $d.ImgW = New-FujiTextBox -Text '60' -Width (Get-FujiScaled 50)
@@ -3781,7 +3785,7 @@ function Add-FujiStepField {
             $pic.Size = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 240), (Get-FujiScaled 90)
             $pic.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
             $d.Preview = $pic
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($pic)
         }
         'capture' {
@@ -3797,7 +3801,7 @@ function Add-FujiStepField {
             [void]$row.Controls.Add($b)
             $d.Status['rect'] = New-FujiHintLabel -Text '' -Width $Width
             [void]$Panel.Controls.Add($row)
-            $row = New-FujiFlow
+            $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($d.Status['rect'])
         }
         'macroselect' {

@@ -64,8 +64,10 @@ function Invoke-FujiUi {
     try {
         & $Action
     } catch {
+        # The innermost place in the script (InvocationInfo only names the outermost call)
         $where = ''
-        if ($_.InvocationInfo) { $where = ' [' + $_.InvocationInfo.ScriptName + ':' + $_.InvocationInfo.ScriptLineNumber + ']' }
+        $trace = [string]$_.ScriptStackTrace
+        if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
         Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $_.Exception.Message) + $where) -Level 'error'
     }
 }
@@ -161,11 +163,13 @@ function Add-FujiFullColumn {
     [void]$Table.ColumnStyles.Add((New-Object -TypeName System.Windows.Forms.ColumnStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
 }
 
+# NoWrap: one line (its preferred height is then exact inside a TableLayoutPanel)
 function New-FujiFlow {
+    param([switch]$NoWrap)
     $f = New-Object -TypeName System.Windows.Forms.FlowLayoutPanel
     $f.AutoSize = $true
     $f.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
-    $f.WrapContents = $true
+    $f.WrapContents = -not $NoWrap
     $f.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList 0
     $f.Dock = [System.Windows.Forms.DockStyle]::Fill
     return $f

@@ -26,18 +26,16 @@ function Show-FujiMainForm {
     $form.BackColor = Get-FujiColor '#fdf7fb'
     $script:Ui.Form = $form
 
-    $root = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $root.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $root.ColumnCount = 1
-    Add-FujiFullColumn -Table $root
-    $root.RowCount = 3
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize)))
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
-    [void]$root.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Absolute), (Get-FujiScaled 210)))
-    $root.Controls.Add((New-FujiTopPanel), 0, 0)
-    $root.Controls.Add((New-FujiStepListPanel), 0, 1)
-    $root.Controls.Add((New-FujiBottomPanel), 0, 2)
-    [void]$form.Controls.Add($root)
+    # Docking, not a TableLayoutPanel: a docked FlowLayoutPanel gets its height from wrapping at the
+    # real window width (an auto-sized table row measured the toolbars far too tall)
+    $bottom = New-FujiBottomPanel
+    $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $bottom.Height = Get-FujiScaled 210
+    [void]$form.Controls.Add((New-FujiStepListPanel))
+    [void]$form.Controls.Add($bottom)
+    $toolbars = @(New-FujiTopPanel)
+    # The last added docks first: add from the bottom row up so the first row is at the top
+    for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
 
     $form.Add_KeyDown({ $e = $_; Invoke-FujiUi { Invoke-FujiShortcut -KeyEvent $e } })
     $form.Add_FormClosing({ $e = $_; Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e } })
@@ -64,12 +62,7 @@ function New-FujiRowLabel {
 }
 
 function New-FujiTopPanel {
-    $top = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $top.Dock = [System.Windows.Forms.DockStyle]::Fill
-    $top.AutoSize = $true
-    $top.ColumnCount = 1
-    Add-FujiFullColumn -Table $top
-    $top.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 4), (Get-FujiScaled 6), 0
+    $top = New-Object -TypeName 'System.Collections.Generic.List[object]'
 
     # save
     $row = New-FujiFlow
@@ -81,7 +74,7 @@ function New-FujiTopPanel {
     $script:Ui.SaveState = $state
     [void]$row.Controls.Add($save)
     [void]$row.Controls.Add($state)
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # macro
     $row = New-FujiFlow
@@ -118,7 +111,7 @@ function New-FujiTopPanel {
     $wl = New-FujiButton -Text (Get-FujiText 'gui.windowList') -Tip (Get-FujiText 'gui.windowListTip')
     $wl.Add_Click({ Invoke-FujiUi { Select-FujiWindowUi } })
     [void]$row.Controls.Add($wl)
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # CSV
     $row = New-FujiFlow
@@ -152,7 +145,7 @@ function New-FujiTopPanel {
     $info.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.CsvInfo = $info
     foreach ($c in @($browse, $load, $header, $enc, $info)) { [void]$row.Controls.Add($c) }
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # palette
     $row = New-FujiFlow
@@ -174,7 +167,7 @@ function New-FujiTopPanel {
             [void]$row.Controls.Add($btn)
         }
     }
-    [void]$top.Controls.Add($row)
+    $top.Add((Set-FujiToolbarRow $row))
 
     # edit
     $row = New-FujiFlow
@@ -210,8 +203,15 @@ function New-FujiTopPanel {
     $hint.ForeColor = Get-FujiColor '#5e5368'
     $script:Ui.InsertHint = $hint
     [void]$row.Controls.Add($hint)
-    [void]$top.Controls.Add($row)
-    return $top
+    $top.Add((Set-FujiToolbarRow $row))
+    return $top.ToArray()
+}
+
+function Set-FujiToolbarRow {
+    param([Parameter(Mandatory)]$Row)
+    $Row.Dock = [System.Windows.Forms.DockStyle]::Top
+    $Row.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 1), (Get-FujiScaled 6), (Get-FujiScaled 1)
+    return $Row
 }
 
 # Color mixed with white (Amount 0 = the colour, 1 = white)
@@ -474,7 +474,7 @@ function New-FujiBottomPanel {
     [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize)))
     [void]$panel.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 100))
     $panel.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), 0, (Get-FujiScaled 6), (Get-FujiScaled 6)
-    $row = New-FujiFlow
+    $row = New-FujiFlow -NoWrap
     $run = New-FujiButton -Text (Get-FujiText 'gui.run')
     $run.Font = $script:Ui.BoldFont
     $run.Add_Click({ Write-FujiUiLog -Message (Get-FujiText 'gui.runNotYet') -Level 'warn' })

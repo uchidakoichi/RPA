@@ -951,7 +951,7 @@ function Get-FujiPlaceholderChoice {
     }
     if ($cols -eq 0) { $list.Add(@('{{1}}', (Get-FujiText 'editor.placeholder.csvFirst'))) }
     foreach ($n in (Get-FujiDefinedVarName -Steps (Get-FujiCurrentStepList $Editor) -ErrorVarName (Get-FujiText 'data.errorVar'))) {
-        $list.Add(@('{{$' + $n + '}}', (Get-FujiText 'editor.placeholder.var' $n)))
+        $list.Add(@(('{{$' + $n + '}}'), (Get-FujiText 'editor.placeholder.var' $n)))
     }
     foreach ($p in $script:FujiCommands['placeholderHelp']) { $list.Add(@([string]$p[0], [string]$p[1])) }
     return , $list
