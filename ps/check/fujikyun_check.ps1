@@ -293,6 +293,8 @@ $advice.ScrollBars = 'Vertical'
 
 $probe = New-Object -TypeName System.Windows.Forms.TextBox
 $probe.Width = 120
+# Japanese IME would turn the test keys into an uncommitted composition
+$probe.ImeMode = [System.Windows.Forms.ImeMode]::Disable
 
 $buttons = New-Object -TypeName System.Windows.Forms.FlowLayoutPanel
 $buttons.Dock = 'Bottom'
@@ -415,8 +417,16 @@ $form.Add_Shown({
             return @('SKIP', 'this window was not in front')
         }
         [System.Windows.Forms.SendKeys]::SendWait('fuji123')
-        [System.Windows.Forms.Application]::DoEvents()
-        @($(if ($probe.Text -eq 'fuji123') { 'OK' } else { 'NG' }), ('"{0}"' -f $probe.Text))
+        # SendWait may return before every injected key reached this window's message queue:
+        # keep pumping messages for a while (up to 3 s) before judging
+        $deadline = (Get-Date).AddSeconds(3)
+        $waitedMs = 0
+        while ($probe.Text -ne 'fuji123' -and (Get-Date) -lt $deadline) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 50
+            $waitedMs += 50
+        }
+        @($(if ($probe.Text -eq 'fuji123') { 'OK' } else { 'NG' }), ('"{0}" (waited {1} ms)' -f $probe.Text, $waitedMs))
     }
 
     Show-CheckResult
