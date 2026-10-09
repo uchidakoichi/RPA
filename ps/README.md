@@ -32,17 +32,37 @@ PowerShell 版が動く端末かを調べるツールです。端末の設定は
 
 `.bat` は `-ExecutionPolicy Bypass` で起動します。この指定はその1回の起動にだけ効き、端末の設定は変えません。なお、グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。
 
+## 編集画面を試す（実行機能はまだ）
+
+マクロの作成・編集・保存ができます。▶ 実行は次の段階で作ります。
+
+1. 次の5つのファイルを、**同じフォルダ** に置きます（RAW 表示をメモ帳に貼り付けて保存する場合は、JSON を **UTF-8** で保存します）。
+   - `fujikyun.bat`
+   - `fujikyun.ps1`
+   - `fujikyun_ja.json`
+   - `fujikyun_commands.json`
+   - `fujikyun_templates.json`
+2. `fujikyun.bat` をダブルクリックします。
+
+マクロのファイル（`fujikyun_macros.json`）や見本 CSV（`samples\`）、参照画像（`rpa_images\`）は、このフォルダに作られます。HTA 版と同じ形式（データ版27）なので、HTA 版の `fujikyun_macros.json` をこのフォルダにコピーすれば、そのまま開けます。
+
 ## フォルダ構成（開発中）
 
 | パス | 内容 |
 | --- | --- |
+| `fujikyun.bat` | 起動用。PowerShell 5.1 を STA モード・コンソールなしで起動 |
+| `fujikyun.ps1` | アプリ本体（1ファイル）。`build/Build-FujiBundle.ps1` が `build/Main.ps1`・`src`・`gui` から作る。**直接編集しない** |
+| `build/Main.ps1` | 起動処理（`fujikyun.ps1` のもと） |
+| `build/Build-FujiBundle.ps1` | 保守用: `fujikyun.ps1` を作り直す。`src`・`gui` を変えたら実行（テストが古いままを検出） |
 | `check/` | 事前チェックツール |
-| `src/*.ps1` | 本体のソース（英数字だけ）。いまは画面のない中核部分 |
-| `fujikyun_ja.json` | 日本語リソース（メッセージ・表示名の文言） |
+| `src/*.ps1` | 画面のない中核部分（英数字だけ） |
+| `gui/*.ps1` | Windows Forms の画面（英数字だけ） |
+| `fujikyun_ja.json` | 日本語リソース（メッセージ・画面の文言） |
 | `fujikyun_commands.json` | コマンド定義（表示名・説明・入力欄・パレット・キー一覧など）。HTA 版から一度だけ書き出し、以後はこのファイルが元データ |
 | `fujikyun_templates.json` | 内蔵テンプレート。HTA 版がテンプレートの元データのあいだは `node tools/export_ps_templates.js` で書き出す（直接編集しない） |
-| `tests/Invoke-FujiTest.ps1` | 中核部分のテスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1` |
+| `tests/Invoke-FujiTest.ps1` | テスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1`。画面のファイルは構文だけ確認 |
 | `tests/golden.json` | HTA 版の関数が同じ入力に返す値（`node tools/make_ps_golden.js`）。**HTA 版が正しいとは限らない** ので、値は確認済みのもので、HTA 版が正しく出せないものは正しい値を `PS_EXPECT` に書いて PowerShell 版のテストに使う |
+| `PSScriptAnalyzerSettings.psd1` | 保守用: 静的解析の設定（5.1 と 7 の構文互換を確認） |
 
 ### src の中身
 
@@ -56,15 +76,16 @@ PowerShell 版が動く端末かを調べるツールです。端末の設定は
 | `Placeholders.ps1` | 差し込み |
 | `Commands.ps1` | コマンドの設定の読み書き・入力チェック・自動ラベル |
 | `Data.ps1` | マクロファイルの整形、ブロック構造（グループ・繰り返しなど） |
+| `Editor.ps1` | 編集の操作（起動時の読み込み・一時ファイル・保存・元に戻す・追加・移動・削除・複製・無効化・折りたたみ・取込・書出・テンプレート・CSV の読み込み）。画面から呼ぶだけで、テストできる |
+
+### gui の中身
+
+| ファイル | 内容 |
+| --- | --- |
+| `Common.ps1` | フォント・色・ログ・確認や入力の小さなダイアログ |
+| `MainForm.ps1` | メイン画面（マクロ・CSV・パレット・ステップ一覧・ログ、キー操作、ドラッグでの並べ替え） |
+| `StepDialog.ps1` | ステップ編集ダイアログ（`fujikyun_commands.json` の入力欄から組み立てる。マウス位置・範囲・参照画像の取得） |
 
 ### Windows（PowerShell 5.1）でテストする
 
-次の14ファイルを、同じフォルダ構成で置いて `tests\run_tests.bat` を実行します（JSON は UTF-8 で保存）。
-
-```
-ps\fujikyun_ja.json
-ps\fujikyun_commands.json
-ps\fujikyun_templates.json
-ps\src\Text.ps1  Json.ps1  Files.ps1  Csv.ps1  Values.ps1  Placeholders.ps1  Commands.ps1  Data.ps1
-ps\tests\Invoke-FujiTest.ps1  golden.json  run_tests.bat
-```
+`ps` フォルダをまるごと（`check` を除く）同じ構成で置いて、`tests\run_tests.bat` を実行します（JSON は UTF-8 で保存）。

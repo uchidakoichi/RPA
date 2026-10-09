@@ -72,10 +72,25 @@ function ConvertTo-FujiMacroData {
     return @{ Data = $data; NewerVersion = $newer }
 }
 
-# Clean data -> file text (same shape and indentation as the HTA's JSON.stringify(..., null, 2))
+# Clean data -> file text (same shape and indentation as the HTA's JSON.stringify(..., null, 2)).
+# The editor's "collapsed" mark on a block start is view state and is not written.
 function ConvertTo-FujiMacroJson {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Data)
-    return (ConvertTo-FujiJson -InputObject ([ordered]@{ version = $script:FujiDataVersion; macros = $Data.macros }) -Indent 2)
+    $macros = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($m in $Data.macros) {
+        $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($s in $m.steps) {
+            if ($s.Contains('collapsed')) {
+                $c = [ordered]@{}
+                foreach ($k in $s.Keys) { if ($k -ne 'collapsed') { $c[$k] = $s[$k] } }
+                $steps.Add($c)
+            } else {
+                $steps.Add($s)
+            }
+        }
+        $macros.Add([ordered]@{ id = $m.id; name = $m.name; targetWindow = $m.targetWindow; steps = $steps })
+    }
+    return (ConvertTo-FujiJson -InputObject ([ordered]@{ version = $script:FujiDataVersion; macros = $macros }) -Indent 2)
 }
 
 # ----------------------------------------------------------------- block structure (same as the HTA)
