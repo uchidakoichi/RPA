@@ -31,3 +31,13 @@ PowerShell 版が動く端末かを調べるツールです。端末の設定は
 3. 結果の画面が出ます。同じ内容が `fujikyun_check_result.txt` に保存されます。
 
 `.bat` は `-ExecutionPolicy Bypass` で起動します。この指定はその1回の起動にだけ効き、端末の設定は変えません。なお、グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。
+
+## フォルダ構成（開発中）
+
+| パス | 内容 |
+| --- | --- |
+| `check/` | 事前チェックツール |
+| `src/*.ps1` | 本体のソース（英数字だけ）。いまは画面のない中核部分: 文字リソース・JSON・ファイル・CSV・差し込み・計算・文字加工・条件 |
+| `fujikyun_ja.json` | 本体の日本語リソース（UTF-8） |
+| `tests/Invoke-FujiTest.ps1` | 中核部分のテスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1` |
+| `tests/golden.json` | HTA 版の関数が同じ入力に返す値（`node tools/make_ps_golden.js` で作る）。両方の版の動きがそろっているかをテストで確かめる |
