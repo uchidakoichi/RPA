@@ -654,6 +654,20 @@ const until = (cond, ms) => new Promise((ok, ng) => { const t0 = Date.now(); con
     assert.strictEqual(R('resultRows[0].status'), '完了');
     console.log('ok 32: command set, JSON settings and COPY variables');
   }
+  // 33) numbers stay exact or are refused; eras back to Meiji
+  {
+    const { R } = makeCtx();
+    assert.strictEqual(R('calcExpression("12345678901234*10")'), '123456789012340');
+    assert.throws(() => R('calcExpression("99999999*99999999")'));
+    assert.strictEqual(R('evalCondition({ op: "EQ", left: "12345678901234567", right: "12345678901234568" }, null)'), false);
+    assert.strictEqual(R('evalCondition({ op: "EQ", left: "１，０００", right: "1000" }, null)'), true);
+    assert.strictEqual(R('warekiOf(new Date(1926, 0, 1))'), '大正15年');
+    assert.strictEqual(R('warekiOf(new Date(1926, 11, 25))'), '昭和元年');
+    assert.strictEqual(R('warekiOf(new Date(1912, 6, 29))'), '明治45年');
+    assert.strictEqual(R('strOp("DATE_ADD", "大正15年12月24日", "1", "")'), '1926/12/25');
+    assert.throws(() => R('strOp("WAREKI", "令和8年2月30日", "", "")'));
+    console.log('ok 33: exact numbers, eras from Meiji');
+  }
   console.log('ALL RUN TESTS PASSED');
   process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

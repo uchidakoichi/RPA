@@ -320,7 +320,31 @@
   },
   {
    "expr": "99999999*99999999",
-   "value": "9999999800000000"
+   "error": true,
+   "ps": {
+    "reason": "exact product; the HTA refuses numbers beyond 2^53",
+    "value": "9999999800000001"
+   }
+  },
+  {
+   "expr": "12345678901234*10",
+   "value": "123456789012340"
+  },
+  {
+   "expr": "0.1*3",
+   "value": "0.3"
+  },
+  {
+   "expr": "1/3*3",
+   "value": "1"
+  },
+  {
+   "expr": "1234567890123456789",
+   "error": true,
+   "ps": {
+    "reason": "19 digits are exact in decimal",
+    "value": "1234567890123456789"
+   }
   }
  ],
  "strop": [
@@ -652,32 +676,81 @@
    "a": "",
    "b": "",
    "value": "keep"
+  },
+  {
+   "op": "WAREKI",
+   "s": "大正15年1月1日",
+   "a": "",
+   "b": "",
+   "value": "大正15年1月1日"
+  },
+  {
+   "op": "WAREKI",
+   "s": "1926/12/24",
+   "a": "",
+   "b": "",
+   "value": "大正15年12月24日"
+  },
+  {
+   "op": "WAREKI",
+   "s": "1926/12/25",
+   "a": "",
+   "b": "",
+   "value": "昭和元年12月25日"
+  },
+  {
+   "op": "WAREKI",
+   "s": "1912/07/30",
+   "a": "",
+   "b": "",
+   "value": "大正元年7月30日"
+  },
+  {
+   "op": "WAREKI",
+   "s": "明治45年7月29日",
+   "a": "",
+   "b": "",
+   "value": "明治45年7月29日"
+  },
+  {
+   "op": "WAREKI",
+   "s": "令和8年2月30日",
+   "a": "",
+   "b": "",
+   "error": true
+  },
+  {
+   "op": "DATE_ADD",
+   "s": "明治45年7月29日",
+   "a": "1",
+   "b": "",
+   "value": "1912/07/30"
   }
  ],
  "numbers": [
   {
    "text": "1",
-   "value": 1
+   "value": "1"
   },
   {
    "text": " 12 ",
-   "value": 12
+   "value": "12"
   },
   {
    "text": "１２",
-   "value": 12
+   "value": "12"
   },
   {
    "text": "1,200",
-   "value": 1200
+   "value": "1200"
   },
   {
    "text": "-3.5",
-   "value": -3.5
+   "value": "-3.5"
   },
   {
    "text": "+7",
-   "value": 7
+   "value": "7"
   },
   {
    "text": "1.",
@@ -701,7 +774,23 @@
   },
   {
    "text": "１，０００",
-   "value": null
+   "value": "1000"
+  },
+  {
+   "text": "007",
+   "value": "7"
+  },
+  {
+   "text": "123456789012345",
+   "value": "123456789012345"
+  },
+  {
+   "text": "12345678901234567",
+   "value": null,
+   "ps": {
+    "reason": "17 digits are exact in decimal; the HTA treats them as text",
+    "value": "12345678901234567"
+   }
   }
  ],
  "conditions": [
@@ -818,6 +907,34 @@
    "left": "",
    "right": "",
    "value": true
+  },
+  {
+   "op": "EQ",
+   "left": "12345678901234567",
+   "right": "12345678901234568",
+   "value": false
+  },
+  {
+   "op": "EQ",
+   "left": "0012",
+   "right": "12",
+   "value": true
+  },
+  {
+   "op": "GT",
+   "left": "12345678901234568",
+   "right": "9",
+   "value": false,
+   "ps": {
+    "reason": "numeric comparison; the HTA compares 17-digit values as text",
+    "value": true
+   }
+  },
+  {
+   "op": "EQ",
+   "left": "１，０００",
+   "right": "1000",
+   "value": true
   }
  ],
  "wareki": [
@@ -862,6 +979,42 @@
    "m": 1,
    "d": 1,
    "year": "令和2年"
+  },
+  {
+   "y": 1926,
+   "m": 12,
+   "d": 24,
+   "year": "大正15年"
+  },
+  {
+   "y": 1926,
+   "m": 1,
+   "d": 1,
+   "year": "大正15年"
+  },
+  {
+   "y": 1912,
+   "m": 7,
+   "d": 30,
+   "year": "大正元年"
+  },
+  {
+   "y": 1912,
+   "m": 7,
+   "d": 29,
+   "year": "明治45年"
+  },
+  {
+   "y": 1868,
+   "m": 1,
+   "d": 1,
+   "year": "明治元年"
+  },
+  {
+   "y": 1867,
+   "m": 12,
+   "d": 31,
+   "year": "1867年"
   }
  ],
  "fixture": {

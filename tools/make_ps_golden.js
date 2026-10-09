@@ -1,6 +1,9 @@
 // Records what the HTA's own functions return for a set of inputs, so the PowerShell edition can be
-// tested against the HTA's exact behaviour (maintainers only, needs Node.js):
+// tested against the HTA (maintainers only, needs Node.js):
 //   node tools/make_ps_golden.js   ->  ps/tests/golden.json
+// The HTA is not the definition of "correct": every expectation here was reviewed, and where the
+// HTA cannot give the right answer (JavaScript numbers are exact only to 15 digits) the correct
+// value is set in PS_EXPECT below and used by the PowerShell tests instead.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -23,7 +26,8 @@ const csv = [
 ].map(t => ({ text: t, records: JSON.parse(R(`JSON.stringify(parseCsv(${J(t)}))`)), warnings: R("csvParseWarnings.length") }));
 
 const calc = ["1+2", "2*3+4", "2*(3+4)", "10/4", "10%3", "-10%3", "1.5*2", "１２＋３", "1,200*2", "（1+2）×3", "0.1+0.2", "1/3", "", "1/0", "2*(3", "abc", "1+",
-    "100-200", "+5", "--5", "7 / 2", "12÷4", "3％2", "1e3", "99999999*99999999"].map(e => Object.assign({ expr: e }, call(`calcExpression(${J(e)})`)));
+    "100-200", "+5", "--5", "7 / 2", "12÷4", "3％2", "1e3", "99999999*99999999",
+    "12345678901234*10", "0.1*3", "1/3*3", "1234567890123456789"].map(e => Object.assign({ expr: e }, call(`calcExpression(${J(e)})`)));
 
 const S = (op, s, a, b) => Object.assign({ op, s, a, b }, call(`strOp(${J(op)}, ${J(s)}, ${J(a)}, ${J(b)})`));
 const strop = [
@@ -38,19 +42,25 @@ const strop = [
     S("WAREKI", "令和8年10月1日", "", ""), S("WAREKI", "平成元年5月1日", "", ""), S("WAREKI", "２０２６年１０月１日", "", ""), S("WAREKI", "hello", "", ""), S("WAREKI", "2026/02/30", "", ""),
     S("DATE_ADD", "2026/10/01", "14", ""), S("DATE_ADD", "2026/03/01", "-1", ""), S("DATE_ADD", "2024/02/28", "1", ""), S("DATE_ADD", "令和元年5月1日", "0", ""),
     S("COMMA", "1234567", "", ""), S("COMMA", "1234567.891", "", ""), S("COMMA", "１２３４", "", ""), S("COMMA", "999", "", ""),
-    S("UNCOMMA", "1,234，567", "", ""), S("LENGTH", "あいう", "", ""), S("LENGTH", "", "", ""), S("UNKNOWN_OP", "keep", "", "")
+    S("UNCOMMA", "1,234，567", "", ""), S("LENGTH", "あいう", "", ""), S("LENGTH", "", "", ""), S("UNKNOWN_OP", "keep", "", ""),
+    S("WAREKI", "大正15年1月1日", "", ""), S("WAREKI", "1926/12/24", "", ""), S("WAREKI", "1926/12/25", "", ""), S("WAREKI", "1912/07/30", "", ""),
+    S("WAREKI", "明治45年7月29日", "", ""), S("WAREKI", "令和8年2月30日", "", ""), S("DATE_ADD", "明治45年7月29日", "1", "")
 ];
 
-const numbers = ["1", " 12 ", "１２", "1,200", "-3.5", "+7", "1.", ".5", "abc", "", "1e3", "１，０００"].map(t => ({ text: t, value: R(`toNumberOrNull(${J(t)})`) }));
+// Numbers are recorded as text (String(n)) so long values survive JSON
+const numbers = ["1", " 12 ", "１２", "1,200", "-3.5", "+7", "1.", ".5", "abc", "", "1e3", "１，０００", "007", "123456789012345", "12345678901234567"]
+    .map(t => ({ text: t, value: R(`(function (n) { return n === null ? null : String(n); })(toNumberOrNull(${J(t)}))`) }));
 
 const C = (op, left, right) => ({ op, left, right, value: R(`evalCondition({ op: ${J(op)}, left: ${J(left)}, right: ${J(right)} }, null)`) });
 const conditions = [
     C("EQ", "10", "10.0"), C("EQ", "abc", "abc"), C("EQ", "abc", "ABC"), C("EQ", "1,000", "１０００"), C("NE", "a", "b"), C("CONTAINS", "hello", "ell"), C("NOT_CONTAINS", "hello", "z"),
     C("EMPTY", "  ", ""), C("EMPTY", "　", ""), C("NOT_EMPTY", "x", ""), C("GT", "100000", "99999"), C("GT", "b", "a"), C("GE", "5", "5"), C("LT", "abc", "abd"),
-    C("LE", "2", "10"), C("LE", "2", "1x"), C("REGEX", "R08-0001", "^R\\d{2}-"), C("REGEX", "abc", "^b"), C("EQ", "", "")
+    C("LE", "2", "10"), C("LE", "2", "1x"), C("REGEX", "R08-0001", "^R\\d{2}-"), C("REGEX", "abc", "^b"), C("EQ", "", ""),
+    C("EQ", "12345678901234567", "12345678901234568"), C("EQ", "0012", "12"), C("GT", "12345678901234568", "9"), C("EQ", "１，０００", "1000")
 ];
 
-const wareki = [[2026, 9, 9], [2019, 4, 1], [2019, 3, 30], [1989, 0, 8], [1989, 0, 7], [1926, 11, 25], [2020, 0, 1]]
+const wareki = [[2026, 9, 9], [2019, 4, 1], [2019, 3, 30], [1989, 0, 8], [1989, 0, 7], [1926, 11, 25], [2020, 0, 1],
+    [1926, 11, 24], [1926, 0, 1], [1912, 6, 30], [1912, 6, 29], [1868, 0, 1], [1867, 11, 31]]
     .map(([y, m, d]) => ({ y, m: m + 1, d, year: R(`warekiOf(new Date(${y}, ${m}, ${d}))`) }));
 
 // Placeholders with a fixed row, header and variables
@@ -61,6 +71,19 @@ const placeholders = ["{{1}}", "{{2}}", "{{9}}", "{{氏名}}様", "{{ 氏名 }}"
     .map(t => ({ text: t, value: R(`expandPlaceholders(${J(t)}, __rs)`) }));
 R(`__rs.rows[0].data = ${J(fixture.unsafeRow)}; var __u = [];`);
 const unsafe = { text: "cmd /c echo {{1}} {{2}} {{3}}", value: R(`expandPlaceholders("cmd /c echo {{1}} {{2}} {{3}}", __rs, __u)`), count: R("__u.length") };
+
+// Correct values where the HTA (JavaScript doubles) cannot give them; the HTA refuses or compares as text
+const PS_EXPECT = [
+    [calc, c => c.expr === "99999999*99999999", { value: "9999999800000001" }, "exact product; the HTA refuses numbers beyond 2^53"],
+    [calc, c => c.expr === "1234567890123456789", { value: "1234567890123456789" }, "19 digits are exact in decimal"],
+    [numbers, c => c.text === "12345678901234567", { value: "12345678901234567" }, "17 digits are exact in decimal; the HTA treats them as text"],
+    [conditions, c => c.op === "GT" && c.left === "12345678901234568", { value: true }, "numeric comparison; the HTA compares 17-digit values as text"]
+];
+for (const [list, match, expect, reason] of PS_EXPECT) {
+    const hits = list.filter(match);
+    if (hits.length !== 1) { throw new Error("PS_EXPECT matched " + hits.length + " cases: " + reason); }
+    hits[0].ps = Object.assign({ reason }, expect);
+}
 
 const out = { generated: "from fujikyun_rpa_builder.hta by tools/make_ps_golden.js", now: "2026-10-09T14:05:12", csv, calc, strop, numbers, conditions, wareki, fixture, placeholders, unsafe };
 const file = path.join(__dirname, "..", "ps", "tests", "golden.json");

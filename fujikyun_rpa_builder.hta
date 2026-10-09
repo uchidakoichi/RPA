@@ -856,20 +856,19 @@ function ensureFolder(path) {
     return path;
 }
 
-// Japanese era (only the eras a clerk will meet in practice)
+// Japanese eras from Meiji (residents' birth dates reach back to Taisho and Meiji): [name, first day, year offset]
+var WAREKI_ERAS = [["令和", 20190501, 2018], ["平成", 19890108, 1988], ["昭和", 19261225, 1925], ["大正", 19120730, 1911], ["明治", 18680101, 1867]];
+
 function warekiOf(d) {
     var y = d.getFullYear();
-    var m = d.getMonth() + 1;
-    var era;
-    var ey;
-    if (y > 2019 || (y === 2019 && m >= 5)) {
-        era = "令和"; ey = y - 2018;
-    } else if (y > 1989 || (y === 1989 && (m > 1 || d.getDate() >= 8))) {
-        era = "平成"; ey = y - 1988;
-    } else {
-        era = "昭和"; ey = y - 1925;
+    var key = y * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    for (var i = 0; i < WAREKI_ERAS.length; i++) {
+        if (key >= WAREKI_ERAS[i][1]) {
+            var ey = y - WAREKI_ERAS[i][2];
+            return WAREKI_ERAS[i][0] + (ey === 1 ? "元" : String(ey)) + "年";
+        }
     }
-    return era + (ey === 1 ? "元" : String(ey)) + "年";
+    return y + "年";
 }
 
 function fileNameOf(path) {
@@ -1493,9 +1492,14 @@ function describeCondition(c) {
 }
 
 // "1,234" "１２３" " 45 " -> number; anything else -> null
+// More than 15 significant digits cannot be held exactly (16-digit IDs would compare equal):
+// such values are not numbers here, so conditions compare them as text
 function toNumberOrNull(s) {
-    var t = toHalfWidthDigits(trimText(s)).replace(/,/g, "");
-    return /^[+\-]?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : null;
+    var t = toHalfWidthDigits(trimText(s)).replace(/[,，]/g, "");
+    if (!/^[+\-]?\d+(\.\d+)?$/.test(t) || t.replace(/^[+\-]?0*|\./g, "").length > 15) {
+        return null;
+    }
+    return parseFloat(t);
 }
 
 function evalCondition(c, rs) {
@@ -1551,7 +1555,14 @@ function calcExpression(text) {
             throw new Error("計算できない文字があるよ: " + (s.substring(pos) || "（式が途中で終わっている）"));
         }
         pos += m[0].length;
-        return parseFloat(m[0]);
+        return exact(parseFloat(m[0]));
+    }
+    // JavaScript numbers are exact only up to 2^53: refuse instead of giving a wrong total
+    function exact(v) {
+        if (Math.abs(v) > 9007199254740991) {
+            throw new Error("数が大きすぎて正確に計算できないよ（15けたまでにしてね）");
+        }
+        return v;
     }
     function factor() {
         var c = peek();
@@ -1574,7 +1585,7 @@ function calcExpression(text) {
             var op = s.charAt(pos++);
             var r = factor();
             if (op === "*") {
-                v *= r;
+                v = exact(v * r);
             } else {
                 if (r === 0) {
                     throw new Error("0で割り算しようとしたよ");
@@ -1589,7 +1600,7 @@ function calcExpression(text) {
         while (peek() === "+" || peek() === "-") {
             var op = s.charAt(pos++);
             var r = term();
-            v = op === "+" ? v + r : v - r;
+            v = exact(op === "+" ? v + r : v - r);
         }
         return v;
     }
@@ -1600,7 +1611,8 @@ function calcExpression(text) {
     if (pos < s.length) {
         throw new Error("計算できない文字があるよ: " + s.substring(pos));
     }
-    return String(Math.round(result * 1e10) / 1e10);
+    // toFixed rounds the value itself (result * 1e10 would lose digits for large results)
+    return String(parseFloat(result.toFixed(10)));
 }
 
 var STR_OPS = [
@@ -1632,10 +1644,16 @@ function strOpName(op) {
 // "2026/10/1" "2026-10-01" "20261001" "令和8年10月1日" "２０２６年１０月１日" -> Date (or null)
 function parseDateText(s) {
     var t = toHalfWidthDigits(trimText(s));
-    var m = /(令和|平成|昭和)(\d+|元)年(\d{1,2})月(\d{1,2})日/.exec(t);
+    var m = /(令和|平成|昭和|大正|明治)(\d+|元)年(\d{1,2})月(\d{1,2})日/.exec(t);
     if (m) {
-        var base = m[1] === "令和" ? 2018 : m[1] === "平成" ? 1988 : 1925;
-        return new Date(base + (m[2] === "元" ? 1 : parseInt(m[2], 10)), parseInt(m[3], 10) - 1, parseInt(m[4], 10));
+        var base = 0;
+        for (var i = 0; i < WAREKI_ERAS.length; i++) {
+            if (WAREKI_ERAS[i][0] === m[1]) {
+                base = WAREKI_ERAS[i][2];
+            }
+        }
+        var wd = new Date(base + (m[2] === "元" ? 1 : parseInt(m[2], 10)), parseInt(m[3], 10) - 1, parseInt(m[4], 10));
+        return wd.getMonth() === parseInt(m[3], 10) - 1 ? wd : null;
     }
     m = /^(\d{4})(\d{2})(\d{2})$/.exec(t) || /(\d{4})\D+(\d{1,2})\D+(\d{1,2})/.exec(t);
     if (!m) {

@@ -45,6 +45,15 @@ function Get-Golden {
     return $p.Value
 }
 
+# A case's expectation for this edition: the reviewed correct value (ps) where the HTA cannot give it,
+# otherwise what the HTA returned. Returns @{ IsError; Value }.
+function Get-Expected {
+    param($Item)
+    $ps = Get-Golden $Item 'ps'
+    if ($null -ne $ps) { return @{ IsError = $false; Value = $ps.value } }
+    return @{ IsError = ($null -ne (Get-Golden $Item 'error')); Value = (Get-Golden $Item 'value') }
+}
+
 # ----------------------------------------------------------------- golden: CSV
 foreach ($case in $golden.csv) {
     $r = ConvertFrom-FujiCsv -Text $case.text
@@ -56,10 +65,11 @@ foreach ($case in $golden.csv) {
 
 # ----------------------------------------------------------------- golden: calculation
 foreach ($case in $golden.calc) {
-    $isError = $null -ne (Get-Golden $case 'error')
+    $exp = Get-Expected $case
+    $isError = $exp.IsError
     try {
         $v = Invoke-FujiCalc -Expression $case.expr
-        if ($isError) { Assert-True $false ('calc "{0}" should fail but gave {1}' -f $case.expr, $v) } else { Assert-Equal $case.value $v ('calc "{0}"' -f $case.expr) }
+        if ($isError) { Assert-True $false ('calc "{0}" should fail but gave {1}' -f $case.expr, $v) } else { Assert-Equal $exp.Value $v ('calc "{0}"' -f $case.expr) }
     } catch {
         Assert-True $isError ('calc "{0}" failed: {1}' -f $case.expr, $_.Exception.Message)
     }
@@ -67,11 +77,12 @@ foreach ($case in $golden.calc) {
 
 # ----------------------------------------------------------------- golden: string operations
 foreach ($case in $golden.strop) {
-    $isError = $null -ne (Get-Golden $case 'error')
+    $exp = Get-Expected $case
+    $isError = $exp.IsError
     $what = 'strOp {0}("{1}", "{2}", "{3}")' -f $case.op, $case.s, $case.a, $case.b
     try {
         $v = Invoke-FujiStringOp -Op $case.op -Text $case.s -A $case.a -B $case.b
-        if ($isError) { Assert-True $false ('{0} should fail but gave {1}' -f $what, $v) } else { Assert-Equal $case.value $v $what }
+        if ($isError) { Assert-True $false ('{0} should fail but gave {1}' -f $what, $v) } else { Assert-Equal $exp.Value $v $what }
     } catch {
         Assert-True $isError ('{0} failed: {1}' -f $what, $_.Exception.Message)
     }
@@ -80,11 +91,12 @@ foreach ($case in $golden.strop) {
 # ----------------------------------------------------------------- golden: numbers, conditions, wareki
 foreach ($case in $golden.numbers) {
     $v = ConvertTo-FujiNumber -Text $case.text
-    Assert-Equal $case.value $v ('number "{0}"' -f $case.text)
+    if ($null -ne $v) { $v = ConvertTo-FujiNumberText -Value $v }
+    Assert-Equal (Get-Expected $case).Value $v ('number "{0}"' -f $case.text)
 }
 foreach ($case in $golden.conditions) {
     $v = Test-FujiCondition -Op $case.op -Left $case.left -Right $case.right
-    Assert-Equal $case.value $v ('condition "{0}" {1} "{2}"' -f $case.left, $case.op, $case.right)
+    Assert-Equal (Get-Expected $case).Value $v ('condition "{0}" {1} "{2}"' -f $case.left, $case.op, $case.right)
 }
 foreach ($case in $golden.wareki) {
     $d = New-Object -TypeName DateTime -ArgumentList ([int]$case.y), ([int]$case.m), ([int]$case.d)

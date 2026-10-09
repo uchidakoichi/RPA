@@ -13,39 +13,41 @@ function ConvertTo-FujiHalfWidthDigit {
     return [regex]::Replace($Text, '[\uFF10-\uFF19]', { param($m) [string][char]([int][char]$m.Value - 0xFEE0) })
 }
 
-# JavaScript's String(number) for the values a clerk meets (integers stay integers)
+# Numbers are [decimal]: exact up to 28 digits, so long IDs and money totals never lose digits
+# (the HTA's JavaScript doubles do, beyond 15 digits)
 function ConvertTo-FujiNumberText {
-    param([double]$Value)
-    if ($Value -eq [Math]::Floor($Value) -and [Math]::Abs($Value) -lt 1e15) {
-        return ([long]$Value).ToString($script:FujiInvariant)
-    }
-    return $Value.ToString('R', $script:FujiInvariant)
+    param([decimal]$Value)
+    return $Value.ToString('0.##########', $script:FujiInvariant)
 }
 
-# "1,200" / full-width digits -> number; anything else -> $null
+# "1,200" / full-width digits and commas -> number; anything else (or too long to be exact) -> $null
 function ConvertTo-FujiNumber {
     param([AllowNull()][AllowEmptyString()][string]$Text)
-    $t = (ConvertTo-FujiHalfWidthDigit -Text ([string]$Text).Trim()).Replace(',', '')
-    if ($t -match '^[+\-]?[0-9]+(\.[0-9]+)?$') { return [double]::Parse($t, $script:FujiInvariant) }
-    return $null
+    $t = (ConvertTo-FujiHalfWidthDigit -Text ([string]$Text).Trim()) -replace '[,\uFF0C]', ''
+    if ($t -notmatch '^[+\-]?[0-9]+(\.[0-9]+)?$') { return $null }
+    if (($t -replace '^[+\-]?0*|\.', '').Length -gt 28) { return $null }
+    return [decimal]::Parse($t, [System.Globalization.NumberStyles]::Number, $script:FujiInvariant)
 }
 
 # ----------------------------------------------------------------- dates
+# Eras from Meiji (residents' birth dates reach back to Taisho and Meiji), newest first, in the
+# order of date.eras in the text resource: first day (yyyymmdd) and year offset
+$script:FujiEraStarts = @(20190501, 19890108, 19261225, 19120730, 18680101)
+$script:FujiEraOffsets = @(2018, 1988, 1925, 1911, 1867)
+
 function Get-FujiWarekiYear {
     param([Parameter(Mandatory)][datetime]$Date)
     $eras = Get-FujiText 'date.eras'
-    $y = $Date.Year
-    $m = $Date.Month
-    if ($y -gt 2019 -or ($y -eq 2019 -and $m -ge 5)) {
-        $era = $eras[0]; $ey = $y - 2018
-    } elseif ($y -gt 1989 -or ($y -eq 1989 -and ($m -gt 1 -or $Date.Day -ge 8))) {
-        $era = $eras[1]; $ey = $y - 1988
-    } else {
-        $era = $eras[2]; $ey = $y - 1925
+    $key = $Date.Year * 10000 + $Date.Month * 100 + $Date.Day
+    for ($i = 0; $i -lt $script:FujiEraStarts.Count; $i++) {
+        if ($key -ge $script:FujiEraStarts[$i]) {
+            $ey = $Date.Year - $script:FujiEraOffsets[$i]
+            $num = [string]$ey
+            if ($ey -eq 1) { $num = Get-FujiText 'date.firstYear' }
+            return $eras[$i] + $num + (Get-FujiText 'date.year')
+        }
     }
-    $num = [string]$ey
-    if ($ey -eq 1) { $num = Get-FujiText 'date.firstYear' }
-    return $era + $num + (Get-FujiText 'date.year')
+    return [string]$Date.Year + (Get-FujiText 'date.year')
 }
 
 function Get-FujiWarekiDate {
@@ -71,7 +73,7 @@ function ConvertFrom-FujiDateText {
     $m = [regex]::Match($t, ('({0})([0-9]+|{1}){2}([0-9]{{1,2}}){3}([0-9]{{1,2}}){4}' -f $eraPattern, $first, $nen, $tsuki, $hi))
     try {
         if ($m.Success) {
-            $base = @(2018, 1988, 1925)[[array]::IndexOf([string[]]$eras, $m.Groups[1].Value)]
+            $base = $script:FujiEraOffsets[[array]::IndexOf([string[]]$eras, $m.Groups[1].Value)]
             $ey = 1
             if ($m.Groups[2].Value -match '^[0-9]+$') { $ey = [int]$m.Groups[2].Value }
             return (New-Object -TypeName DateTime -ArgumentList ($base + $ey), ([int]$m.Groups[3].Value), ([int]$m.Groups[4].Value))
@@ -94,9 +96,16 @@ function Invoke-FujiCalc {
     $s = $s -replace '\s+', ''
     if ($s -eq '') { throw (Get-FujiText 'calc.empty') }
     $state = @{ S = $s; Pos = 0 }
-    $result = Read-FujiCalcExpr -State $state
+    try {
+        $result = Read-FujiCalcExpr -State $state
+    } catch [System.OverflowException] {
+        throw (Get-FujiText 'calc.tooBig')
+    } catch [System.Management.Automation.MethodInvocationException] {
+        if ($_.Exception.InnerException -is [System.OverflowException]) { throw (Get-FujiText 'calc.tooBig') }
+        throw
+    }
     if ($state.Pos -lt $s.Length) { throw (Get-FujiText 'calc.badChar' $s.Substring($state.Pos)) }
-    return (ConvertTo-FujiNumberText -Value ([Math]::Round($result * 1e10) / 1e10))
+    return (ConvertTo-FujiNumberText -Value ([Math]::Round([decimal]$result, 10, [System.MidpointRounding]::AwayFromZero)))
 }
 
 function Get-FujiCalcPeek {
@@ -114,14 +123,15 @@ function Read-FujiCalcNumber {
         throw (Get-FujiText 'calc.badChar' $rest)
     }
     $State.Pos += $m.Length
-    return [double]::Parse($m.Value, $script:FujiInvariant)
+    if (($m.Value -replace '^0*|\.', '').Length -gt 28) { throw (Get-FujiText 'calc.tooBig') }
+    return [decimal]::Parse($m.Value, $script:FujiInvariant)
 }
 
 function Read-FujiCalcFactor {
     param($State)
     $c = Get-FujiCalcPeek -State $State
     if ($c -eq '+') { $State.Pos++; return (Read-FujiCalcFactor -State $State) }
-    if ($c -eq '-') { $State.Pos++; return -(Read-FujiCalcFactor -State $State) }
+    if ($c -eq '-') { $State.Pos++; return [decimal]::Negate((Read-FujiCalcFactor -State $State)) }
     if ($c -eq '(') {
         $State.Pos++
         $v = Read-FujiCalcExpr -State $State
@@ -139,12 +149,13 @@ function Read-FujiCalcTerm {
         $op = Get-FujiCalcPeek -State $State
         $State.Pos++
         $r = Read-FujiCalcFactor -State $State
+        # [decimal] methods throw OverflowException (PowerShell operators could switch to double)
         if ($op -eq '*') {
-            $v = $v * $r
+            $v = [decimal]::Multiply($v, $r)
         } else {
             if ($r -eq 0) { throw (Get-FujiText 'calc.divZero') }
-            # .NET % on doubles keeps the sign of the dividend, like JavaScript
-            if ($op -eq '/') { $v = $v / $r } else { $v = $v % $r }
+            # Remainder keeps the sign of the dividend, like JavaScript
+            if ($op -eq '/') { $v = [decimal]::Divide($v, $r) } else { $v = [decimal]::Remainder($v, $r) }
         }
     }
     return $v
@@ -157,7 +168,7 @@ function Read-FujiCalcExpr {
         $op = Get-FujiCalcPeek -State $State
         $State.Pos++
         $r = Read-FujiCalcTerm -State $State
-        if ($op -eq '+') { $v = $v + $r } else { $v = $v - $r }
+        if ($op -eq '+') { $v = [decimal]::Add($v, $r) } else { $v = [decimal]::Subtract($v, $r) }
     }
     return $v
 }
