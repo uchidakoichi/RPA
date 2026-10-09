@@ -414,6 +414,7 @@
     "tplLines": "\r\n・",
     "commentPrefix": "// ",
     "blockEndPrefix": "└ ",
-    "imgCaptureDisabled": "（PNG画像を選ぶか、📷 で切り取ってね）"
+    "imgCaptureDisabled": "（PNG画像を選ぶか、📷 で切り取ってね）",
+    "imgNetworkNotShown": "⚠ ネットワーク上の画像は、開いたときには自動で表示しないよ（知らないサーバーに接続しないため）。パスを入力し直すと表示するキュン: {0}"
   }
 }

@@ -76,7 +76,7 @@ function Show-FujiStepDialog {
             foreach ($cue in $script:StepDlg.Cues) {
                 [void][FujiUi.Native]::SendMessage($cue[0].Handle, $script:EmSetCueBanner, [IntPtr]1, [string]$cue[1])
             }
-            Update-FujiImagePreview
+            Update-FujiImagePreview -Opening
         })
     $form.Add_FormClosed({ if ($script:StepDlg.Timer) { $script:StepDlg.Timer.Stop(); $script:StepDlg.Timer.Dispose() } })
     [void](Show-FujiDialog -Form $form)
@@ -291,7 +291,11 @@ function Complete-FujiStepDialog {
 }
 
 # ----------------------------------------------------------------- reference image
+# Opening: the dialog was just opened. A network path (\\server\...) from a macro file is not read
+# then: reading it connects to that server, and Windows may send the user's sign-in (NTLM) to it.
+# It is shown once the user types or picks the path.
 function Update-FujiImagePreview {
+    param([switch]$Opening)
     $d = $script:StepDlg
     if ($null -eq $d -or $null -eq $d.Preview -or -not $d.Inputs.ContainsKey('path')) { return }
     $old = $d.Preview.Image
@@ -299,6 +303,10 @@ function Update-FujiImagePreview {
     if ($old) { $old.Dispose() }
     $full = Resolve-FujiEditorPath -Editor $script:Ed -Path $d.Inputs['path'].Text
     if ($full -eq '') { return }
+    if ($Opening -and ($full.StartsWith('\\') -or $full.StartsWith('//'))) {
+        $d.Status['img'].Text = Get-FujiText 'gui.imgNetworkNotShown' $full
+        return
+    }
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
         $d.Status['img'].Text = Get-FujiText 'gui.imgMissing' $full
         return
