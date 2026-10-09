@@ -1,5 +1,6 @@
 {
   "sentinel": "ふじキュン",
+  "textVersion": 2,
   "date": {
     "eras": [
       "令和",
@@ -442,7 +443,8 @@
     "schedule": "⏰ 予定",
     "scheduleTip": "決まった時刻にマクロを自動で実行します",
     "diagnostics": "🩺 環境チェック",
-    "diagnosticsTip": "クリップボード・文字認識・Excel など、この端末で使える機能を調べます"
+    "diagnosticsTip": "クリップボード・文字認識・Excel など、この端末で使える機能を調べます",
+    "textOld": "fujikyun_ja.json が fujikyun.ps1 より古いキュン（文言の版 {0}、必要な版 {1}）。ボタンなどが英字の名前で表示されるので、fujikyun_ja.json も最新のものに置き換えてね。"
   },
   "run": {
     "noSteps": "実行できるコマンドがないキュン。まずはコマンドを追加してね♡",

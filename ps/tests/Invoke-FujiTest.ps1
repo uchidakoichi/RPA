@@ -785,6 +785,25 @@ Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Book1').Handle 'window 
 Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Excel').Handle 'window title: suffix'
 Assert-True ($null -eq (Select-FujiWindow -Windows $wins -Title 'memo pad') -and $null -eq (Select-FujiWindow -Windows $wins -Title '')) 'window title: no match'
 
+# ----------------------------------------------------------------- every text the scripts ask for exists
+Assert-Equal '' (Test-FujiTextVersion) 'fujikyun_ja.json has the text version the scripts need'
+$keyFiles = @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'gui') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $psRoot 'build/Main.ps1'))
+$missing = New-Object -TypeName 'System.Collections.Generic.List[string]'
+$seen = 0
+foreach ($f in $keyFiles) {
+    $text = [System.IO.File]::ReadAllText($f.FullName)
+    # Get-FujiText 'a.b' and the keys of label / key lists written as 'gui.x' / 'run.x' ...
+    foreach ($m in [regex]::Matches($text, "'((?:gui|run|editor|schedule|rec|diag|calc|csv|data|validate|label|placeholder|date|strOp)\.[A-Za-z0-9_.]+)'")) {
+        $key = $m.Groups[1].Value
+        if ($key.EndsWith('.')) { continue }
+        $seen++
+        $value = Get-FujiText $key
+        if ($value -is [string] -and $value -eq $key) { $missing.Add($f.Name + ': ' + $key) }
+    }
+}
+Assert-True ($seen -gt 300) ('text keys found in the sources ({0})' -f $seen)
+Assert-True ($missing.Count -eq 0) ('every text key exists in fujikyun_ja.json: ' + ($missing -join ', '))
+
 # ----------------------------------------------------------------- source rules
 # The app file handed out must be the current build of the sources
 $built = & (Join-Path $psRoot 'build/Build-FujiBundle.ps1') -PassThru

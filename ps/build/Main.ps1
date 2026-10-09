@@ -39,6 +39,11 @@ try {
     # CSV step labels show the loaded CSV's column names
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
+    $textOld = Test-FujiTextVersion
+    if ($textOld) {
+        Write-FujiUiLog -Message $textOld -Level 'error'
+        $script:Ed.Notices.Add($textOld)
+    }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
         (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0

@@ -5,6 +5,8 @@
 # ---------------------------------------------------------------------------------------------
 
 $script:FujiText = $null
+# Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
+$script:FujiTextVersion = 2
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -44,4 +46,18 @@ function Get-FujiText {
     if ($node -is [System.Management.Automation.PSCustomObject]) { return $node }
     if ($FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
     return [string]$node
+}
+
+# '' when fujikyun_ja.json is as new as this script, otherwise the message to show. A missing text
+# is shown as its key (gui.schedule ...), so an old file next to a new script must be pointed out.
+function Test-FujiTextVersion {
+    $p = $script:FujiText.PSObject.Properties['textVersion']
+    $have = 0
+    if ($null -ne $p) { $have = [int]$p.Value }
+    if ($have -ge $script:FujiTextVersion) { return '' }
+    $message = Get-FujiText 'gui.textOld' $have $script:FujiTextVersion
+    if ($message -eq 'gui.textOld') {
+        $message = 'fujikyun_ja.json is older than fujikyun.ps1 (text version {0}, needed {1}). Please replace fujikyun_ja.json with the latest one.' -f $have, $script:FujiTextVersion
+    }
+    return $message
 }
