@@ -28,6 +28,8 @@ function Show-FujiMainForm {
 
     # Docking, not a TableLayoutPanel: a docked FlowLayoutPanel gets its height from wrapping at the
     # real window width (an auto-sized table row measured the toolbars far too tall)
+    # No layout while the controls are added (each addition would lay out the window again)
+    $form.SuspendLayout()
     $bottom = New-FujiBottomPanel
     $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
     $bottom.Height = Get-FujiScaled 210
@@ -36,6 +38,8 @@ function Show-FujiMainForm {
     $toolbars = @(New-FujiTopPanel)
     # The last added docks first: add from the bottom row up so the first row is at the top
     for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
+    $form.ResumeLayout($true)
+    $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
 
     $form.Add_KeyDown({ $e = $_; Invoke-FujiUi { Invoke-FujiShortcut -KeyEvent $e } })
     $form.Add_FormClosing({ $e = $_; Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e } })
@@ -50,6 +54,7 @@ function Show-FujiMainForm {
             }
         })
     Update-FujiAll
+    $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
 }
 
@@ -59,10 +64,10 @@ function Write-FujiStartupTime {
     $total = ((Get-Date) - (Get-Process -Id $PID).StartTime).TotalSeconds
     $m = $script:StartMarks
     $w = $script:StartWatch.Elapsed.TotalSeconds
-    if ($m.Count -lt 3) { return }
+    if ($m.Count -lt 5) { return }
     $f = '0.0'
     $before = $total - $w
-    Write-FujiUiLog -Message (Get-FujiText 'gui.startupTime' $total.ToString($f) $before.ToString($f) $m[0].ToString($f) ($m[1] - $m[0]).ToString($f) ($m[2] - $m[1]).ToString($f) ($w - $m[2]).ToString($f))
+    Write-FujiUiLog -Message (Get-FujiText 'gui.startupTime' $total.ToString($f) $before.ToString($f) $m[0].ToString($f) ($m[1] - $m[0]).ToString($f) ($m[2] - $m[1]).ToString($f) ($m[3] - $m[2]).ToString($f) ($m[4] - $m[3]).ToString($f) ($w - $m[4]).ToString($f))
 }
 
 # ----------------------------------------------------------------- top panel
@@ -79,6 +84,7 @@ function New-FujiTopPanel {
 
     # save
     $row = New-FujiFlow
+    $row.SuspendLayout()
     $save = New-FujiButton -Text (Get-FujiText 'gui.save') -Tip (Get-FujiText 'gui.saveTip')
     $save.Font = $script:Ui.BoldFont
     $save.Add_Click({ Invoke-FujiUi { Save-FujiUi } })
@@ -91,6 +97,7 @@ function New-FujiTopPanel {
 
     # macro
     $row = New-FujiFlow
+    $row.SuspendLayout()
     [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.macro')))
     $combo = New-FujiComboBox -Width (Get-FujiScaled 320)
     $combo.Add_SelectedIndexChanged({ Invoke-FujiUi { Select-FujiMacroUi } })
@@ -128,6 +135,7 @@ function New-FujiTopPanel {
 
     # CSV
     $row = New-FujiFlow
+    $row.SuspendLayout()
     [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.csv')))
     $path = New-FujiTextBox -Width (Get-FujiScaled 380)
     $path.Add_KeyDown({
@@ -162,6 +170,7 @@ function New-FujiTopPanel {
 
     # palette
     $row = New-FujiFlow
+    $row.SuspendLayout()
     [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.add')))
     foreach ($group in $script:FujiCommands['palette']) {
         $gl = New-FujiLabel -Text ([string]$group['label'])
@@ -184,6 +193,7 @@ function New-FujiTopPanel {
 
     # edit
     $row = New-FujiFlow
+    $row.SuspendLayout()
     [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.edit')))
     $undo = New-FujiButton -Text (Get-FujiText 'gui.undo') -Tip (Get-FujiText 'gui.undoTip')
     $undo.Add_Click({ Invoke-FujiUi { if (Undo-FujiEditorChange -Editor $script:Ed) { Update-FujiAll } } })
@@ -222,6 +232,7 @@ function New-FujiTopPanel {
 
 function Set-FujiToolbarRow {
     param([Parameter(Mandatory)]$Row)
+    $Row.ResumeLayout($false)
     $Row.Dock = [System.Windows.Forms.DockStyle]::Top
     $Row.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 1), (Get-FujiScaled 6), (Get-FujiScaled 1)
     return $Row
@@ -798,16 +809,32 @@ function Update-FujiTemplateDetail {
     $t = $gal.Shown[$i]
     $target = [string]$t['targetWindow']
     if (-not $target) { $target = Get-FujiText 'gui.tplNoTarget' }
-    $nl = "`r`n"
-    $lines = @(
-        (Get-FujiText 'gui.templateItem' (Get-FujiText ('gui.levels.' + $t['level'])) $t['name']), '',
-        [string]$t['summary'], '',
-        (Get-FujiText 'gui.tplUseCase' $t['useCase']), '',
-        (Get-FujiText 'gui.tplPrepare' (@($t['prepare']) -join (Get-FujiText 'gui.tplJoin'))), '',
-        (Get-FujiText 'gui.tplCustomize' (@($t['customize']) -join (Get-FujiText 'gui.tplLines'))), '',
-        (Get-FujiText 'gui.tplMeta' $target $t['csvFile'] $t['steps'].Count)
-    )
-    $gal.Details.Text = $lines -join $nl
+    $level = Get-FujiText ('gui.levels.' + $t['level'])
+    $prepare = Join-FujiTextList -Items $t['prepare'] -Separator (Get-FujiText 'gui.tplJoin')
+    $customize = Join-FujiTextList -Items $t['customize'] -Separator (Get-FujiText 'gui.tplLines')
+    $steps = $t['steps']
+    $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $lines.Add((Get-FujiText 'gui.templateItem' $level $t['name']))
+    $lines.Add('')
+    $lines.Add([string]$t['summary'])
+    $lines.Add('')
+    $lines.Add((Get-FujiText 'gui.tplUseCase' $t['useCase']))
+    $lines.Add('')
+    $lines.Add((Get-FujiText 'gui.tplPrepare' $prepare))
+    $lines.Add('')
+    $lines.Add((Get-FujiText 'gui.tplCustomize' $customize))
+    $lines.Add('')
+    $lines.Add((Get-FujiText 'gui.tplMeta' $target $t['csvFile'] $steps.Count))
+    $gal.Details.Text = [string]::Join("`r`n", $lines.ToArray())
+}
+
+# Items of a list from a JSON file joined into one text. A plain loop on purpose: "@(...)" around
+# such a list failed on Windows PowerShell 5.1 with "argument types do not match"
+function Join-FujiTextList {
+    param($Items, [string]$Separator)
+    $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($x in $Items) { $parts.Add([string]$x) }
+    return [string]::Join($Separator, $parts.ToArray())
 }
 
 function New-FujiMacroFromTemplateUi {
@@ -833,7 +860,7 @@ function New-FujiMacroFromTemplateUi {
         Write-FujiUiLog -Message (Get-FujiText 'editor.templateCsvFailed' $_.Exception.Message) -Level 'warn'
     }
     $lines = Get-FujiText 'gui.tplLines'
-    Show-FujiMessage -Title (Get-FujiText 'gui.templateDoneTitle') -Message (Get-FujiText 'editor.templateDone' $name (@($tpl['prepare']) -join $lines) (@($tpl['customize']) -join $lines))
+    Show-FujiMessage -Title (Get-FujiText 'gui.templateDoneTitle') -Message (Get-FujiText 'editor.templateDone' $name (Join-FujiTextList -Items $tpl['prepare'] -Separator $lines) (Join-FujiTextList -Items $tpl['customize'] -Separator $lines))
 }
 
 # ----------------------------------------------------------------- CSV
