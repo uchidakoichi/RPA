@@ -670,6 +670,14 @@ Assert-True ((Get-FakeCall 'CLICK') -eq 'CLICK 10,20 DOUBLE' -and (Get-FakeCall 
 $run = New-TestRun -Steps @(@('CLICK_IMG', '{"path":"none.png","threshold":"0.9"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing reference image'
 
+# Excel: a formula only when typed in the step; inserted text never becomes one
+$run = New-TestRun -Steps @(@('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A1","value":"{{1}}"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A2","value":"=SUM(B1:B2)"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A3","value":"{{2}}"}')) -Rows @(, [string[]]@('=cmd|x', '-12'))
+[void](Invoke-FujiRun -Run $run)
+Assert-Equal "EXCEL True A1 '=cmd|x | EXCEL True A2 =SUM(B1:B2) | EXCEL True A3 -12" (Get-FakeCall 'EXCEL') 'Excel write: inserted formula as text, typed formula kept, number kept'
+$run = New-TestRun -Steps @(@('MAIL', '{"method":"MAILTO","mode":"DRAFT","to":"{{1}}","cc":"","subject":"s","body":"b","attach":""}')) -Rows @(, [string[]]@('a@x.jp?bcc=evil@y.jp'))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ((Get-FakeCall 'URL').StartsWith('URL mailto:a@x.jp%3Fbcc%3Devil@y.jp?subject=')) 'mailto: an inserted address cannot add fields'
+
 # output CSVs: values the app adds never start a formula; original columns stay as they were
 $run = New-TestRun -Steps @(@('RECORD', '{"name":"v","value":"=HYPERLINK(1)"}'), @('RECORD', '{"name":"n","value":"-5"}')) -Rows @(, [string[]]@('=A1'))
 [void](Invoke-FujiRun -Run $run)

@@ -6682,6 +6682,8 @@ function excelSheet(rs, path, sheet, forWrite) {
         var app = new ActiveXObject("Excel.Application");
         app.Visible = false;
         app.DisplayAlerts = false;
+        // Workbooks opened by automation run their macros by default: never run them (3 = force disable)
+        app.AutomationSecurity = 3;
         rs.excel = { app: app, books: {} };
     }
     var key = path.toLowerCase();
@@ -6727,6 +6729,11 @@ function runExcel(step, next) {
         var sh = excelSheet(rs, path, expandPlaceholders(p.sheet, rs), write);
         if (write) {
             var value = expandPlaceholders(p.value, rs);
+            if (trimText(p.value).charAt(0) !== "=") {
+                // Only a formula typed in the step itself is written as a formula: inserted text
+                // (CSV, screen) that looks like one is written as text (the apostrophe is not shown)
+                value = safeCsvValue(value);
+            }
             sh.Range(cell).Value = value;
             sh.Parent.Save();
             log("📗 " + fileNameOf(path) + " の " + cell + " に「" + truncateText(value, 30) + "」を書いて保存したよ", "info");
@@ -6810,7 +6817,7 @@ function runMail(step, next) {
         if (attachments.length) {
             log("⚠ メールアプリを開く方法（mailto）では添付できないから、添付は手で付けてね", "warn");
         }
-        var url = "mailto:" + to.join(",") + "?subject=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body.replace(/\r?\n/g, "\r\n")) +
+        var url = "mailto:" + to.map(function (t) { return encodeURIComponent(t).replace(/%40/g, "@"); }).join(",") + "?subject=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body.replace(/\r?\n/g, "\r\n")) +
             (trimText(m.cc) ? "&cc=" + encodeURIComponent(splitAddresses(m.cc).join(",")) : "");
         try {
             new ActiveXObject("Shell.Application").ShellExecute(url, "", "", "open", 1);

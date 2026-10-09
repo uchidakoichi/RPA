@@ -3168,7 +3168,7 @@ function Invoke-FujiMail {
     if ($Settings['method'] -eq 'MAILTO') {
         if ($attachments.Count -gt 0) { Write-FujiRunLog $Run (Get-FujiText 'run.mailtoNoAttach') 'warn' }
         $body = $m.body -replace '\r?\n', "`r`n"
-        $url = 'mailto:' + ($to -join ',') + '?subject=' + [uri]::EscapeDataString($m.subject) + '&body=' + [uri]::EscapeDataString($body)
+        $url = 'mailto:' + (($to | ForEach-Object { [uri]::EscapeDataString($_).Replace('%40', '@') }) -join ',') + '?subject=' + [uri]::EscapeDataString($m.subject) + '&body=' + [uri]::EscapeDataString($body)
         if ($cc.Count -gt 0) { $url += '&cc=' + [uri]::EscapeDataString(($cc -join ',')) }
         try { & $Run.Io.OpenUrl $url } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.mailtoFailed' $_.Exception.Message)) }
         Write-FujiRunLog $Run (Get-FujiText 'run.mailtoOpened' ($to -join ', '))
@@ -3202,7 +3202,12 @@ function Invoke-FujiExcel {
         Cell  = (Expand-FujiRunText -Run $Run -Text $Settings['cell']).Trim()
         Value = ''
     }
-    if ($write) { $request.Value = Expand-FujiRunText -Run $Run -Text $Settings['value'] }
+    if ($write) {
+        $request.Value = Expand-FujiRunText -Run $Run -Text $Settings['value']
+        # Only a formula typed in the step itself is written as a formula: inserted text (CSV,
+        # screen) that looks like one is written as text (Excel does not show the apostrophe)
+        if (-not ([string]$Settings['value']).Trim().StartsWith('=')) { $request.Value = ConvertTo-FujiSafeCsvValue $request.Value }
+    }
     try {
         $text = [string](& $Run.Io.Excel $request)
     } catch [System.OperationCanceledException] {
@@ -5303,6 +5308,8 @@ function Invoke-FujiExcelRequest {
         $app = New-Object -ComObject Excel.Application
         $app.Visible = $false
         $app.DisplayAlerts = $false
+        # Workbooks opened by automation run their macros by default: never run them (3 = force disable)
+        $app.AutomationSecurity = 3
         $c.Excel = @{ App = $app; Books = @{} }
     }
     $path = $Request.Path

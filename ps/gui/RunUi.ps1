@@ -391,6 +391,8 @@ function Invoke-FujiExcelRequest {
         $app = New-Object -ComObject Excel.Application
         $app.Visible = $false
         $app.DisplayAlerts = $false
+        # Workbooks opened by automation run their macros by default: never run them (3 = force disable)
+        $app.AutomationSecurity = 3
         $c.Excel = @{ App = $app; Books = @{} }
     }
     $path = $Request.Path
