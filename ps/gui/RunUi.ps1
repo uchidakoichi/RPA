@@ -27,17 +27,14 @@ function New-FujiRunBar {
     $script:Ui.PauseButton = $pause
     $script:Ui.StopButton = $stop
     foreach ($c in @($run, $pause, $stop)) { [void]$row.Controls.Add($c) }
-    [void]$row.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.startRow')))
     $script:Ui.StartRow = New-FujiTextBox -Text '1' -Width (Get-FujiScaled 50)
-    [void]$row.Controls.Add($script:Ui.StartRow)
-    [void]$row.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.endRow')))
     $script:Ui.EndRow = New-FujiTextBox -Text '' -Width (Get-FujiScaled 50)
     $script:Ui.ToolTip.SetToolTip($script:Ui.EndRow, (Get-FujiText 'gui.endRowAll'))
-    [void]$row.Controls.Add($script:Ui.EndRow)
-    [void]$row.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.interval')))
     $script:Ui.Interval = New-FujiTextBox -Text '300' -Width (Get-FujiScaled 55)
-    [void]$row.Controls.Add($script:Ui.Interval)
-    [void]$row.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.ms')))
+    # a label and its box never wrap apart
+    [void]$row.Controls.Add((New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'gui.startRow')), $script:Ui.StartRow)))
+    [void]$row.Controls.Add((New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'gui.endRow')), $script:Ui.EndRow)))
+    [void]$row.Controls.Add((New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'gui.interval')), $script:Ui.Interval, (New-FujiLabel -Text (Get-FujiText 'gui.ms')))))
     $script:Ui.AlarmCheck = New-FujiCheck -Text (Get-FujiText 'gui.alarm') -Checked $true
     [void]$row.Controls.Add($script:Ui.AlarmCheck)
     $bell = New-FujiButton -Text (Get-FujiText 'gui.alarmTest') -Tip (Get-FujiText 'gui.alarmTestTip')
@@ -64,6 +61,15 @@ function New-FujiRunBar {
     $row.ResumeLayout($false)
     $row.Dock = [System.Windows.Forms.DockStyle]::Top
     return $row
+}
+
+# Controls kept on one line inside a wrapping row
+function New-FujiGlued {
+    param([object[]]$Controls)
+    $g = New-FujiFlow -NoWrap
+    $g.Dock = [System.Windows.Forms.DockStyle]::None
+    foreach ($c in $Controls) { [void]$g.Controls.Add($c) }
+    return $g
 }
 
 function New-FujiCheck {
