@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Runs on Windows PowerShell 5.1 and on PowerShell 7 (also on macOS / Linux):
-        powershell -NoProfile -File ps\tests\Invoke-FujiTest.ps1
-        pwsh -NoProfile -File ps/tests/Invoke-FujiTest.ps1
+        powershell -NoProfile -File tests\Invoke-FujiTest.ps1
+        pwsh -NoProfile -File tests/Invoke-FujiTest.ps1
     golden.json holds checked input / output pairs, first taken from the original
     implementation (tag hta-final); edit it directly from now on.
 #>
@@ -810,7 +810,7 @@ Assert-True ($missing.Count -eq 0) ('every text key exists in fujikyun_ja.json: 
 # The app file handed out must be the current build of the sources
 $built = & (Join-Path $psRoot 'build/Build-FujiBundle.ps1') -PassThru
 $current = ([System.IO.File]::ReadAllText((Join-Path $psRoot 'fujikyun.ps1'))) -replace "`r`n", "`n"
-Assert-True ($current -ceq ($built -replace "`r`n", "`n")) 'fujikyun.ps1 is up to date (run ps/build/Build-FujiBundle.ps1)'
+Assert-True ($current -ceq ($built -replace "`r`n", "`n")) 'fujikyun.ps1 is up to date (run build/Build-FujiBundle.ps1)'
 
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'gui') -Filter '*.ps1') +
     @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'build') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $psRoot 'fujikyun.ps1')) + @(Get-Item -LiteralPath $PSCommandPath)

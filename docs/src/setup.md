@@ -11,7 +11,7 @@
    - `fujikyun_commands.json`
    - `fujikyun_templates.json`
 
-   GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにし、**JSON は文字コード「UTF-8」で保存** します（`ps` フォルダの中にあります）。自治体セキュリティクラウドのダウンロード機能では、ファイルが壊れることがあるのでダウンロードしないでください。
+   GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにし、**JSON は文字コード「UTF-8」で保存** します（GitHub のリポジトリ直下にあります）。自治体セキュリティクラウドのダウンロード機能では、ファイルが壊れることがあるのでダウンロードしないでください。
 2. `fujikyun.bat` をダブルクリックします。
 3. **［🩺 環境チェック］** で、この端末で使える機能を確認します。
 4. **［📚 テンプレート］** からお手本マクロを作って、動かしてみましょう（[チュートリアル](tutorial.md)）。
@@ -44,8 +44,8 @@
 
 ## 保守する人向け
 
-ソースは `ps` フォルダにあり、`.ps1` は英数字（ASCII）だけで書いています。Windows PowerShell 5.1 は BOM のない `.ps1` を Shift_JIS として読むためで、日本語の文言はすべて UTF-8 の `fujikyun_ja.json` に分けています。
+ソースは `src`・`gui`・`build` フォルダにあり、`.ps1` は英数字（ASCII）だけで書いています。Windows PowerShell 5.1 は BOM のない `.ps1` を Shift_JIS として読むためで、日本語の文言はすべて UTF-8 の `fujikyun_ja.json` に分けています。
 
-- `fujikyun.ps1` は `ps/build/Build-FujiBundle.ps1` が `ps/build/Main.ps1`・`ps/src`・`ps/gui` から作る1ファイルです（直接編集しない）。
-- テスト：`ps/tests/Invoke-FujiTest.ps1`（Windows では `ps\tests\run_tests.bat`）。画面に依存しない部分（編集・実行の決まり・CSV・計算・和暦・予定・記録の変換・画像照合・OCR 結果の処理など）を、偽の画面操作で確かめます。
-- 詳しくは [`ps/README.md`](https://github.com/uchidakoichi/RPA/blob/master/ps/README.md) を見てください。
+- `fujikyun.ps1` は `build/Build-FujiBundle.ps1` が `build/Main.ps1`・`src`・`gui` から作る1ファイルです（直接編集しない）。
+- テスト：`tests/Invoke-FujiTest.ps1`（Windows では `tests\run_tests.bat`）。画面に依存しない部分（編集・実行の決まり・CSV・計算・和暦・予定・記録の変換・画像照合・OCR 結果の処理など）を、偽の画面操作で確かめます。
+- 詳しくは [`DEVELOP.md`](https://github.com/uchidakoichi/RPA/blob/master/DEVELOP.md) を見てください。

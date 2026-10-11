@@ -1,0 +1,10 @@
+# files the tool creates when it runs from this folder
+fujikyun_macros*.json
+fujikyun_settings.json
+fujikyun_result.csv
+fujikyun_error_list.csv
+evidence/
+rpa_images/
+macro_export/
+check/fujikyun_check_result.txt
+.DS_Store
