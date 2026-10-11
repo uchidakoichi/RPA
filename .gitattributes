@@ -1,4 +1,3 @@
-*.hta -text
 *.csv -text
 *.zip binary
 *.bat text eol=crlf

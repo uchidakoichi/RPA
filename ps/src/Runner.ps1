@@ -1113,6 +1113,9 @@ function Split-FujiPathList {
 
 function Invoke-FujiMail {
     param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    # Only Outlook and mailto: a step from the HTA set to SMTP must not be sent another way
+    $method = [string]$Settings['method']
+    if ($method -ne '' -and $method -ne 'OUTLOOK' -and $method -ne 'MAILTO') { return (Get-FujiRunError (Get-FujiText 'run.mailMethod' $method)) }
     $m = @{}
     foreach ($k in @('to', 'cc', 'subject', 'body', 'attach')) { $m[$k] = Expand-FujiRunText -Run $Run -Text $Settings[$k] }
     $attachments = Split-FujiPathList $m.attach

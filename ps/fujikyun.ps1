@@ -3259,6 +3259,9 @@ function Split-FujiPathList {
 
 function Invoke-FujiMail {
     param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    # Only Outlook and mailto: a step from the HTA set to SMTP must not be sent another way
+    $method = [string]$Settings['method']
+    if ($method -ne '' -and $method -ne 'OUTLOOK' -and $method -ne 'MAILTO') { return (Get-FujiRunError (Get-FujiText 'run.mailMethod' $method)) }
     $m = @{}
     foreach ($k in @('to', 'cc', 'subject', 'body', 'attach')) { $m[$k] = Expand-FujiRunText -Run $Run -Text $Settings[$k] }
     $attachments = Split-FujiPathList $m.attach
@@ -3451,7 +3454,7 @@ function Get-FujiScheduleRepeatName {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 2
+$script:FujiTextVersion = 3
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
