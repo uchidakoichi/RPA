@@ -1,6 +1,6 @@
 {
   "title": "# テンプレート解説",
-  "generated": "> このファイルは `ps/build/Build-FujiTemplateDoc.ps1` で `ps/fujikyun_templates.json` から自動生成しています。直接編集せず、JSON を直してから再生成してください。",
+  "generated": "> このファイルは `build/Build-FujiTemplateDoc.ps1` で `fujikyun_templates.json` から自動生成しています。直接編集せず、JSON を直してから再生成してください。",
   "intro": "ふじキュン♡のRPAマクロビルダーには **{count} 種類** のテンプレート（お手本マクロ）が入っています。画面上部の **［📚 テンプレート］** から選んで **［✨ 作る］** を押すと、マクロが追加され、見本CSVが `samples` フォルダに用意されて自動で読み込まれます。",
   "notes": [
     "見本CSVの人名・番号・URL・メールアドレスはすべて **架空** です。",

@@ -1,5 +1,5 @@
 # PSScriptAnalyzer settings for the PowerShell edition (maintainers only):
-#   Invoke-ScriptAnalyzer -Path ps -Recurse -Settings ps/PSScriptAnalyzerSettings.psd1
+#   Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSScriptAnalyzerSettings.psd1
 @{
     Severity     = @('Error', 'Warning')
     # The New- / Set- / Update- functions here change in-memory data or the window only (undo

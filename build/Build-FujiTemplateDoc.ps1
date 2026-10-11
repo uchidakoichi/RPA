@@ -1,12 +1,12 @@
-# Generates samples/*.csv and docs/src/templates.md from ps/fujikyun_templates.json, so the app,
+# Generates samples/*.csv and docs/src/templates.md from fujikyun_templates.json, so the app,
 # the sample CSVs and the docs never drift apart. The step texts come from the app's own label rules.
 # The page's fixed wording is in template_doc_ja.json (this file stays ASCII for Windows PowerShell 5.1).
-# Usage (maintainers only):  powershell -NoProfile -File ps\build\Build-FujiTemplateDoc.ps1
+# Usage (maintainers only):  powershell -NoProfile -File build\Build-FujiTemplateDoc.ps1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$psRoot = Split-Path -Parent $PSScriptRoot
-$repoRoot = Split-Path -Parent $psRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$psRoot = $repoRoot
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1' | Sort-Object Name) { . $f.FullName }
 Import-FujiText -Path (Join-Path $psRoot 'fujikyun_ja.json')
 Import-FujiCommand -Path (Join-Path $psRoot 'fujikyun_commands.json')

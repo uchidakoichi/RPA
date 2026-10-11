@@ -1,5 +1,5 @@
 // Builds the browser-readable manuals and the download package (maintainers only, needs Node.js):
-//   powershell -File ps\build\Build-FujiTemplateDoc.ps1   (regenerates samples/ and docs/src/templates.md)
+//   powershell -File build\Build-FujiTemplateDoc.ps1   (regenerates samples/ and docs/src/templates.md)
 //   node tools/build_docs.js        (docs/src/*.md -> docs/*.html, then dist/fujikyun_docs_samples.zip)
 // No external packages: a small Markdown converter for the subset the docs use, and a ZIP writer
 // on top of Node's zlib, so the result opens offline in any browser on a municipal PC.
@@ -282,7 +282,7 @@ const TOP = "fujikyun_docs_samples/";
 const readme = "﻿ふじキュン♡のRPAマクロビルダー　ドキュメントと見本CSV\r\n\r\n" +
     "・docs\\index.html をダブルクリックすると、ブラウザでマニュアルが開きます（ネット接続は不要です）。\r\n" +
     "・samples フォルダには、テンプレートの見本CSV（すべて架空のデータ）が入っています。\r\n" +
-    "・ツール本体（ps フォルダの5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
+    "・ツール本体（リポジトリ直下の5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
 const entries = [{ name: TOP + "README.txt", data: Buffer.from(readme, "utf8") }];
 for (const p of PAGES) {
     entries.push({ name: TOP + "docs/" + p.out, data: Buffer.from(built[p.out].html, "utf8") });

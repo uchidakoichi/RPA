@@ -61,7 +61,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `fujikyun_ja.json` | 日本語リソース（メッセージ・画面の文言） |
 | `fujikyun_commands.json` | コマンド定義（表示名・説明・入力欄・パレット・キー一覧など） |
 | `fujikyun_templates.json` | 内蔵テンプレート（元データ）。直したら `build/Build-FujiTemplateDoc.ps1` で `samples/*.csv` と `docs/src/templates.md` を作り直す（文言は `build/template_doc_ja.json`） |
-| `tests/Invoke-FujiTest.ps1` | テスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1`。画面のファイルは構文だけ確認 |
+| `tests/Invoke-FujiTest.ps1` | テスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File tests/Invoke-FujiTest.ps1`。画面のファイルは構文だけ確認 |
 | `tests/golden.json` | テストの期待値（入力と正しい出力の組）。移植のときに元の実装から作り、確認済みの値だけを使う。正しい値が元の実装と違うものは `PS_EXPECT` に書く。今後はこのファイルを直接直す |
 | `PSScriptAnalyzerSettings.psd1` | 保守用: 静的解析の設定（5.1 と 7 の構文互換を確認） |
 
@@ -99,4 +99,4 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 
 ### Windows（PowerShell 5.1）でテストする
 
-`ps` フォルダをまるごと（`check` を除く）同じ構成で置いて、`tests\run_tests.bat` を実行します（JSON は UTF-8 で保存）。
+リポジトリをまるごと（`check`・`docs`・`dist` を除く）同じ構成で置いて、`tests\run_tests.bat` を実行します（JSON は UTF-8 で保存）。
