@@ -244,8 +244,8 @@
     }
   },
   "gui": {
-    "title": "ふじキュン♡のRPAマクロビルダー（PowerShell版）",
-    "welcome": "ふじキュン♡のRPAマクロビルダー（PowerShell版）へようこそキュン♡ 今日もいっしょにがんばろうね！",
+    "title": "ふじキュン♡のRPAマクロビルダー",
+    "welcome": "ふじキュン♡のRPAマクロビルダーへようこそキュン♡ 今日もいっしょにがんばろうね！",
     "workDir": "📁 作業フォルダ: {0}",
     "startupError": "起動できなかったキュン…\n{0}",
     "savedState": "✔ 本番ファイルと同じ内容",
@@ -587,7 +587,7 @@
     "ocrText": "🔤 ${0} = {1}",
     "attachMissing": "🚨 添付ファイルが見つからないキュン: {0}",
     "mailNoTo": "🚨 宛先が空っぽだったキュン",
-    "mailMethod": "🚨 メールの送り方「{0}」は PowerShell版では使えないキュン（SMTP は廃止したよ）。ブロックを編集して、送り方を Outlook かメールアプリ（mailto）にしてね",
+    "mailMethod": "🚨 メールの送り方「{0}」は使えないキュン。ブロックを編集して、送り方を Outlook かメールアプリ（mailto）にしてね",
     "mailtoNoAttach": "⚠ メールアプリを開く方法（mailto）では添付できないから、添付は手で付けてね",
     "mailtoOpened": "✉ メールアプリで作成画面を開いたよ: {0}",
     "mailtoFailed": "🚨 メールアプリを開けなかったキュン（{0}）",
@@ -698,7 +698,7 @@
     "autoBusy": "🗓 画面でダイアログが開いていたから、自動実行はやめたキュン",
     "autoMissing": "🗓 起動時に指定された予定が見つからなかったキュン（{0}）",
     "autoClose": "🗓 予定どおり完了したから、10秒後にふじキュンを閉じるよ（閉じたくないときは画面をクリックしてね）",
-    "taskDescription": "ふじキュン♡のRPAマクロビルダー（PowerShell版）の予定"
+    "taskDescription": "ふじキュン♡のRPAマクロビルダーの予定"
   },
   "rec": {
     "imeNote": "⏺ ここで日本語を入力（変換）していたよ。TEXT か CSV に置き換えてね",
@@ -737,7 +737,7 @@
     "screen": "画面の大きさ（拡大率）",
     "windows": "ウィンドウ一覧の取得",
     "windowCount": "{0}個のウィンドウ",
-    "hintLanguage": "PowerShellが制限モード（{0}）で動いているよ（組織の AppLocker / WDAC の設定）。ふじキュンのPowerShell版は FullLanguage でないと動かない機能が多いキュン。",
+    "hintLanguage": "PowerShellが制限モード（{0}）で動いているよ（組織の AppLocker / WDAC の設定）。ふじキュンは FullLanguage でないと動かない機能が多いキュン。",
     "hintFolder": "ふじキュンのフォルダに書き込めないよ。デスクトップやドキュメントなど、書き込めるフォルダに置いてね。",
     "hintCsharp": "C#のコンパイルができないよ。画像でクリックと記録が使えないキュン。",
     "hintOcr": "Windowsの文字認識に使える言語が入っていないよ。［設定］→［時刻と言語］→［言語］で日本語の「光学式文字認識」を追加してね。",

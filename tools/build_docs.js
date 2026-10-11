@@ -14,7 +14,7 @@ const outDir = path.join(root, "docs");
 
 const PAGES = [
     { src: "index.md", out: "index.html", nav: "目次" },
-    { src: "powershell.md", out: "powershell.html", nav: "準備・移行" },
+    { src: "setup.md", out: "setup.html", nav: "準備" },
     { src: "tutorial.md", out: "tutorial.html", nav: "チュートリアル" },
     { src: "manual.md", out: "manual.html", nav: "操作マニュアル" },
     { src: "templates.md", out: "templates.html", nav: "テンプレート解説" },
@@ -282,7 +282,7 @@ const TOP = "fujikyun_docs_samples/";
 const readme = "﻿ふじキュン♡のRPAマクロビルダー　ドキュメントと見本CSV\r\n\r\n" +
     "・docs\\index.html をダブルクリックすると、ブラウザでマニュアルが開きます（ネット接続は不要です）。\r\n" +
     "・samples フォルダには、テンプレートの見本CSV（すべて架空のデータ）が入っています。\r\n" +
-    "・ツール本体 fujikyun_rpa_builder.hta はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください。\r\n";
+    "・ツール本体（ps フォルダの5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
 const entries = [{ name: TOP + "README.txt", data: Buffer.from(readme, "utf8") }];
 for (const p of PAGES) {
     entries.push({ name: TOP + "docs/" + p.out, data: Buffer.from(built[p.out].html, "utf8") });

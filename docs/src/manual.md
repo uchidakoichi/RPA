@@ -48,7 +48,7 @@ Windows だけで動く RPA（パソコン作業の自動化）ツールです�
 | OS | Windows 10 / 11 |
 | 必須 | Windows に最初から入っている **Windows PowerShell 5.1**（言語モードが FullLanguage であること）。ほかのソフトのインストールは不要です |
 | Excel / Outlook | EXCEL_READ・EXCEL_WRITE は Excel、MAIL の Outlook 送信は Outlook が入っている PC で使えます |
-| ファイル | `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json` の5つを **同じフォルダ** に置きます（JSON は UTF-8 で保存。[PowerShell版の説明](powershell.md#準備)） |
+| ファイル | `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json` の5つを **同じフォルダ** に置きます（JSON は UTF-8 で保存。[準備](setup.md#ファイルを置く)） |
 | 置き場所 | **書き込みできるフォルダ**に置いてください（例: `C:\RPA作業\` やドキュメント）。マクロやログはこのフォルダに保存されます |
 
 起動したら、まず **［🩺 環境チェック］** を押して、その端末で使える機能を確かめましょう（[18章](#18-環境チェック)）。
@@ -458,8 +458,6 @@ KEY コマンドや、WAIT_FOR・WINDOW_CHECK の「押すキー」は、Windows
 | --- | --- |
 | Outlook | 下書きに保存（おすすめ）／作成画面を表示（送信は人が押す）／すぐに送信。添付もできます |
 | メールアプリを開くだけ（mailto） | いつものメールアプリで作成画面を開きます。添付はできません |
-
-> ⚠ 以前の HTA 版にあった **メールサーバーから直接送信（SMTP）は廃止** しました。HTA 版で SMTP にしていたブロックは、実行するとその行をエラーにして止まります（ほかの送り方で勝手に送ることはありません）。ブロックを編集して、送り方を選び直してください。
 
 宛先・CC・件名・本文・添付には差し込みが使えます（例: 添付 `C:\RPA作業\送付\{{氏名}}.pdf`）。宛先や添付が複数のときは `;` で区切ります。添付ファイルが見つからないときは、メールを作らずにエラーにします。**まずは「下書き」で中身を確かめてから** 送信にしてください。
 

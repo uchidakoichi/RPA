@@ -1,6 +1,6 @@
-# ふじキュン♡のRPAマクロビルダー PowerShell版
+# ふじキュン♡のRPAマクロビルダー（保守する人向け）
 
-HTA 版（`fujikyun_rpa_builder.hta`）を、Windows PowerShell 5.1 ＋ Windows Forms へ移植したものです。使う人向けの説明は [docs/src/powershell.md](../docs/src/powershell.md) にあります。HTA 版もそのまま使えます。
+Windows PowerShell 5.1 ＋ Windows Forms で動く本体です。使う人向けの説明は [docs/src/setup.md](../docs/src/setup.md) にあります。
 
 ## 方針
 
@@ -9,8 +9,8 @@ HTA 版（`fujikyun_rpa_builder.hta`）を、Windows PowerShell 5.1 ＋ Windows 
 | 動かすもの | Windows に最初から入っている **Windows PowerShell 5.1**（インストール不要・exe なし） |
 | 起動 | `.bat` をダブルクリック → PowerShell 5.1 を STA モードで起動 |
 | 画面 | Windows Forms |
-| マクロのデータ | HTA 版と同じ `fujikyun_macros.json`（データ版27）をそのまま使う |
-| 廃止する機能 | SMTP によるメール送信（Outlook と mailto は残す） |
+| マクロのデータ | `fujikyun_macros.json`（データ版27） |
+| メール | Outlook と mailto（SMTP は使わない） |
 
 ### 文字コードの決まり
 
@@ -21,7 +21,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 
 ## 事前チェック（`check/`）
 
-PowerShell 版が動く端末かを調べるツールです。端末の設定は変えません（クリップボードの文字は元に戻し、キーはこのツール自身の入力欄にだけ送ります）。
+ふじキュンが動く端末かを調べるツールです。端末の設定は変えません（クリップボードの文字は元に戻し、キーはこのツール自身の入力欄にだけ送ります）。
 
 1. 次の3つのファイルを、同じフォルダに置きます（GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにします）。
    - `fujikyun_check.bat`
@@ -34,7 +34,7 @@ PowerShell 版が動く端末かを調べるツールです。端末の設定は
 
 ## 試す
 
-HTA 版の機能（作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予定・🩺 環境チェック）がそろっています（SMTP 送信は廃止）。実行中は Esc（ほかの画面にいるときは Esc 長押し）か ⏹ で止まります。
+作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予定・🩺 環境チェック が使えます。実行中は Esc（ほかの画面にいるときは Esc 長押し）か ⏹ で止まります。
 「画像でクリック」は最初に使うときだけ、画像照合の部品を準備（コンパイル）するので数秒かかります。名前・画像・文字（OCR）での検索は別のスレッドで動くので、その間も停止できます。
 
 1. 次の5つのファイルを、**同じフォルダ** に置きます（RAW 表示をメモ帳に貼り付けて保存する場合は、JSON を **UTF-8** で保存します）。
@@ -45,9 +45,9 @@ HTA 版の機能（作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予�
    - `fujikyun_templates.json`
 2. `fujikyun.bat` をダブルクリックします。
 
-マクロのファイル（`fujikyun_macros.json`）や見本 CSV（`samples\`）、参照画像（`rpa_images\`）は、このフォルダに作られます。HTA 版と同じ形式（データ版27）なので、HTA 版の `fujikyun_macros.json` をこのフォルダにコピーすれば、そのまま開けます。
+マクロのファイル（`fujikyun_macros.json`）や見本 CSV（`samples\`）、参照画像（`rpa_images\`）は、このフォルダに作られます。
 
-## フォルダ構成（開発中）
+## フォルダ構成
 
 | パス | 内容 |
 | --- | --- |
@@ -59,10 +59,10 @@ HTA 版の機能（作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予�
 | `src/*.ps1` | 画面のない中核部分（英数字だけ） |
 | `gui/*.ps1` | Windows Forms の画面（英数字だけ） |
 | `fujikyun_ja.json` | 日本語リソース（メッセージ・画面の文言） |
-| `fujikyun_commands.json` | コマンド定義（表示名・説明・入力欄・パレット・キー一覧など）。HTA 版から一度だけ書き出し、以後はこのファイルが元データ |
+| `fujikyun_commands.json` | コマンド定義（表示名・説明・入力欄・パレット・キー一覧など） |
 | `fujikyun_templates.json` | 内蔵テンプレート（元データ）。直したら `build/Build-FujiTemplateDoc.ps1` で `samples/*.csv` と `docs/src/templates.md` を作り直す（文言は `build/template_doc_ja.json`） |
 | `tests/Invoke-FujiTest.ps1` | テスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1`。画面のファイルは構文だけ確認 |
-| `tests/golden.json` | HTA 版の関数が同じ入力に返す値（`node tools/make_ps_golden.js`）。**HTA 版が正しいとは限らない** ので、値は確認済みのもので、HTA 版が正しく出せないものは正しい値を `PS_EXPECT` に書いて PowerShell 版のテストに使う |
+| `tests/golden.json` | テストの期待値（入力と正しい出力の組）。移植のときに元の実装から作り、確認済みの値だけを使う。正しい値が元の実装と違うものは `PS_EXPECT` に書く。今後はこのファイルを直接直す |
 | `PSScriptAnalyzerSettings.psd1` | 保守用: 静的解析の設定（5.1 と 7 の構文互換を確認） |
 
 ### src の中身
@@ -70,7 +70,7 @@ HTA 版の機能（作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予�
 | ファイル | 内容 |
 | --- | --- |
 | `Text.ps1` | 日本語リソースの読み込み（UTF-8 を厳密に読む） |
-| `Json.ps1` | JSON の読み書き（5.1 と 7 で同じ結果。HTA 版と同じ書式で書く） |
+| `Json.ps1` | JSON の読み書き（5.1 と 7 で同じ結果。決まった書式で書く） |
 | `Files.ps1` | 文字コードの判定（CSV）、壊れにくい保存 |
 | `Csv.ps1` | CSV の読み書き |
 | `Values.ps1` | 数値（decimal で正確に）・和暦（明治〜令和）・日付・計算・文字加工・条件 |

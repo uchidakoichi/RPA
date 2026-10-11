@@ -1,5 +1,5 @@
 {
- "_about": "PowerShell 版の内蔵テンプレート（テンプレートの元データ。直したら ps/build/Build-FujiTemplateDoc.ps1 で見本CSVと説明書を作り直す）",
+ "_about": "内蔵テンプレート（テンプレートの元データ。直したら ps/build/Build-FujiTemplateDoc.ps1 で見本CSVと説明書を作り直す）",
  "categories": [
   "入門・Windows",
   "Excel",

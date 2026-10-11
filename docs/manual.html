@@ -33,7 +33,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 </style>
 </head>
 <body>
-<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="powershell.html">準備・移行</a><a href="tutorial.html">チュートリアル</a><a href="manual.html" class="current">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="setup.html">準備</a><a href="tutorial.html">チュートリアル</a><a href="manual.html" class="current">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
 <main>
 <h1 id="ふじキュンのrpaマクロビルダー-操作マニュアル">ふじキュン♡のRPAマクロビルダー 操作マニュアル</h1>
 <p>Windows だけで動く RPA（パソコン作業の自動化）ツールです。インストール不要で、<code>fujikyun.bat</code> をダブルクリックすると起動します。ネットワークにはつながりません。</p>
@@ -48,7 +48,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 <ol start="13"><li><a href="#13-実行">実行</a></li><li><a href="#14-スケジュール-予定">スケジュール（⏰ 予定）</a></li><li><a href="#15-安全装置">安全装置</a></li><li><a href="#16-保存されるファイル">保存されるファイル</a></li><li><a href="#17-マクロの共有書出取込">マクロの共有（書出・取込）</a></li><li><a href="#18-環境チェック">環境チェック</a></li><li><a href="#19-キーボードショートカット">キーボードショートカット</a></li><li><a href="#20-マクロファイルの形式">マクロファイルの形式</a></li></ol>
 <hr>
 <h2 id="1-動作環境と置き場所">1. 動作環境と置き場所</h2>
-<div class="table-wrap"><table><thead><tr><th>項目</th><th>内容</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 / 11</td></tr><tr><td>必須</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong>（言語モードが FullLanguage であること）。ほかのソフトのインストールは不要です</td></tr><tr><td>Excel / Outlook</td><td>EXCEL_READ・EXCEL_WRITE は Excel、MAIL の Outlook 送信は Outlook が入っている PC で使えます</td></tr><tr><td>ファイル</td><td><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code> の5つを <strong>同じフォルダ</strong> に置きます（JSON は UTF-8 で保存。<a href="powershell.html#準備">PowerShell版の説明</a>）</td></tr><tr><td>置き場所</td><td><strong>書き込みできるフォルダ</strong>に置いてください（例: <code>C:\RPA作業\</code> やドキュメント）。マクロやログはこのフォルダに保存されます</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>内容</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 / 11</td></tr><tr><td>必須</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong>（言語モードが FullLanguage であること）。ほかのソフトのインストールは不要です</td></tr><tr><td>Excel / Outlook</td><td>EXCEL_READ・EXCEL_WRITE は Excel、MAIL の Outlook 送信は Outlook が入っている PC で使えます</td></tr><tr><td>ファイル</td><td><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code> の5つを <strong>同じフォルダ</strong> に置きます（JSON は UTF-8 で保存。<a href="setup.html#ファイルを置く">準備</a>）</td></tr><tr><td>置き場所</td><td><strong>書き込みできるフォルダ</strong>に置いてください（例: <code>C:\RPA作業\</code> やドキュメント）。マクロやログはこのフォルダに保存されます</td></tr></tbody></table></div>
 <p>起動したら、まず <strong>［🩺 環境チェック］</strong> を押して、その端末で使える機能を確かめましょう（<a href="#18-環境チェック">18章</a>）。</p>
 <hr>
 <h2 id="2-画面の見かた">2. 画面の見かた</h2>
@@ -177,7 +177,6 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 <h2 id="11-メール">11. メール</h2>
 <p><strong>MAIL</strong>（✉ メールを作る・送る）の送り方は2つです。</p>
 <div class="table-wrap"><table><thead><tr><th>送り方</th><th>内容</th></tr></thead><tbody><tr><td>Outlook</td><td>下書きに保存（おすすめ）／作成画面を表示（送信は人が押す）／すぐに送信。添付もできます</td></tr><tr><td>メールアプリを開くだけ（mailto）</td><td>いつものメールアプリで作成画面を開きます。添付はできません</td></tr></tbody></table></div>
-<blockquote><p>⚠ 以前の HTA 版にあった <strong>メールサーバーから直接送信（SMTP）は廃止</strong> しました。HTA 版で SMTP にしていたブロックは、実行するとその行をエラーにして止まります（ほかの送り方で勝手に送ることはありません）。ブロックを編集して、送り方を選び直してください。</p></blockquote>
 <p>宛先・CC・件名・本文・添付には差し込みが使えます（例: 添付 <code>C:\RPA作業\送付\{{氏名}}.pdf</code>）。宛先や添付が複数のときは <code>;</code> で区切ります。添付ファイルが見つからないときは、メールを作らずにエラーにします。<strong>まずは「下書き」で中身を確かめてから</strong> 送信にしてください。</p>
 <hr>
 <h2 id="12-マクロの呼び出し部品化">12. マクロの呼び出し（部品化）</h2>

@@ -15,15 +15,7 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 2. `fujikyun.bat` をダブルクリックで起動し、**［🩺 環境チェック］** で使える機能を確認します。
 3. **［📚 テンプレート］** からお手本マクロを作って、動かしてみましょう。
 
-詳しくは [PowerShell版の説明](docs/src/powershell.md) を見てください。
-
-## HTA 版（開発終了）
-
-以前の `fujikyun_rpa_builder.hta`（HTA 版）は、**開発を終了しました**。今後の機能追加・不具合修正は PowerShell 版だけで行います。HTA（mshta.exe）は開発の終わった Internet Explorer の部品で動くためです。
-
-- マクロのファイル（`fujikyun_macros.json`）は共通なので、PowerShell 版のフォルダにコピーすればそのまま使えます。
-- 最終版は、タグ [`hta-final`](https://github.com/uchidakoichi/RPA/tree/hta-final) に残しています。リポジトリ直下の `fujikyun_rpa_builder.hta` も、当面はそのまま置いておきます。
-- PowerShell 版では SMTP のメール送信を廃止しました（Outlook・mailto は使えます）。
+詳しくは [準備](docs/src/setup.md) を見てください。
 
 ## 主な機能
 
@@ -59,17 +51,13 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 
 | パス | 内容 |
 | --- | --- |
-| `ps/` | ツール本体（PowerShell 版）。利用者に必要なのは `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_*.json` の5つ。保守向けの説明は [ps/README.md](ps/README.md) |
+| `ps/` | ツール本体。利用者に必要なのは `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_*.json` の5つ。保守向けの説明は [ps/README.md](ps/README.md) |
 | `samples/` | テンプレート用の見本CSV（すべて架空のデータ） |
 | `docs/*.html` | ブラウザで読むドキュメント（`docs/src/*.md` から生成） |
 | `docs/src/` | ドキュメントの原稿（Markdown） |
 | `dist/fujikyun_docs_samples.zip` | ドキュメント（HTML）と見本CSVのまとめ |
 | `ps/build/Build-FujiTemplateDoc.ps1` | 保守用: `ps/fujikyun_templates.json` から `samples/` と `docs/src/templates.md` を生成 |
 | `tools/build_docs.js` | 保守用: `docs/src/*.md` から `docs/*.html` と zip を生成（Node.js が必要。利用者には不要） |
-| `fujikyun_rpa_builder.hta` | HTA 版（開発終了） |
-| `tools/check_templates.js`・`test_runner.js`・`hta_context.js` | HTA 版の保守用（開発終了） |
-| `tools/make_ps_golden.js` | 移植時に HTA 版から PowerShell 版のテストの期待値を作った道具（今後は `ps/tests/golden.json` を直接直す） |
-| `RPA.md` | 要件定義書 |
 
 ## ライセンス
 

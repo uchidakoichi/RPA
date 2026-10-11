@@ -16,7 +16,7 @@ RPA が初めての方向けに、5つのレッスンで少しずつ使い方を
 
 ## レッスン0：準備
 
-1. 書き込みできるフォルダ（例: `C:\RPA作業\`）を1つ作り、次の5つのファイルを置きます（[PowerShell版の説明](powershell.md#準備)）。
+1. 書き込みできるフォルダ（例: `C:\RPA作業\`）を1つ作り、次の5つのファイルを置きます（[準備](setup.md#ファイルを置く)）。
    - `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json`
 2. `fujikyun.bat` をダブルクリックで起動します。
 3. いちばん上の段の **［🩺 環境チェック］** を押します。

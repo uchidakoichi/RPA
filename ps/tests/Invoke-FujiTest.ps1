@@ -7,8 +7,8 @@
     Runs on Windows PowerShell 5.1 and on PowerShell 7 (also on macOS / Linux):
         powershell -NoProfile -File ps\tests\Invoke-FujiTest.ps1
         pwsh -NoProfile -File ps/tests/Invoke-FujiTest.ps1
-    golden.json holds what the HTA's own functions return for the same inputs
-    (node tools/make_ps_golden.js), so these tests keep both editions in step.
+    golden.json holds checked input / output pairs, first taken from the original
+    implementation (tag hta-final); edit it directly from now on.
 #>
 [CmdletBinding()]
 param()

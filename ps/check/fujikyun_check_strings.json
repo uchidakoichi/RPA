@@ -1,7 +1,7 @@
 {
   "sentinel": "ふじキュン",
-  "title": "ふじキュン♡ PowerShell版 事前チェック",
-  "header": "この端末で PowerShell 版のふじキュンが動くかを調べたキュン♡ NG の行があったら、右の「詳細」と下の「対処」を見てね。結果は fujikyun_check_result.txt にも保存したよ。",
+  "title": "ふじキュン♡ 事前チェック",
+  "header": "この端末でふじキュンが動くかを調べたキュン♡ NG の行があったら、右の「詳細」と下の「対処」を見てね。結果は fujikyun_check_result.txt にも保存したよ。",
   "colResult": "結果",
   "colName": "項目",
   "colDetail": "詳細",
@@ -14,7 +14,7 @@
   "copied": "結果をクリップボードにコピーしたキュン♡",
   "savedTo": "結果を保存したファイル: ",
   "saveFailed": "結果ファイルを保存できなかった: ",
-  "summaryAllOk": "すべて OK！ PowerShell 版を使える端末だキュン♡",
+  "summaryAllOk": "すべて OK！ ふじキュンを使える端末だキュン♡",
   "summaryNg": "NG が {0} 件あるよ。下の「対処」を確認してね。",
   "adviceTitle": "対処",
   "ocrSample": "登録 12345",
@@ -44,7 +44,7 @@
   "advice": {
     "psVersion": "Windows PowerShell 5.1 で動かしてね。bat から起動すると 5.1 で動くよ。",
     "sta": "bat から起動してね（-STA を付けて起動するようになっているよ）。",
-    "languageMode": "制限モードでは PowerShell 版は動かないよ。組織のアプリケーション制御（AppLocker / WDAC）で信頼された署名が必要になるキュン。",
+    "languageMode": "制限モードではふじキュンは動かないよ。組織のアプリケーション制御（AppLocker / WDAC）で信頼された署名が必要になるキュン。",
     "resources": "fujikyun_check_strings.json を「UTF-8」で保存し直してね（メモ帳の［名前を付けて保存］→ 文字コード UTF-8）。",
     "motw": "ファイルを右クリック →［プロパティ］→［許可する］にチェック →［OK］してね（PowerShell なら Unblock-File）。",
     "writeAccess": "書き込みできるフォルダ（例: ドキュメント）に置いてね。",
