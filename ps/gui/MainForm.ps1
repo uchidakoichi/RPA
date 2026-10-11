@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------------------------
-#  Main window: macro and CSV toolbars, command palette, step list, log
+#  Main window: macro and CSV toolbars; below them commands and log (left) and the step list (right)
 #  The step list is an owner-drawn ListBox; $script:Rows maps its rows to step indexes
 #  (blocks inside a collapsed block have no row). Every change: editor function, then Update-FujiAll.
 # ---------------------------------------------------------------------------------------------
@@ -29,16 +29,35 @@ function Show-FujiMainForm {
     # Docking, not a TableLayoutPanel: a docked FlowLayoutPanel gets its height from wrapping at the
     # real window width (an auto-sized table row measured the toolbars far too tall)
     # No layout while the controls are added (each addition would lay out the window again)
+    # Below the file rows the window is split left and right: commands, run controls and the log on
+    # the left; the step list takes the whole height on the right (steps are narrow, lists are long)
     $form.SuspendLayout()
-    $bottom = New-FujiBottomPanel
-    $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $bottom.Height = Get-FujiScaled 250
-    [void]$form.Controls.Add((New-FujiStepListPanel))
-    [void]$form.Controls.Add($bottom)
     $toolbars = @(New-FujiTopPanel)
     $script:Ui.Toolbars = $toolbars
-    # The last added docks first: add from the bottom row up so the first row is at the top
-    for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
+    $split = New-Object -TypeName System.Windows.Forms.SplitContainer
+    # A new SplitContainer is 150 px wide: size it before placing the splitter
+    $split.Size = $form.ClientSize
+    $split.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $split.FixedPanel = [System.Windows.Forms.FixedPanel]::Panel1
+    $split.SplitterDistance = [int]($form.ClientSize.Width * 0.5)
+    $split.Panel1MinSize = Get-FujiScaled 280
+    $split.Panel2MinSize = Get-FujiScaled 280
+    # the splitter shows the container's colour: a visible bar to drag, the panels keep the window's
+    $split.SplitterWidth = Get-FujiScaled 8
+    $split.BackColor = Get-FujiColor '#e0cfe6'
+    $split.Panel1.BackColor = $form.BackColor
+    $split.Panel2.BackColor = $form.BackColor
+    $bottom = New-FujiBottomPanel
+    $bottom.Dock = [System.Windows.Forms.DockStyle]::Fill
+    # The last added docks first: the filling part first, then the rows from the bottom up
+    # toolbars: 3 file rows, one row per command category, the edit row
+    $editRow = $toolbars.Count - 1
+    [void]$split.Panel1.Controls.Add($bottom)
+    for ($i = $editRow - 1; $i -ge 3; $i--) { [void]$split.Panel1.Controls.Add($toolbars[$i]) }
+    [void]$split.Panel2.Controls.Add((New-FujiStepListPanel))
+    [void]$split.Panel2.Controls.Add($toolbars[$editRow])
+    [void]$form.Controls.Add($split)
+    for ($i = 2; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
     $form.ResumeLayout($true)
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
 
@@ -177,16 +196,25 @@ function New-FujiTopPanel {
     foreach ($c in @($browse, $load, $header, $enc, $info)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
-    # palette
-    $row = New-FujiFlow
-    $row.SuspendLayout()
-    [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.add')))
+    # palette: one row per category. The names are a left column of one width, so the buttons of
+    # every category start at the same place and wrap under each other, not under the names
+    $addLabel = New-FujiRowLabel (Get-FujiText 'gui.add')
+    $indent = $addLabel.PreferredWidth + $addLabel.Margin.Horizontal
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $labelWidth = 0
     foreach ($group in $script:FujiCommands['palette']) {
         $gl = New-FujiLabel -Text ([string]$group['label'])
         $gl.ForeColor = Get-FujiColor '#7a6f84'
         $gl.Font = $script:Ui.SmallFont
-        $gl.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8), (Get-FujiScaled 8), 0, 0
-        [void]$row.Controls.Add($gl)
+        $labelWidth = [Math]::Max($labelWidth, $gl.PreferredWidth)
+        $labels.Add($gl)
+    }
+    $i = 0
+    foreach ($group in $script:FujiCommands['palette']) {
+        $catRow = New-Object -TypeName System.Windows.Forms.Panel
+        $catRow.SuspendLayout()
+        $flow = New-FujiFlow
+        $flow.AutoSize = $false
         $color = Get-FujiColor $script:CategoryColors[[string]$group['category']]
         foreach ($cmd in $group['cmds']) {
             $def = Get-FujiCommandDef ([string]$cmd)
@@ -195,10 +223,30 @@ function New-FujiTopPanel {
             $btn.FlatAppearance.BorderColor = $color
             $btn.BackColor = Get-FujiTint -Color $color -Amount 0.88
             $btn.Add_Click({ $cmdName = [string]$this.Tag; Invoke-FujiUi { Add-FujiStepUi -Cmd $cmdName } })
-            [void]$row.Controls.Add($btn)
+            [void]$flow.Controls.Add($btn)
         }
+        $flow.Add_Resize({ $wrapFlow = $this; Invoke-FujiUi { Update-FujiWrapHeight -Flow $wrapFlow } })
+        $gl = $labels[$i]
+        $gl.AutoSize = $false
+        $gl.Dock = [System.Windows.Forms.DockStyle]::Left
+        $gl.Width = $indent + $labelWidth + (Get-FujiScaled 12)
+        $gl.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList ($indent + (Get-FujiScaled 4)), (Get-FujiScaled 8), 0, 0
+        # the last added docks first: the filling buttons, then the name, then (first row) the row label
+        [void]$catRow.Controls.Add($flow)
+        [void]$catRow.Controls.Add($gl)
+        if ($i -eq 0) {
+            $addLabel.AutoSize = $false
+            $addLabel.Dock = [System.Windows.Forms.DockStyle]::Left
+            $addLabel.Width = $indent
+            $addLabel.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList 0, (Get-FujiScaled 6), 0, 0
+            $gl.Width -= $indent
+            $gl.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 4), (Get-FujiScaled 8), 0, 0
+            [void]$catRow.Controls.Add($addLabel)
+        }
+        $catRow.Height = $btn.PreferredSize.Height + (Get-FujiScaled 8)
+        $top.Add((Set-FujiToolbarRow $catRow))
+        $i++
     }
-    $top.Add((Set-FujiToolbarRow $row))
 
     # edit
     $row = New-FujiFlow
@@ -249,6 +297,16 @@ function Set-FujiToolbarRow {
     $Row.Dock = [System.Windows.Forms.DockStyle]::Top
     $Row.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 1), (Get-FujiScaled 6), (Get-FujiScaled 1)
     return $Row
+}
+
+# A row whose buttons wrap (a FlowLayoutPanel filling a docked panel): the panel takes the height
+# the buttons need at the width they have
+function Update-FujiWrapHeight {
+    param([Parameter(Mandatory)][System.Windows.Forms.FlowLayoutPanel]$Flow)
+    $w = $Flow.ClientSize.Width
+    if ($w -le 0 -or $null -eq $Flow.Parent) { return }
+    $h = $Flow.GetPreferredSize((New-Object -TypeName System.Drawing.Size -ArgumentList $w, 0)).Height + $Flow.Parent.Padding.Vertical
+    if ($Flow.Parent.Height -ne $h) { $Flow.Parent.Height = $h }
 }
 
 # Color mixed with white (Amount 0 = the colour, 1 = white)

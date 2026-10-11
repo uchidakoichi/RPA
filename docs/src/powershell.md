@@ -10,9 +10,9 @@
 | 画面 | HTML（Trident） | Windows Forms |
 | ファイル | 1つ | 5つ |
 | メール | Outlook・SMTP・mailto | Outlook・mailto（**SMTP は廃止**） |
-| これから | 現状のまま残す | こちらを中心に育てる |
+| これから | **開発終了**（最終版はタグ `hta-final`） | 機能追加・不具合修正はこちらだけ |
 
-HTA（mshta.exe）は、Microsoft がすでに開発を終えた Internet Explorer の部品で動いていて、組織のセキュリティ方針で止められることが増えています。PowerShell 版は、その古い部品や VBScript 流の書き方を使わずに作り直したものです。新しく使い始めるなら PowerShell 版をおすすめします。
+HTA（mshta.exe）は、Microsoft がすでに開発を終えた Internet Explorer の部品で動いていて、組織のセキュリティ方針で止められることが増えています。PowerShell 版は、その古い部品や VBScript 流の書き方を使わずに作り直したものです。HTA 版の開発は終了しました。これから使い始める場合も、いま HTA 版を使っている場合も、PowerShell 版を使ってください。
 
 ## 準備
 
