@@ -4632,12 +4632,33 @@ function New-FujiTopPanel {
     # palette
     $row = New-FujiFlow
     $row.SuspendLayout()
-    [void]$row.Controls.Add((New-FujiRowLabel (Get-FujiText 'gui.add')))
+    $addLabel = New-FujiRowLabel (Get-FujiText 'gui.add')
+    [void]$row.Controls.Add($addLabel)
+    # one line per category: the category labels share one width so the buttons line up, and the
+    # lines after the first are indented by the row label
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($group in $script:FujiCommands['palette']) {
         $gl = New-FujiLabel -Text ([string]$group['label'])
         $gl.ForeColor = Get-FujiColor '#7a6f84'
         $gl.Font = $script:Ui.SmallFont
-        $gl.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8), (Get-FujiScaled 8), 0, 0
+        $labels.Add($gl)
+    }
+    $labelWidth = 0
+    foreach ($gl in $labels) { $labelWidth = [Math]::Max($labelWidth, $gl.PreferredWidth) }
+    $indent = $addLabel.PreferredWidth + $addLabel.Margin.Horizontal
+    $last = $null
+    $i = 0
+    foreach ($group in $script:FujiCommands['palette']) {
+        $gl = $labels[$i]
+        $i++
+        $gl.AutoSize = $false
+        $gl.Size = New-Object -TypeName System.Drawing.Size -ArgumentList ($labelWidth + (Get-FujiScaled 4)), $gl.PreferredHeight
+        $left = Get-FujiScaled 8
+        if ($null -ne $last) {
+            $row.SetFlowBreak($last, $true)
+            $left += $indent
+        }
+        $gl.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList $left, (Get-FujiScaled 8), 0, 0
         [void]$row.Controls.Add($gl)
         $color = Get-FujiColor $script:CategoryColors[[string]$group['category']]
         foreach ($cmd in $group['cmds']) {
@@ -4648,6 +4669,7 @@ function New-FujiTopPanel {
             $btn.BackColor = Get-FujiTint -Color $color -Amount 0.88
             $btn.Add_Click({ $cmdName = [string]$this.Tag; Invoke-FujiUi { Add-FujiStepUi -Cmd $cmdName } })
             [void]$row.Controls.Add($btn)
+            $last = $btn
         }
     }
     $top.Add((Set-FujiToolbarRow $row))
