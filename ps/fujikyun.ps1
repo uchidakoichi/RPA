@@ -4451,7 +4451,7 @@ function Show-FujiDiagnostic {
 
 # ===== gui/MainForm.ps1 =====
 # ---------------------------------------------------------------------------------------------
-#  Main window: macro and CSV toolbars, command palette, step list, log
+#  Main window: macro and CSV toolbars; below them commands and log (left) and the step list (right)
 #  The step list is an owner-drawn ListBox; $script:Rows maps its rows to step indexes
 #  (blocks inside a collapsed block have no row). Every change: editor function, then Update-FujiAll.
 # ---------------------------------------------------------------------------------------------
@@ -4481,16 +4481,33 @@ function Show-FujiMainForm {
     # Docking, not a TableLayoutPanel: a docked FlowLayoutPanel gets its height from wrapping at the
     # real window width (an auto-sized table row measured the toolbars far too tall)
     # No layout while the controls are added (each addition would lay out the window again)
+    # Below the file rows the window is split left and right: commands, run controls and the log on
+    # the left; the step list takes the whole height on the right (steps are narrow, lists are long)
     $form.SuspendLayout()
-    $bottom = New-FujiBottomPanel
-    $bottom.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $bottom.Height = Get-FujiScaled 250
-    [void]$form.Controls.Add((New-FujiStepListPanel))
-    [void]$form.Controls.Add($bottom)
     $toolbars = @(New-FujiTopPanel)
     $script:Ui.Toolbars = $toolbars
-    # The last added docks first: add from the bottom row up so the first row is at the top
-    for ($i = $toolbars.Count - 1; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
+    $split = New-Object -TypeName System.Windows.Forms.SplitContainer
+    # A new SplitContainer is 150 px wide: size it before placing the splitter
+    $split.Size = $form.ClientSize
+    $split.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $split.FixedPanel = [System.Windows.Forms.FixedPanel]::Panel1
+    $split.SplitterDistance = [int]($form.ClientSize.Width * 0.5)
+    $split.Panel1MinSize = Get-FujiScaled 280
+    $split.Panel2MinSize = Get-FujiScaled 280
+    # the splitter shows the container's colour: a visible bar to drag, the panels keep the window's
+    $split.SplitterWidth = Get-FujiScaled 8
+    $split.BackColor = Get-FujiColor '#e0cfe6'
+    $split.Panel1.BackColor = $form.BackColor
+    $split.Panel2.BackColor = $form.BackColor
+    $bottom = New-FujiBottomPanel
+    $bottom.Dock = [System.Windows.Forms.DockStyle]::Fill
+    # The last added docks first: the filling part first, then the rows from the bottom up
+    [void]$split.Panel1.Controls.Add($bottom)
+    [void]$split.Panel1.Controls.Add($toolbars[3])
+    [void]$split.Panel2.Controls.Add((New-FujiStepListPanel))
+    [void]$split.Panel2.Controls.Add($toolbars[4])
+    [void]$form.Controls.Add($split)
+    for ($i = 2; $i -ge 0; $i--) { [void]$form.Controls.Add($toolbars[$i]) }
     $form.ResumeLayout($true)
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
 
