@@ -64,10 +64,11 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 | `docs/*.html` | ブラウザで読むドキュメント（`docs/src/*.md` から生成） |
 | `docs/src/` | ドキュメントの原稿（Markdown） |
 | `dist/fujikyun_docs_samples.zip` | ドキュメント（HTML）と見本CSVのまとめ |
+| `ps/build/Build-FujiTemplateDoc.ps1` | 保守用: `ps/fujikyun_templates.json` から `samples/` と `docs/src/templates.md` を生成 |
 | `tools/build_docs.js` | 保守用: `docs/src/*.md` から `docs/*.html` と zip を生成（Node.js が必要。利用者には不要） |
 | `fujikyun_rpa_builder.hta` | HTA 版（開発終了） |
-| `tools/build_templates.js`・`check_templates.js`・`test_runner.js`・`hta_context.js` | HTA 版の保守用（開発終了） |
-| `tools/make_ps_golden.js`・`export_ps_templates.js` | 移植時に HTA 版から PowerShell 版のテストの期待値とテンプレートを作った道具（移植完了につき、今後は `ps/` のファイルを直接直す） |
+| `tools/check_templates.js`・`test_runner.js`・`hta_context.js` | HTA 版の保守用（開発終了） |
+| `tools/make_ps_golden.js` | 移植時に HTA 版から PowerShell 版のテストの期待値を作った道具（今後は `ps/tests/golden.json` を直接直す） |
 | `RPA.md` | 要件定義書 |
 
 ## ライセンス

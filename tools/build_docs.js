@@ -1,5 +1,5 @@
 // Builds the browser-readable manuals and the download package (maintainers only, needs Node.js):
-//   node tools/build_templates.js   (regenerates samples/ and docs/src/templates.md)
+//   powershell -File ps\build\Build-FujiTemplateDoc.ps1   (regenerates samples/ and docs/src/templates.md)
 //   node tools/build_docs.js        (docs/src/*.md -> docs/*.html, then dist/fujikyun_docs_samples.zip)
 // No external packages: a small Markdown converter for the subset the docs use, and a ZIP writer
 // on top of Node's zlib, so the result opens offline in any browser on a municipal PC.
@@ -14,11 +14,11 @@ const outDir = path.join(root, "docs");
 
 const PAGES = [
     { src: "index.md", out: "index.html", nav: "目次" },
+    { src: "powershell.md", out: "powershell.html", nav: "準備・移行" },
     { src: "tutorial.md", out: "tutorial.html", nav: "チュートリアル" },
     { src: "manual.md", out: "manual.html", nav: "操作マニュアル" },
     { src: "templates.md", out: "templates.html", nav: "テンプレート解説" },
-    { src: "faq.md", out: "faq.html", nav: "Q&A" },
-    { src: "powershell.md", out: "powershell.html", nav: "PowerShell版" }
+    { src: "faq.md", out: "faq.html", nav: "Q&A" }
 ];
 
 // ---------------------------------------------------------------- Markdown -> HTML

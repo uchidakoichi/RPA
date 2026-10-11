@@ -1,6 +1,6 @@
 {
   "sentinel": "ふじキュン",
-  "textVersion": 2,
+  "textVersion": 3,
   "date": {
     "eras": [
       "令和",
@@ -587,6 +587,7 @@
     "ocrText": "🔤 ${0} = {1}",
     "attachMissing": "🚨 添付ファイルが見つからないキュン: {0}",
     "mailNoTo": "🚨 宛先が空っぽだったキュン",
+    "mailMethod": "🚨 メールの送り方「{0}」は PowerShell版では使えないキュン（SMTP は廃止したよ）。ブロックを編集して、送り方を Outlook かメールアプリ（mailto）にしてね",
     "mailtoNoAttach": "⚠ メールアプリを開く方法（mailto）では添付できないから、添付は手で付けてね",
     "mailtoOpened": "✉ メールアプリで作成画面を開いたよ: {0}",
     "mailtoFailed": "🚨 メールアプリを開けなかったキュン（{0}）",

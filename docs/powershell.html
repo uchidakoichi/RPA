@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PowerShell版 - ふじキュン♡のRPAマクロビルダー</title>
+<title>準備とHTA版からの移行 - ふじキュン♡のRPAマクロビルダー</title>
 <style>
 :root { --fg: #2f2a33; --muted: #6d6470; --accent: #c2185b; --line: #ead7e2; --bg: #ffffff; --soft: #fdf5f9; --code: #f4eef2; }
 * { box-sizing: border-box; }
@@ -33,11 +33,11 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 </style>
 </head>
 <body>
-<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a><a href="powershell.html" class="current">PowerShell版</a></nav></header>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="powershell.html" class="current">準備・移行</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
 <main>
-<h1 id="powershell版">PowerShell版</h1>
-<p>ふじキュン♡のRPAマクロビルダーには、HTA 版（<code>fujikyun_rpa_builder.hta</code>）と PowerShell 版の2つがあります。どちらも同じマクロ・同じコマンド・同じテンプレートで動き、マクロのファイル（<code>fujikyun_macros.json</code>）もそのまま使えます。</p>
-<h2 id="どちらを使えばいい">どちらを使えばいい？</h2>
+<h1 id="準備とhta版からの移行">準備とHTA版からの移行</h1>
+<p>ふじキュン♡のRPAマクロビルダーは、<strong>PowerShell 版</strong> が本体です。以前の HTA 版（<code>fujikyun_rpa_builder.hta</code>）は開発を終了しました。どちらも同じマクロ・同じコマンド・同じテンプレートで動き、HTA 版のマクロのファイル（<code>fujikyun_macros.json</code>）もそのまま使えます。</p>
+<h2 id="hta-版とくらべると">HTA 版とくらべると</h2>
 <div class="table-wrap"><table><thead><tr><th></th><th>HTA 版</th><th>PowerShell 版</th></tr></thead><tbody><tr><td>動かすもの</td><td>mshta.exe（古い Internet Explorer の部品）</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong></td></tr><tr><td>画面</td><td>HTML（Trident）</td><td>Windows Forms</td></tr><tr><td>ファイル</td><td>1つ</td><td>5つ</td></tr><tr><td>メール</td><td>Outlook・SMTP・mailto</td><td>Outlook・mailto（<strong>SMTP は廃止</strong>）</td></tr><tr><td>これから</td><td><strong>開発終了</strong>（最終版はタグ <code>hta-final</code>）</td><td>機能追加・不具合修正はこちらだけ</td></tr></tbody></table></div>
 <p>HTA（mshta.exe）は、Microsoft がすでに開発を終えた Internet Explorer の部品で動いていて、組織のセキュリティ方針で止められることが増えています。PowerShell 版は、その古い部品や VBScript 流の書き方を使わずに作り直したものです。HTA 版の開発は終了しました。これから使い始める場合も、いま HTA 版を使っている場合も、PowerShell 版を使ってください。</p>
 <h2 id="準備">準備</h2>
@@ -46,6 +46,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 <p>マクロのファイル（<code>fujikyun_macros.json</code>）・見本CSV（<code>samples</code>）・参照画像（<code>rpa_images</code>）・証跡（<code>evidence</code>）・書き出したマクロ（<code>macro_export</code>）・予定（<code>fujikyun_settings.json</code>）は、このフォルダに作られます。HTA 版で作ったマクロを使うときは、HTA 版の <code>fujikyun_macros.json</code> をこのフォルダにコピーします。</p>
 <h3 id="起動のしくみ">起動のしくみ</h3>
 <p><code>fujikyun.bat</code> は、PowerShell 5.1 を STA モード（Windows Forms に必要）・コンソールなしで起動します。<code>-ExecutionPolicy Bypass</code> の指定はその1回の起動にだけ効き、端末の設定は変えません。グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。</p>
+<h2 id="hta-版から移るとき">HTA 版から移るとき</h2>
+<ol><li>PowerShell 版の5つのファイルを置いたフォルダに、HTA 版のフォルダから次をコピーします（あるものだけ）。<ul><li><code>fujikyun_macros.json</code>（マクロ）・<code>fujikyun_settings.json</code>（予定）</li><li><code>rpa_images</code>（画像でクリックの画像）・<code>samples</code>（見本CSV）</li></ul></li><li><code>fujikyun.bat</code> で起動し、マクロが見えることを確かめます。</li><li><strong>［⏰ 予定］で［🗓 Windowsに登録］済みの予定があれば</strong>、その予定で［登録を解除］→［🗓 Windowsに登録］をし直します。HTA 版で登録したタスクは HTA 版を起動するので、そのままでは HTA 版が動きます（［登録を解除］で HTA 版のタスクも消えます）。</li><li>メールのブロックで送り方を <strong>SMTP</strong> にしていたものは、編集して Outlook かメールアプリ（mailto）に変えます（そのままだと、その行で止まります）。</li><li>動作を確かめたら、HTA 版のフォルダは使わないようにします。</li></ol>
 <h2 id="hta-版との違い">HTA 版との違い</h2>
 <p>使い方は <a href="manual.html">操作マニュアル</a> のとおりで、HTA 版と同じです。違うのは次の点です。</p>
 <ul><li><strong>メールの SMTP 送信はありません。</strong> Outlook か、メールアプリ（mailto）を使います。テンプレートのメールも Outlook／mailto で動きます。</li><li><strong>実行の止め方</strong>：Esc か ⏹。ほかの画面が前にあるときは <strong>Esc を1秒ほど長押し</strong> します。</li><li><strong>画像でクリック・⏺ 記録</strong> は、最初に使うときだけ準備（小さな C# のコンパイル）に数秒かかります。</li><li>名前・画像・文字（OCR）での検索は別のスレッドで動くので、検索中も画面が固まらず、停止できます。</li><li><strong>⏰ 予定の Windows 登録</strong> は、Windows のタスク スケジューラに「<code>fujikyun.ps1</code> を <code>-AutoRun &lt;予定のID&gt;</code> で起動する」タスクを作ります。タスクの名前は <code>FujikyunRPA_PS_</code> で始まります。</li><li>実行結果CSV・エラー行CSVで、ツールが付け足す列（記録した値・備考・エラー内容）が <code>=</code> などで始まるときは、Excel で数式として動かないよう先頭に <code>'</code> を付けます（元データの列はそのまま）。</li><li>EXCEL_WRITE で、差し込みで入った値が <code>=</code> などで始まるときは文字として書きます。ステップに直接書いた数式（<code>=SUM(A1:A3)</code> など）は数式のままです。Excel のブックはマクロを無効にして開きます。</li></ul>

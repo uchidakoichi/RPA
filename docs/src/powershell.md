@@ -1,8 +1,8 @@
-# PowerShell版
+# 準備とHTA版からの移行
 
-ふじキュン♡のRPAマクロビルダーには、HTA 版（`fujikyun_rpa_builder.hta`）と PowerShell 版の2つがあります。どちらも同じマクロ・同じコマンド・同じテンプレートで動き、マクロのファイル（`fujikyun_macros.json`）もそのまま使えます。
+ふじキュン♡のRPAマクロビルダーは、**PowerShell 版** が本体です。以前の HTA 版（`fujikyun_rpa_builder.hta`）は開発を終了しました。どちらも同じマクロ・同じコマンド・同じテンプレートで動き、HTA 版のマクロのファイル（`fujikyun_macros.json`）もそのまま使えます。
 
-## どちらを使えばいい？
+## HTA 版とくらべると
 
 | | HTA 版 | PowerShell 版 |
 | --- | --- | --- |
@@ -33,6 +33,16 @@ HTA（mshta.exe）は、Microsoft がすでに開発を終えた Internet Explor
 ### 起動のしくみ
 
 `fujikyun.bat` は、PowerShell 5.1 を STA モード（Windows Forms に必要）・コンソールなしで起動します。`-ExecutionPolicy Bypass` の指定はその1回の起動にだけ効き、端末の設定は変えません。グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。
+
+## HTA 版から移るとき
+
+1. PowerShell 版の5つのファイルを置いたフォルダに、HTA 版のフォルダから次をコピーします（あるものだけ）。
+   - `fujikyun_macros.json`（マクロ）・`fujikyun_settings.json`（予定）
+   - `rpa_images`（画像でクリックの画像）・`samples`（見本CSV）
+2. `fujikyun.bat` で起動し、マクロが見えることを確かめます。
+3. **［⏰ 予定］で［🗓 Windowsに登録］済みの予定があれば**、その予定で［登録を解除］→［🗓 Windowsに登録］をし直します。HTA 版で登録したタスクは HTA 版を起動するので、そのままでは HTA 版が動きます（［登録を解除］で HTA 版のタスクも消えます）。
+4. メールのブロックで送り方を **SMTP** にしていたものは、編集して Outlook かメールアプリ（mailto）に変えます（そのままだと、その行で止まります）。
+5. 動作を確かめたら、HTA 版のフォルダは使わないようにします。
 
 ## HTA 版との違い
 

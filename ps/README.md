@@ -60,7 +60,7 @@ HTA 版の機能（作成・編集・保存・▶ 実行・⏺ 記録・⏰ 予�
 | `gui/*.ps1` | Windows Forms の画面（英数字だけ） |
 | `fujikyun_ja.json` | 日本語リソース（メッセージ・画面の文言） |
 | `fujikyun_commands.json` | コマンド定義（表示名・説明・入力欄・パレット・キー一覧など）。HTA 版から一度だけ書き出し、以後はこのファイルが元データ |
-| `fujikyun_templates.json` | 内蔵テンプレート。HTA 版がテンプレートの元データのあいだは `node tools/export_ps_templates.js` で書き出す（直接編集しない） |
+| `fujikyun_templates.json` | 内蔵テンプレート（元データ）。直したら `build/Build-FujiTemplateDoc.ps1` で `samples/*.csv` と `docs/src/templates.md` を作り直す（文言は `build/template_doc_ja.json`） |
 | `tests/Invoke-FujiTest.ps1` | テスト。Windows では `tests\run_tests.bat`、Mac などでは `pwsh -File ps/tests/Invoke-FujiTest.ps1`。画面のファイルは構文だけ確認 |
 | `tests/golden.json` | HTA 版の関数が同じ入力に返す値（`node tools/make_ps_golden.js`）。**HTA 版が正しいとは限らない** ので、値は確認済みのもので、HTA 版が正しく出せないものは正しい値を `PS_EXPECT` に書いて PowerShell 版のテストに使う |
 | `PSScriptAnalyzerSettings.psd1` | 保守用: 静的解析の設定（5.1 と 7 の構文互換を確認） |

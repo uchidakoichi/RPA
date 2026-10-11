@@ -662,6 +662,8 @@ $run = New-TestRun -Steps @(@('MAIL', ('{"method":"OUTLOOK","mode":"SEND","to":"
 $script:Fake.Files = @('C:\a.pdf')
 [void](Invoke-FujiRun -Run $run)
 Assert-True ((Get-FakeCall 'OUTLOOK') -eq 'OUTLOOK SEND a@x.jp; b@x.jp' -and $run.ResultRows[0].Values[(Get-FujiText 'run.mailColumn')] -eq (Get-FujiText 'run.mailSentValue')) 'run: Outlook send, full-width separator'
+$run = New-TestRun -Steps @(@('MAIL', '{"method":"SMTP","mode":"SEND","to":"a@x.jp","cc":"","subject":"s","body":"b","attach":""}'))
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'error' -and (Get-FakeCall 'OUTLOOK') -eq '') 'run: SMTP (dropped) stops the row, not sent through Outlook'
 $run = New-TestRun -Steps @(@('SCREENSHOT', '{"name":"Recv{{1}}","scope":"FULL"}'), @('CLICK_POS', ('{"x":"10","y":"' + [char]0xFF12 + [char]0xFF10 + '","kind":"DOUBLE"}')), @('CLICK_NAME', 'Save'),
     @('READ_TEXT', '{"area":"FULL","x":"","y":"","w":"","h":"","name":"o"}'), @('CLICK_TEXT', '{"text":"OK","area":"WINDOW","x":"","y":"","w":"","h":"","nth":"2"}')) -Rows @(, [string[]]@('/1'))
 [void](Invoke-FujiRun -Run $run)

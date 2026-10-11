@@ -33,19 +33,22 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 </style>
 </head>
 <body>
-<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="tutorial.html" class="current">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a><a href="powershell.html">PowerShell版</a></nav></header>
+<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="powershell.html">準備・移行</a><a href="tutorial.html" class="current">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
 <main>
 <h1 id="チュートリアルはじめてのロボットづくり">チュートリアル：はじめてのロボットづくり</h1>
 <p>RPA が初めての方向けに、5つのレッスンで少しずつ使い方を覚えます。レッスン1〜3は <strong>メモ帳と電卓だけ</strong> で試せるので、職場のシステムに触らずに安心して練習できます。</p>
 <div class="table-wrap"><table><thead><tr><th>レッスン</th><th>内容</th><th>時間の目安</th></tr></thead><tbody><tr><td><a href="#レッスン0準備">0. 準備</a></td><td>置き場所・起動・環境チェック</td><td>5分</td></tr><tr><td><a href="#レッスン1お手本を動かす">1. お手本を動かす</a></td><td>テンプレートを実行して流れを見る</td><td>10分</td></tr><tr><td><a href="#レッスン2自分で組み立てる">2. 自分で組み立てる</a></td><td>空のマクロから作る・差し込みを使う</td><td>20分</td></tr><tr><td><a href="#レッスン3値を読み取る">3. 値を読み取る</a></td><td>COPY と実行結果CSV</td><td>15分</td></tr><tr><td><a href="#レッスン4職場のシステムに向ける">4. 職場のシステムに向ける</a></td><td>対象ウィンドウ・確認ポイント・1件テスト</td><td>30分</td></tr><tr><td><a href="#レッスン5止まらないロボットにする">5. 止まらないロボットにする</a></td><td>WINDOW_CHECK・WAIT_FOR・エラー行の再実行</td><td>20分</td></tr><tr><td><a href="#レッスン6変数繰り返し分岐を使う">6. 変数・繰り返し・分岐を使う</a></td><td>変数・文字の加工・もし〜なら・エラー時の処理</td><td>20分</td></tr></tbody></table></div>
 <hr>
 <h2 id="レッスン0準備">レッスン0：準備</h2>
-<ol><li><code>fujikyun_rpa_builder.hta</code> を、書き込みできるフォルダ（例: <code>C:\RPA作業\</code>）に置きます。</li><li>ダウンロードしたファイルの場合は、右クリック →［プロパティ］→ <strong>［許可する］</strong> にチェック →［OK］。</li><li>ダブルクリックで起動します。</li><li>下の段の <strong>［🩺 環境チェック］</strong> を押します。<ul><li>✅ が並べば準備OKです。</li><li>❌ があっても大丈夫。どの機能が使えないかが表示されるので、<a href="faq.html">Q&amp;A</a> を参考にしてください。</li></ul></li></ol>
-<blockquote><p>💡 ふじキュンは、HTA と同じフォルダにマクロや結果を保存します。専用のフォルダを1つ作って、その中で使うのがおすすめです。</p></blockquote>
+<ol><li>書き込みできるフォルダ（例: <code>C:\RPA作業\</code>）を1つ作り、次の5つのファイルを置きます（<a href="powershell.html#準備">PowerShell版の説明</a>）。<ul><li><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code></li></ul></li><li><code>fujikyun.bat</code> をダブルクリックで起動します。</li><li>いちばん上の段の <strong>［🩺 環境チェック］</strong> を押します。<ul><li>すべて <strong>OK</strong> なら準備完了です。</li><li><strong>NG</strong> があっても大丈夫。どの機能が使えないかが表示されるので、<a href="faq.html">Q&amp;A</a> を参考にしてください。</li></ul></li></ol>
+<blockquote><p>💡 ふじキュンは、<code>fujikyun.bat</code> と同じフォルダにマクロや結果を保存します。専用のフォルダを1つ作って、その中で使うのがおすすめです。</p></blockquote>
+<p><strong>画面の見方</strong></p>
+<div class="table-wrap"><table><thead><tr><th>場所</th><th>あるもの</th></tr></thead><tbody><tr><td>上の3段</td><td>保存・予定・環境チェック ／ マクロの選択・テンプレート・対象ウィンドウ ／ CSV</td></tr><tr><td>左側</td><td>「追加」のコマンド（分類ごとに1行）、実行の操作（▶ 実行・開始行・終了行・間隔 など）、ログ</td></tr><tr><td>右側</td><td>「編集」の操作と、ブロック（マクロの手順）の一覧</td></tr></tbody></table></div>
+<p>左右の境目（薄い紫の線）はドラッグで動かせます。ブロックが多いときは左へ動かすと見やすくなります。</p>
 <hr>
 <h2 id="レッスン1お手本を動かす">レッスン1：お手本を動かす</h2>
 <p><strong>ゴール:</strong> ロボットが「アプリを開く → 切り替える → 貼り付ける → キーを押す」様子を見る。</p>
-<ol><li>上の段の <strong>［📚 テンプレート］</strong> を押します。</li><li>「入門・Windows」の <strong>「はじめての1本：メモ帳にCSVを入力」</strong> の［✨ 作る］を押します。<ul><li>マクロが追加され、見本CSV <code>samples\01_basic_meibo.csv</code> が自動で読み込まれます。</li></ul></li><li>表示されたブロックを上から読んでみましょう。<div class="table-wrap"><table><thead><tr><th>#</th><th>ブロック</th><th>意味</th></tr></thead><tbody><tr><td>1</td><td>💬 COMMENT</td><td>説明メモ（実行時は何もしない）</td></tr><tr><td>2〜5</td><td>📁 準備（最初の1行だけ）</td><td>1行目のときだけメモ帳を起動して2秒待つ</td></tr><tr><td>6</td><td>🪟 SWITCH メモ帳</td><td>メモ帳を前面にする</td></tr><tr><td>7〜14</td><td>📁 1行ぶんの入力</td><td>CSV 1列目 → Tab → 2列目 → Tab → 3列目 → Enter</td></tr></tbody></table></div></li><li>下の段の <strong>［▶ 実行］</strong> を押し、手を離して見守ります。</li><li>メモ帳に5人分が入力されたら成功です 🎉</li></ol>
+<ol><li>上の段の <strong>［📚 テンプレート］</strong> を押します。</li><li>「入門・Windows」の <strong>「はじめての1本：メモ帳にCSVを入力」</strong> の［✨ 作る］を押します。<ul><li>マクロが追加され、見本CSV <code>samples\01_basic_meibo.csv</code> が自動で読み込まれます。</li></ul></li><li>表示されたブロックを上から読んでみましょう。<div class="table-wrap"><table><thead><tr><th>#</th><th>ブロック</th><th>意味</th></tr></thead><tbody><tr><td>1</td><td>💬 COMMENT</td><td>説明メモ（実行時は何もしない）</td></tr><tr><td>2〜5</td><td>📁 準備（最初の1行だけ）</td><td>1行目のときだけメモ帳を起動して2秒待つ</td></tr><tr><td>6</td><td>🪟 SWITCH メモ帳</td><td>メモ帳を前面にする</td></tr><tr><td>7〜14</td><td>📁 1行ぶんの入力</td><td>CSV 1列目 → Tab → 2列目 → Tab → 3列目 → Enter</td></tr></tbody></table></div></li><li>左側の <strong>［▶ 実行］</strong> を押し、手を離して見守ります。</li><li>メモ帳に5人分が入力されたら成功です 🎉</li></ol>
 <p><strong>やってみよう</strong></p>
 <ul><li>止め方を先に覚えておくと安心です。ロボットはメモ帳を前に出して入力するので、止めるときは <strong>Esc を約1秒長押し</strong> します（どの画面からでも止まります）。ふじキュンの画面をクリックしてから Esc か［⏹ 停止］でも止まります。</li><li>「間隔」を 300 → 1000 にすると、ゆっくり動くので流れが追いやすくなります。</li></ul>
 <hr>
@@ -66,7 +69,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 <h2 id="レッスン4職場のシステムに向ける">レッスン4：職場のシステムに向ける</h2>
 <p><strong>ゴール:</strong> 本物の画面で、安全に1件だけ動かす。</p>
 <p>ここからは職場のシステム（文書起案・財務会計・グループウェア・福祉システムなど）を使います。まずは <strong>照会（見るだけ）</strong> のテンプレートから始めましょう。</p>
-<ol><li><strong>［📚 テンプレート］</strong> から、使うシステムに近いものを選びます。<ul><li>初めてなら「文書番号で検索して決裁状況の画面を保存」「受給者の照会画面を連続で撮影」など <strong>初級の照会系</strong> がおすすめです。</li></ul></li><li><strong>対象ウィンドウ</strong> を合わせます。<ol><li>使うシステムの画面を開いておきます。</li><li>対象ウィンドウの右の <strong>［🔍 一覧］</strong> を押し、システムのタイトルを選びます。</li><li>タイトルに日付や件名など毎回変わる部分があれば、変わらない <strong>先頭部分か末尾部分だけ</strong> を残します（<a href="manual.html#9-ウィンドウ名の合わせ方">マニュアル9章</a>）。</li></ol></li><li><strong>ボタン名</strong> を合わせます。CLICK_NAME「登録」などは、画面に表示されている文字と完全に同じにします。</li><li><strong>カーソルの位置</strong> を合わせます。<ul><li>テンプレートによっては、最初に <strong>✋ 確認ポイント</strong> で「入力欄をクリックしてから続行してね」と聞いてきます。画面の入力欄をクリックしてから［▶ 続行］を押します。</li><li>慣れたら、無効になっている（薄い）CLICK_POS を開いて［📍 数秒後のマウス位置を取得］で座標を入れ、<strong>⊘ 無効化</strong> ボタンで有効にし、確認ポイントの方を無効化します。これで完全自動になります。</li></ul></li><li>CSV を自分のデータに差し替えます（見本CSVを Excel で開いて書き換え、CSV形式で保存）。</li><li><strong>開始行 1・終了行 1</strong> で実行し、画面の動きを最後まで見守ります。</li><li>問題がなければ終了行を増やして、少しずつ件数を増やします。</li></ol>
+<ol><li><strong>［📚 テンプレート］</strong> から、使うシステムに近いものを選びます。<ul><li>初めてなら「文書番号で検索して決裁状況の画面を保存」「受給者の照会画面を連続で撮影」など <strong>初級の照会系</strong> がおすすめです。</li></ul></li><li><strong>対象ウィンドウ</strong> を合わせます。<ol><li>使うシステムの画面を開いておきます。</li><li>対象ウィンドウの右の <strong>［🔍 一覧］</strong> を押し、システムのタイトルを選びます。</li><li>タイトルに日付や件名など毎回変わる部分があれば、変わらない <strong>先頭部分か末尾部分だけ</strong> を残します（<a href="manual.html#9-ウィンドウ名の合わせ方">マニュアル9章</a>）。</li></ol></li><li><strong>ボタン名</strong> を合わせます。CLICK_NAME「登録」などは、画面に表示されている文字と完全に同じにします。</li><li><strong>カーソルの位置</strong> を合わせます。<ul><li>テンプレートによっては、最初に <strong>✋ 確認ポイント</strong> で「入力欄をクリックしてから続行してね」と聞いてきます。画面の入力欄をクリックしてから［▶ 続行］を押します。</li><li>慣れたら、無効になっている（薄い）CLICK_POS を開いて［📍 3秒後のマウス位置を取得］で座標を入れ、<strong>⊘ 無効化</strong> ボタンで有効にし、確認ポイントの方を無効化します。これで完全自動になります。</li></ul></li><li>CSV を自分のデータに差し替えます（見本CSVを Excel で開いて書き換え、CSV形式で保存）。</li><li><strong>開始行 1・終了行 1</strong> で実行し、画面の動きを最後まで見守ります。</li><li>問題がなければ終了行を増やして、少しずつ件数を増やします。</li></ol>
 <blockquote><p>⚠ 登録・送信・決裁など <strong>取り消しにくい操作の前には、確認ポイント（CONFIRM）を入れておきましょう</strong>。十分に試して安心できたら、確認ポイントを無効化して連続実行にします。</p></blockquote>
 <hr>
 <h2 id="レッスン5止まらないロボットにする">レッスン5：止まらないロボットにする</h2>
@@ -79,7 +82,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
 <hr>
 <h2 id="レッスン6変数繰り返し分岐を使う">レッスン6：変数・繰り返し・分岐を使う</h2>
 <p><strong>ゴール:</strong> 値を加工したり、条件で分けたり、エラーでも止めずに続けたりする。</p>
-<ol><li><strong>［📚 テンプレート］→「変数・繰り返し・分岐」</strong> を開きます。メモ帳だけで試せるものが入っています。</li><li><strong>「全角・半角や桁数がバラバラな番号をそろえてから入力」</strong> を作って実行し、右下の <strong>［📊 変数］</strong> を押して、<code>$番号7桁</code> や <code>$電話</code> が行ごとに変わる様子を見てみましょう。</li><li><strong>「金額で分岐：10万円以上だけ人が確認してから入力」</strong> を実行すると、高額の行だけ確認ポイントで止まります。❓もし〜なら と ↔そうでなければ の位置を見てください。</li><li><strong>「エラーが出ても止めずに記録して次の行へ」</strong> を実行すると、2行目はわざとエラーになりますが、止まらずに3行目まで進みます。［↓ 実行結果CSV］の「結果」列を見てみましょう。</li></ol>
+<ol><li><strong>［📚 テンプレート］→「変数・繰り返し・分岐」</strong> を開きます。メモ帳だけで試せるものが入っています。</li><li><strong>「全角・半角や桁数がバラバラな番号をそろえてから入力」</strong> を作って実行し、実行の操作の <strong>［📊 変数］</strong> を押して、<code>$番号7桁</code> や <code>$電話</code> が行ごとに変わる様子を見てみましょう。</li><li><strong>「金額で分岐：10万円以上だけ人が確認してから入力」</strong> を実行すると、高額の行だけ確認ポイントで止まります。❓もし〜なら と ↔そうでなければ の位置を見てください。</li><li><strong>「エラーが出ても止めずに記録して次の行へ」</strong> を実行すると、2行目はわざとエラーになりますが、止まらずに3行目まで進みます。［↓ 実行結果CSV］の「結果」列を見てみましょう。</li></ol>
 <p><strong>ポイント</strong></p>
 <ul><li>変数は <code>{{$名前}}</code> で使います（CSVの列は <code>{{列名}}</code>、変数は <code>$</code> 付き）。</li><li>繰り返し・もし〜なら・エラー時の処理は、グループと同じく「始まり〜終わり」のブロックです。</li><li>くわしくは <a href="manual.html#7-変数繰り返し分岐">操作マニュアル 7章</a> を見てください。</li></ul>
 <hr>
