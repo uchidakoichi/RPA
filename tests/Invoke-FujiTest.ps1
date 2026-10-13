@@ -651,6 +651,9 @@ Assert-True ((Get-FakeCall 'START') -eq 'START notepad.exe ok.txt' -and $run.Err
 $run = New-TestRun -Steps @(@('RUN', "powershell -Command `"Get-Item '{{1}}'`"")) -Rows @([string[]]@("x'; Stop-Computer; '"), [string[]]@('C:\a b.txt'))
 Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: PowerShell RUN with a quote in the value'
 Assert-True ((Get-FakeCall 'START') -eq "START powershell -Command `"Get-Item 'C:\a b.txt'`"" -and $run.ErrorRows.Count -eq 1) 'run: PowerShell injection row recorded, safe row started'
+$run = New-TestRun -Steps @(@('RUN', "{{1}} -Command `"Get-Item '{{2}}'`"")) -Rows @([string[]]@('powershell', "x'; Stop-Computer; '"), [string[]]@('powershell', 'C:\a.txt'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: PowerShell named by a value'
+Assert-True ((Get-FakeCall 'START') -eq "START powershell -Command `"Get-Item 'C:\a.txt'`"" -and $run.ErrorRows.Count -eq 1) 'run: PowerShell named by a value is checked strictly'
 
 # variables: calculation, string operations, copy, record, Excel
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"{{1}}*2","mode":"CALC"}'), @('STR_OP', '{"name":"t","src":"  {{2}} ","op":"TRIM","a":"","b":""}'),

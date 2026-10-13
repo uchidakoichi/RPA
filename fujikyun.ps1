@@ -2859,6 +2859,11 @@ function Invoke-FujiRunCommand {
         $unsafePattern = Get-FujiCommandUnsafePattern -Command $val
     }
     if ($null -ne $def -and (Test-FujiExpandValue $def)) { $val = Expand-FujiRunText -Run $Run -Text $val -Unsafe $unsafe -UnsafePattern $unsafePattern }
+    if ($cmd -eq 'RUN' -and -not [object]::ReferenceEquals($unsafePattern, $script:FujiPowerShellUnsafe) -and $script:FujiPowerShellCommand.IsMatch($val)) {
+        # PowerShell named by an inserted value (e.g. {{1}} -Command ...): check the values again as for PowerShell
+        $unsafe.Clear()
+        $val = Expand-FujiRunText -Run $Run -Text ([string]$Step.val) -Unsafe $unsafe -UnsafePattern $script:FujiPowerShellUnsafe
+    }
     $p = ConvertFrom-FujiStepValue -Cmd $cmd -Value ([string]$Step.val)
     switch ($cmd) {
         'GROUP_START' {
