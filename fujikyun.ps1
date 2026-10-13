@@ -1978,6 +1978,17 @@ function Select-FujiWindow {
 $script:FujiPlaceholder = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\{\{([^{}]+)\}\}', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
 # Characters with a meaning on a command line: an inserted value holding one makes RUN refuse the row
 $script:FujiCommandUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["&|<>^%\r\n]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+# A RUN that starts PowerShell also refuses PowerShell's own quote, variable, statement and block characters
+# (PowerShell reads the curly quotes U+2018-U+201E as quotes too), so a value cannot leave its '...' or end the statement
+$script:FujiPowerShellUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["&|<>^%\r\n\x27`$;(){}\u2018-\u201E]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+$script:FujiPowerShellCommand = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\b(powershell|pwsh)\b', ([System.Text.RegularExpressions.RegexOptions]::CultureInvariant -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
+
+# The characters RUN refuses in inserted values: Command is the RUN text before insertion
+function Get-FujiCommandUnsafePattern {
+    param([AllowNull()][AllowEmptyString()][string]$Command)
+    if (-not [string]::IsNullOrEmpty($Command) -and $script:FujiPowerShellCommand.IsMatch($script:FujiPlaceholder.Replace($Command, ' '))) { return $script:FujiPowerShellUnsafe }
+    return $script:FujiCommandUnsafe
+}
 
 function Write-FujiContextLog {
     param([hashtable]$Context, [string]$Message, [string]$Level = 'info')
@@ -2042,8 +2053,10 @@ function Expand-FujiPlaceholder {
     param(
         [AllowNull()][AllowEmptyString()][string]$Text,
         [hashtable]$Context = @{},
-        [System.Collections.Generic.List[string]]$Unsafe = $null
+        [System.Collections.Generic.List[string]]$Unsafe = $null,
+        [System.Text.RegularExpressions.Regex]$UnsafePattern = $null
     )
+    if ($null -eq $UnsafePattern) { $UnsafePattern = $script:FujiCommandUnsafe }
     if ([string]::IsNullOrEmpty($Text)) { return '' }
     $sb = New-Object -TypeName System.Text.StringBuilder
     $last = 0
@@ -2053,7 +2066,7 @@ function Expand-FujiPlaceholder {
         if ($null -eq $value) {
             Write-FujiContextLog -Context $Context -Message (Get-FujiText 'placeholder.unknown' $m.Value) -Level 'warn'
             $value = $m.Value
-        } elseif ($null -ne $Unsafe -and $script:FujiCommandUnsafe.IsMatch($value)) {
+        } elseif ($null -ne $Unsafe -and $UnsafePattern.IsMatch($value)) {
             $short = $value
             if ($short.Length -gt 20) { $short = $short.Substring(0, 20) + [char]0x2026 }
             $Unsafe.Add(('{0}={1}{2}{3}' -f $m.Value, [char]0x300C, $short, [char]0x300D))
@@ -2342,8 +2355,9 @@ function Get-FujiRunContext {
 }
 
 function Expand-FujiRunText {
-    param([hashtable]$Run, [AllowNull()][AllowEmptyString()][string]$Text, [System.Collections.Generic.List[string]]$Unsafe = $null)
-    return (Expand-FujiPlaceholder -Text $Text -Context (Get-FujiRunContext $Run) -Unsafe $Unsafe)
+    param([hashtable]$Run, [AllowNull()][AllowEmptyString()][string]$Text, [System.Collections.Generic.List[string]]$Unsafe = $null,
+        [System.Text.RegularExpressions.Regex]$UnsafePattern = $null)
+    return (Expand-FujiPlaceholder -Text $Text -Context (Get-FujiRunContext $Run) -Unsafe $Unsafe -UnsafePattern $UnsafePattern)
 }
 
 # WScript-style key codes: {SPACE} and {SPACE n} are not key codes, so they become spaces
@@ -2839,8 +2853,12 @@ function Invoke-FujiRunCommand {
         return (Get-FujiRunNext 0)
     }
     $unsafe = $null
-    if ($cmd -eq 'RUN') { $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]' }
-    if ($null -ne $def -and (Test-FujiExpandValue $def)) { $val = Expand-FujiRunText -Run $Run -Text $val -Unsafe $unsafe }
+    $unsafePattern = $null
+    if ($cmd -eq 'RUN') {
+        $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $unsafePattern = Get-FujiCommandUnsafePattern -Command $val
+    }
+    if ($null -ne $def -and (Test-FujiExpandValue $def)) { $val = Expand-FujiRunText -Run $Run -Text $val -Unsafe $unsafe -UnsafePattern $unsafePattern }
     $p = ConvertFrom-FujiStepValue -Cmd $cmd -Value ([string]$Step.val)
     switch ($cmd) {
         'GROUP_START' {

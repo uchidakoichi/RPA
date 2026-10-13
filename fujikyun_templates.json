@@ -4528,7 +4528,7 @@
     ],
     [
      "RUN",
-     "powershell -NoProfile -WindowStyle Hidden -Command \"$x=New-Object -ComObject Excel.Application; $x.DisplayAlerts=$false; $b=$x.Workbooks.Open('{{ブック}}',0,$true); $b.Worksheets.Item('{{シート}}').PrintOut([Type]::Missing,[Type]::Missing,{{部数}}); $b.Close($false); $x.Quit()\""
+     "powershell -NoProfile -WindowStyle Hidden -Command \"$x=New-Object -ComObject Excel.Application; $x.DisplayAlerts=$false; $b=$x.Workbooks.Open('{{ブック}}',0,$true); $b.Worksheets.Item('{{シート}}').PrintOut([Type]::Missing,[Type]::Missing,[int]'{{部数}}'); $b.Close($false); $x.Quit()\""
     ],
     [
      "WAIT",

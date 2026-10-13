@@ -2572,7 +2572,7 @@ CSVの「ブック」を画面に出さずに開き、指定した「シート�
 | # | コマンド | 設定 | 補足 |
 | --- | --- | --- | --- |
 | 1 | `COMMENT` コメント | `既定のプリンターに送るよ。最初は部数を1にして試してね` |  |
-| 2 | `RUN` アプリ起動 | `powershell -NoProfile -WindowStyle Hidden -Command "$x=New-Object -ComObject Excel.Application; $x.DisplayAlerts=$false; $b=$x.Workbooks.Open('{{ブック}}',0,$true); $b.Worksheets.Item('{{シート}}').PrintOut([Type]::Missing,[Type]::Missing,{{部数}}); $b.Close($false); $x.Quit()"` |  |
+| 2 | `RUN` アプリ起動 | `powershell -NoProfile -WindowStyle Hidden -Command "$x=New-Object -ComObject Excel.Application; $x.DisplayAlerts=$false; $b=$x.Workbooks.Open('{{ブック}}',0,$true); $b.Worksheets.Item('{{シート}}').PrintOut([Type]::Missing,[Type]::Missing,[int]'{{部数}}'); $b.Close($false); $x.Quit()"` |  |
 | 3 | `WAIT` 待機 | `10000` |  |
 | 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に {{シート}} を {{部数}} 部、印刷に送った` |  |
 
