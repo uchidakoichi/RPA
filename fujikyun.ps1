@@ -1212,6 +1212,26 @@ function Get-FujiTemplateStep {
     return , $out
 }
 
+# Search words: lower case, full-width letters and digits as half-width, split at spaces (both widths)
+function ConvertTo-FujiSearchText {
+    param([AllowEmptyString()][string]$Text)
+    return (Invoke-FujiStringOp -Op 'ZEN2HAN' -Text $Text).ToLowerInvariant()
+}
+
+# $true when the template (name, category, what it is for, how to prepare and change it) holds
+# every word of Query; an empty query matches all
+function Test-FujiTemplateMatch {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
+    $words = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
+    if ($words.Count -eq 0) { return $true }
+    $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($k in @('name', 'category', 'summary', 'useCase')) { $parts.Add([string]$Template[$k]) }
+    foreach ($k in @('prepare', 'customize', 'ideas')) { foreach ($x in $Template[$k]) { $parts.Add([string]$x) } }
+    $hay = ConvertTo-FujiSearchText ([string]::Join("`n", $parts.ToArray()))
+    foreach ($w in $words) { if (-not $hay.Contains($w)) { return $false } }
+    return $true
+}
+
 function ConvertTo-FujiTemplateCsvText {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
     $rows = @()
@@ -4046,6 +4066,10 @@ function Get-FujiScaled {
 function Initialize-FujiUi {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    # RichTextBox (the log) uses the old RichEdit 3.0 in apps that target .NET Framework before 4.7.1,
+    # as powershell.exe does; it shows emoji as a box. Ask for RichEdit 4.1 (msftedit.dll) before
+    # the first RichTextBox is made (Windows Forms reads the switch once).
+    [System.AppContext]::SetSwitch('Switch.System.Windows.Forms.DoNotLoadLatestRichEditControl', $false)
     # Real pixels everywhere (screen capture and clicks use the same coordinates as the screen)
     $native = Get-FujiNativeType
     [void]$native::SetProcessDPIAware()
@@ -5270,12 +5294,28 @@ function Show-FujiTemplateGallery {
     $topRow.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6)
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.templateHelp') -MaxWidth (Get-FujiScaled 960)))
     [void]$topRow.SetFlowBreak($topRow.Controls[0], $true)
+    [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.templateSearch')))
+    $search = New-FujiTextBox -Width (Get-FujiScaled 260)
+    $script:Ui.ToolTip.SetToolTip($search, (Get-FujiText 'gui.templateSearchTip'))
+    [void]$topRow.Controls.Add($search)
     [void]$topRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.category')))
-    $cats = New-Object -TypeName 'System.Collections.Generic.List[object]'
-    $cats.Add((Get-FujiText 'gui.allCategories'))
-    foreach ($c in (Get-FujiTemplateData)['categories']) { $cats.Add([string]$c) }
-    $combo = New-FujiComboBox -Items $cats.ToArray() -Values $cats.ToArray() -Width (Get-FujiScaled 280)
+    # Each category with its number of templates; the values are the plain names
+    $perCat = @{}
+    foreach ($t in $all) { $perCat[[string]$t['category']] = 1 + [int]$perCat[[string]$t['category']] }
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $labels.Add((Get-FujiText 'gui.allCategories') + ' (' + (Get-FujiText 'gui.templateCount' $all.Count) + ')')
+    $values.Add('')
+    foreach ($c in (Get-FujiTemplateData)['categories']) {
+        $labels.Add([string]$c + ' (' + (Get-FujiText 'gui.templateCount' ([int]$perCat[[string]$c])) + ')')
+        $values.Add([string]$c)
+    }
+    $combo = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 300)
+    $combo.MaxDropDownItems = 25
     [void]$topRow.Controls.Add($combo)
+    $hits = New-FujiLabel -Text ''
+    $hits.ForeColor = Get-FujiColor '#6b5aa6'
+    [void]$topRow.Controls.Add($hits)
     $split = New-Object -TypeName System.Windows.Forms.SplitContainer
     # A new SplitContainer is 150 px wide: size it before placing the splitter
     $split.Size = $f.ClientSize
@@ -5305,8 +5345,22 @@ function Show-FujiTemplateGallery {
     [void]$f.Controls.Add($split)
     [void]$f.Controls.Add($topRow)
     [void]$f.Controls.Add($bar)
-    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo }
+    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo; Search = $search; Hits = $hits }
     $combo.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
+    $search.Add_TextChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
+    # Down arrow or Enter from the search box goes on to the list
+    $search.Add_KeyDown({
+            $k = $_.KeyCode
+            if (($k -eq [System.Windows.Forms.Keys]::Down -or $k -eq [System.Windows.Forms.Keys]::Enter) -and $script:Ui.Gallery.List.Items.Count -gt 0) {
+                $_.SuppressKeyPress = $true
+                [void]$script:Ui.Gallery.List.Focus()
+            }
+        })
+    # Enter in the search box must not create a macro: the default button is off while typing there
+    $script:Ui.Gallery.Create = $create
+    $search.Add_Enter({ $this.FindForm().AcceptButton = $null })
+    $search.Add_Leave({ $this.FindForm().AcceptButton = $script:Ui.Gallery.Create })
+    $f.Add_Shown({ [void]$script:Ui.Gallery.Search.Focus() })
     $lb.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateDetail } })
     $lb.Add_DoubleClick({ if ($this.SelectedIndex -ge 0) { $this.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK } })
     $combo.SelectedIndex = 0
@@ -5321,17 +5375,20 @@ function Show-FujiTemplateGallery {
 function Update-FujiTemplateList {
     $gal = $script:Ui.Gallery
     $cat = ''
-    if ($gal.Combo.SelectedIndex -gt 0) { $cat = [string]$gal.Combo.SelectedItem }
+    if ($gal.Combo.SelectedIndex -gt 0) { $cat = [string]$gal.Combo.Tag[$gal.Combo.SelectedIndex] }
+    $query = $gal.Search.Text
     $gal.Shown.Clear()
     $gal.List.BeginUpdate()
     $gal.List.Items.Clear()
     foreach ($t in (Get-FujiTemplateData)['templates']) {
         if ($cat -and $t['category'] -ne $cat) { continue }
+        if (-not (Test-FujiTemplateMatch -Template $t -Query $query)) { continue }
         $gal.Shown.Add($t)
         [void]$gal.List.Items.Add((Get-FujiText 'gui.templateItem' (Get-FujiText ('gui.levels.' + $t['level'])) $t['name']))
     }
     $gal.List.EndUpdate()
-    if ($gal.List.Items.Count -gt 0) { $gal.List.SelectedIndex = 0 } else { $gal.Details.Text = '' }
+    $gal.Hits.Text = Get-FujiText 'gui.templateCount' $gal.List.Items.Count
+    if ($gal.List.Items.Count -gt 0) { $gal.List.SelectedIndex = 0 } else { $gal.Details.Text = Get-FujiText 'gui.templateNoMatch' }
 }
 
 function Update-FujiTemplateDetail {

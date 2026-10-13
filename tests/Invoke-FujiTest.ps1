@@ -187,7 +187,14 @@ foreach ($t in $golden.templateLabels) {
     $ps = Get-Golden $t 'ps'
     if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
 }
-Assert-Equal 67 $templates['templates'].Count 'template count'
+Assert-Equal 157 $templates['templates'].Count 'template count'
+$cats = $templates['categories']
+foreach ($t in $templates['templates']) { Assert-True ($cats.Contains($t['category'])) ('{0}: category is listed' -f $t['id']) }
+$tplHits = { param($q) $ids = New-Object -TypeName 'System.Collections.Generic.List[string]'; foreach ($t in $templates['templates']) { if (Test-FujiTemplateMatch -Template $t -Query $q) { $ids.Add($t['id']) } }; , $ids.ToArray() }
+Assert-Equal $templates['templates'].Count (& $tplHits ' ').Count 'template search: blank query shows all'
+Assert-True ((& $tplHits ([string][char]0xFF30 + [char]0xFF44 + [char]0xFF46 + [char]0x3000 + 'word')) -contains 'word-to-pdf') 'template search: full-width letters and space, any case'
+Assert-True (-not ((& $tplHits 'PDF Word') -contains 'ppt-to-pdf')) 'template search: every word must match'
+Assert-Equal 0 (& $tplHits 'no-such-word-xyz').Count 'template search: no match'
 foreach ($t in $templates['templates']) {
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($item in $t['steps']) {

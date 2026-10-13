@@ -479,6 +479,26 @@ function Get-FujiTemplateStep {
     return , $out
 }
 
+# Search words: lower case, full-width letters and digits as half-width, split at spaces (both widths)
+function ConvertTo-FujiSearchText {
+    param([AllowEmptyString()][string]$Text)
+    return (Invoke-FujiStringOp -Op 'ZEN2HAN' -Text $Text).ToLowerInvariant()
+}
+
+# $true when the template (name, category, what it is for, how to prepare and change it) holds
+# every word of Query; an empty query matches all
+function Test-FujiTemplateMatch {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
+    $words = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
+    if ($words.Count -eq 0) { return $true }
+    $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($k in @('name', 'category', 'summary', 'useCase')) { $parts.Add([string]$Template[$k]) }
+    foreach ($k in @('prepare', 'customize', 'ideas')) { foreach ($x in $Template[$k]) { $parts.Add([string]$x) } }
+    $hay = ConvertTo-FujiSearchText ([string]::Join("`n", $parts.ToArray()))
+    foreach ($w in $words) { if (-not $hay.Contains($w)) { return $false } }
+    return $true
+}
+
 function ConvertTo-FujiTemplateCsvText {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
     $rows = @()

@@ -170,37 +170,114 @@ function convert(lines, ids) {
 }
 
 const CSS = `
-:root { --fg: #2f2a33; --muted: #6d6470; --accent: #c2185b; --line: #ead7e2; --bg: #ffffff; --soft: #fdf5f9; --code: #f4eef2; }
+:root {
+  --ink: #2a2530; --muted: #625a6b; --paper: #ffffff; --desk: #eef2f6; --grid: #dbe5ee; --rule: #cfdbe6;
+  --kyun: #c8346e; --fuji: #6b5aa6; --fusen: #fff4b8; --fusen-edge: #e9d27a; --link: #2a5db0; --code: #f2f0f6;
+  --font: "BIZ UDPGothic", "Yu Gothic UI", "Meiryo UI", "Meiryo", sans-serif;
+  --mono: "BIZ UDGothic", Consolas, "MS Gothic", monospace;
+}
 * { box-sizing: border-box; }
-body { margin: 0; font-family: "Meiryo UI", "Yu Gothic UI", "Segoe UI", sans-serif; font-size: 16px; line-height: 1.75; color: var(--fg); background: var(--soft); }
-header { position: sticky; top: 0; z-index: 2; background: linear-gradient(90deg, #f48fb1, #f7b6d2 55%, #b3d9ff); color: #fff; padding: 8px 16px; }
-header .title { font-weight: bold; margin-right: 16px; text-shadow: 0 1px 2px rgba(120, 30, 80, .35); }
-header nav a { color: #fff; margin-right: 12px; text-decoration: none; font-size: 15px; white-space: nowrap; }
-header nav a.current { text-decoration: underline; font-weight: bold; }
-main { max-width: 1000px; margin: 0 auto; padding: 16px 24px 48px; background: var(--bg); min-height: 100vh; }
-h1, h2, h3 { scroll-margin-top: 64px; }
-h1 { font-size: 26px; color: var(--accent); border-bottom: 3px solid var(--line); padding-bottom: 6px; }
-h2 { font-size: 22px; margin-top: 36px; border-left: 6px solid #f48fb1; padding-left: 10px; }
-h3 { font-size: 18px; margin-top: 26px; color: #8e3b66; }
-a { color: #1565c0; }
-code { font-family: Consolas, "MS Gothic", monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
-pre { background: #2d2733; color: #ece6f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font); font-size: 16px; line-height: 1.8; color: var(--ink); background: var(--desk); }
+header { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 1px solid var(--rule); padding: 0 20px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 20px; }
+header .title { font-weight: 700; padding: 10px 0 8px; white-space: nowrap; letter-spacing: .02em; }
+header .title b { color: var(--kyun); }
+header nav { display: flex; overflow-x: auto; }
+header nav a { color: var(--muted); text-decoration: none; font-size: 15px; padding: 10px 12px 8px; white-space: nowrap; border-bottom: 3px solid transparent; }
+header nav a:hover { color: var(--ink); border-bottom-color: var(--grid); }
+header nav a.current { color: var(--ink); font-weight: 700; border-bottom-color: var(--kyun); }
+main { max-width: 980px; margin: 0 auto; padding: 0 32px 56px; background: var(--paper); min-height: 100vh; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
+h1, h2, h3 { scroll-margin-top: 72px; line-height: 1.45; }
+h1 { font-size: 32px; font-weight: 700; margin: 0 -32px 28px; padding: 44px 32px 20px; letter-spacing: .03em;
+  background-color: #f8fafc;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 16px 16px; background-position: -1px -1px; border-bottom: 4px solid var(--kyun); }
+h2 { font-size: 22px; margin: 48px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+h2::before { content: ""; display: inline-block; width: .62em; height: .62em; margin-right: .45em; background: var(--kyun); vertical-align: .08em; }
+h3 { font-size: 18px; margin: 34px 0 10px; color: var(--fuji); }
+main > p, main > ul, main > ol, blockquote, .finder { max-width: 46em; }
+li { margin: 2px 0; }
+a { color: var(--link); text-underline-offset: 3px; }
+a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--kyun); outline-offset: 2px; }
+strong { font-weight: 700; }
+code { font-family: var(--mono); background: var(--code); padding: 1px 5px; border-radius: 3px; font-size: .9em; }
+pre { background: var(--ink); color: #f1edf4; padding: 14px 16px; border-radius: 4px; overflow-x: auto; line-height: 1.55; }
 pre code { background: none; color: inherit; padding: 0; }
-.table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; margin: 10px 0; min-width: 60%; }
-th, td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; text-align: left; }
-th { background: #fce4ef; }
-tr:nth-child(even) td { background: #fffafd; }
-blockquote { margin: 12px 0; padding: 8px 14px; background: #fff8e1; border-left: 4px solid #ffb300; }
-hr { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
-footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
-@media print { header { position: static; } main { max-width: none; } }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; min-width: 60%; font-size: 15px; line-height: 1.6; }
+th, td { border: 1px solid var(--rule); padding: 7px 11px; vertical-align: top; text-align: left; }
+th { background: #f3f6f9; font-weight: 700; white-space: nowrap; }
+blockquote { margin: 16px 0; padding: 10px 16px; background: var(--fusen); border-left: 5px solid var(--fusen-edge); box-shadow: 2px 3px 0 rgba(120, 100, 30, .12); }
+blockquote p { margin: 4px 0; }
+hr { border: 0; border-top: 1px dashed var(--rule); margin: 32px 0; }
+.lv { display: inline-block; font-size: 13px; line-height: 1.5; padding: 0 8px; border-radius: 10px; white-space: nowrap; border: 1px solid; }
+.lv1 { color: #2f6b3a; border-color: #9cc9a4; background: #f1f8f2; }
+.lv2 { color: #7a5200; border-color: #e3c37a; background: #fdf7e8; }
+.lv3 { color: #8f2350; border-color: #e3a1bc; background: #fcf0f5; }
+.finder { margin: 20px 0 8px; padding: 14px 16px; border: 1px solid var(--rule); border-top: 4px solid var(--fuji); background: #fbfafd; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.finder label { font-weight: 700; }
+.finder input, .finder select { font: inherit; font-size: 15px; padding: 6px 10px; border: 1px solid #b9c6d3; border-radius: 3px; background: #fff; color: var(--ink); }
+.finder input { flex: 1 1 16em; min-width: 12em; }
+.finder .hits { color: var(--muted); font-size: 14px; }
+.finder .none { flex-basis: 100%; margin: 0; color: var(--kyun); }
+footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--rule); }
+@media (max-width: 640px) { main { padding: 0 16px 40px; } h1 { margin: 0 -16px 24px; padding: 32px 16px 16px; font-size: 26px; } header { padding: 0 12px; } }
+@media print { header, .finder { display: none; } main { max-width: none; border: 0; } h1 { background: none; } body { background: #fff; } }
 `;
+
+// Templates page: level badges and a search box over the list (each row also matches its section's text)
+const FINDER_HTML = '<div class="finder" hidden><label for="tpl-q">やりたいことで探す</label>' +
+    '<input id="tpl-q" type="search" placeholder="例: PDF、コピー、メール、Excel 転記" autocomplete="off">' +
+    '<select id="tpl-cat" aria-label="分類"><option value="">すべての分類</option></select>' +
+    '<span class="hits" id="tpl-hits" aria-live="polite"></span>' +
+    '<p class="none" id="tpl-none" hidden>見つかりませんでした。ことばを短くするか、分類を「すべての分類」にしてください。</p></div>';
+const FINDER_JS = `<script>
+(function () {
+  var box = document.querySelector(".finder"), list = document.getElementById("一覧");
+  if (!box || !list) { return; }
+  var table = list.nextElementSibling.querySelector("tbody"), rows = [].slice.call(table.rows);
+  var q = document.getElementById("tpl-q"), cat = document.getElementById("tpl-cat");
+  var hits = document.getElementById("tpl-hits"), none = document.getElementById("tpl-none");
+  var norm = function (s) { return (s.normalize ? s.normalize("NFKC") : s).toLowerCase(); };
+  var seen = {};
+  rows.forEach(function (tr) {
+    var c = tr.cells[0].textContent, text = tr.textContent, a = tr.querySelector("a");
+    var el = a && document.getElementById(a.getAttribute("href").slice(1));
+    for (el = el && el.nextElementSibling; el && !(el.tagName === "A" && el.id) && el.tagName !== "H2"; el = el.nextElementSibling) {
+      if (el.tagName !== "DIV") { text += " " + el.textContent; }
+    }
+    tr.dataset.text = norm(text);
+    tr.dataset.cat = c;
+    if (!seen[c]) { seen[c] = 0; var o = document.createElement("option"); o.value = c; o.textContent = c; cat.appendChild(o); }
+    seen[c]++;
+  });
+  [].forEach.call(cat.options, function (o) { if (o.value) { o.textContent = o.value + "（" + seen[o.value] + "）"; } });
+  function update() {
+    var words = norm(q.value).split(/\\s+/).filter(Boolean), c = cat.value, n = 0;
+    rows.forEach(function (tr) {
+      var ok = (!c || tr.dataset.cat === c) && words.every(function (w) { return tr.dataset.text.indexOf(w) >= 0; });
+      tr.hidden = !ok;
+      if (ok) { n++; }
+    });
+    hits.textContent = rows.length + "件中 " + n + "件";
+    none.hidden = n > 0;
+  }
+  q.addEventListener("input", update);
+  cat.addEventListener("change", update);
+  box.hidden = false;
+  update();
+})();
+</script>`;
+function decorateTemplates(body) {
+    body = body.replace(/<td>(初級|中級|上級)<\/td>/g, (m, lv) => '<td><span class="lv lv' + ({ 初級: 1, 中級: 2, 上級: 3 })[lv] + '">' + lv + "</span></td>");
+    return body.replace('<h2 id="一覧">', FINDER_HTML + '\n<h2 id="一覧">') + "\n" + FINDER_JS;
+}
 
 function page(title, nav, current, body) {
     return "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
         "<title>" + esc(title) + " - ふじキュン♡のRPAマクロビルダー</title>\n<style>" + CSS + "</style>\n</head>\n<body>\n" +
-        '<header><span class="title">ふじキュン♡のRPAマクロビルダー</span><nav>' +
+        '<header><span class="title"><b>ふじキュン♡</b>のRPAマクロビルダー</span><nav>' +
         nav.map(p => '<a href="' + p.out + '"' + (p.out === current ? ' class="current"' : "") + ">" + esc(p.nav) + "</a>").join("") +
         "</nav></header>\n<main>\n" + body + "\n<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>\n</main>\n</body>\n</html>\n";
 }
@@ -209,7 +286,8 @@ const built = {};
 for (const p of PAGES) {
     const md = fs.readFileSync(path.join(srcDir, p.src), "utf8").replace(/^﻿/, "").replace(/\r\n/g, "\n");
     const ids = new Set();
-    const body = convert(md.split("\n"), ids);
+    let body = convert(md.split("\n"), ids);
+    if (p.out === "templates.html") { body = decorateTemplates(body); }
     const title = (md.match(/^# +(.*)$/m) || [null, p.nav])[1];
     const html = page(title, PAGES, p.out, body);
     fs.writeFileSync(path.join(outDir, p.out), html, "utf8");
