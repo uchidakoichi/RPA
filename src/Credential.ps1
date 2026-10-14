@@ -46,10 +46,35 @@ function Get-FujiCredLayout {
     if ($p -eq 8) { $blob = $blobSize + 8 }
     $persist = $blob + $p
     $userName = $persist + 8 + 2 * $p
-    return @{ Type = 4; TargetName = 8; BlobSize = $blobSize; Blob = $blob; Persist = $persist; UserName = $userName; Size = $userName + $p }
+    return @{ Type = 4; TargetName = 8; Comment = 8 + $p; BlobSize = $blobSize; Blob = $blob; Persist = $persist; UserName = $userName; Size = $userName + $p }
 }
 
-# @{ User; Password } or $null when nothing is registered under Target
+# Where a password may be typed: kept in the credential's comment as "program|title part"
+function ConvertTo-FujiSecretPlace {
+    param([AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    return (([string]$Program).Trim().Replace('|', '') + '|' + ([string]$Window).Trim())
+}
+
+function ConvertFrom-FujiSecretPlace {
+    param([AllowNull()][AllowEmptyString()][string]$Text)
+    $t = [string]$Text
+    $i = $t.IndexOf('|')
+    if ($i -lt 0) { return @{ Program = ''; Window = '' } }
+    return @{ Program = $t.Substring(0, $i); Window = $t.Substring($i + 1) }
+}
+
+# A password goes only into the window it was registered for: the window in front must have the
+# registered text in its title and, when a program was registered, belong to that program
+function Test-FujiSecretPlace {
+    param([hashtable]$Foreground, [AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    if (-not $Window -or $null -eq $Foreground) { return $false }
+    $ic = [System.StringComparison]::OrdinalIgnoreCase
+    if (([string]$Foreground.Title).IndexOf($Window, $ic) -lt 0) { return $false }
+    if ($Program -and -not [string]::Equals([string]$Foreground.Program, $Program, $ic)) { return $false }
+    return $true
+}
+
+# @{ User; Password; Program; Window } or $null when nothing is registered under Target
 function Read-FujiCredential {
     param([Parameter(Mandatory)][string]$Target)
     $t = Get-FujiCredNativeType
@@ -67,7 +92,8 @@ function Read-FujiCredential {
             $password = [System.Text.Encoding]::Unicode.GetString($bytes)
             [Array]::Clear($bytes, 0, $bytes.Length)
         }
-        return @{ User = [string]$user; Password = $password }
+        $place = ConvertFrom-FujiSecretPlace ([System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, $l.Comment)))
+        return @{ User = [string]$user; Password = $password; Program = $place.Program; Window = $place.Window }
     } finally {
         $t::CredFree($ptr)
     }
@@ -75,8 +101,10 @@ function Read-FujiCredential {
 
 # Account: the user name (may be empty). Secret: the password; its characters go from the
 # SecureString's own unmanaged copy straight to Windows and that copy is wiped afterwards.
+# Program / Window: the only window it may be typed into (Test-FujiSecretPlace).
 function Write-FujiCredential {
-    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$Account, [Parameter(Mandatory)][System.Security.SecureString]$Secret)
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$Account, [Parameter(Mandatory)][System.Security.SecureString]$Secret,
+        [AllowEmptyString()][string]$Program = '', [Parameter(Mandatory)][string]$Window)
     $bytes = $Secret.Length * 2
     if ($bytes -gt $script:FujiCredLimits.MaxBlobBytes) { throw (Get-FujiText 'cred.tooLong') }
     $l = Get-FujiCredLayout
@@ -84,11 +112,13 @@ function Write-FujiCredential {
     $cred = $m::AllocHGlobal($l.Size)
     $name = $m::StringToHGlobalUni($script:FujiCredPrefix + $Target)
     $userPtr = $m::StringToHGlobalUni($Account)
+    $comment = $m::StringToHGlobalUni((ConvertTo-FujiSecretPlace -Program $Program -Window $Window))
     $blob = $m::SecureStringToGlobalAllocUnicode($Secret)
     try {
         for ($i = 0; $i -lt $l.Size; $i++) { $m::WriteByte($cred, $i, 0) }
         $m::WriteInt32($cred, $l.Type, $script:FujiCredLimits.Type)
         $m::WriteIntPtr($cred, $l.TargetName, $name)
+        $m::WriteIntPtr($cred, $l.Comment, $comment)
         $m::WriteInt32($cred, $l.BlobSize, $bytes)
         $m::WriteIntPtr($cred, $l.Blob, $blob)
         $m::WriteInt32($cred, $l.Persist, $script:FujiCredLimits.Persist)
@@ -96,6 +126,7 @@ function Write-FujiCredential {
         if (-not (Get-FujiCredNativeType)::CredWriteW($cred, [uint32]0)) { throw (Get-FujiText 'cred.writeFailed') }
     } finally {
         $m::ZeroFreeGlobalAllocUnicode($blob)
+        $m::FreeHGlobal($comment)
         $m::FreeHGlobal($userPtr)
         $m::FreeHGlobal($name)
         $m::FreeHGlobal($cred)

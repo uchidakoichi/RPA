@@ -526,7 +526,7 @@ function Register-FujiStepCredential {
     $d = $script:StepDlg
     $target = $d.Inputs['target'].Text.Trim()
     if (-not $target) { $d.Status['cred'].Text = Get-FujiText 'cred.statusNoTarget'; return }
-    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target
+    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target -DefaultWindow ([string](Get-FujiCurrentMacro $script:Ed).targetWindow)
 }
 
 function Update-FujiStepCredentialStatus {

@@ -5,12 +5,13 @@
 
 # ----------------------------------------------------------------- the dialog: register, change, remove
 # Returns the status text for the step dialog
+# DefaultWindow: the window title offered when nothing is registered yet (the macro's target window)
 function Show-FujiCredentialDialog {
-    param([Parameter(Mandatory)][string]$Target)
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$DefaultWindow = '')
     $existing = $null
     try { $existing = Read-FujiCredential -Target $Target } catch { $existing = $null }
     $width = Get-FujiScaled 480
-    $f = New-FujiDialogForm -Title (Get-FujiText 'cred.title' $Target) -Width $width -Height (Get-FujiScaled 330)
+    $f = New-FujiDialogForm -Title (Get-FujiText 'cred.title' $Target) -Width $width -Height (Get-FujiScaled 470)
     $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
     $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -32,11 +33,26 @@ function Show-FujiCredentialDialog {
     $again = New-FujiTextBox -Width $inner
     $again.UseSystemPasswordChar = $true
     [void]$layout.Controls.Add($again)
+    # the only window the password may be typed into
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.place') -MaxWidth $inner))
+    $windowText = $DefaultWindow
+    $programText = ''
+    if ($null -ne $existing -and $existing.Window) { $windowText = $existing.Window; $programText = $existing.Program }
+    $window = New-FujiTextBox -Text $windowText -Width $inner
+    [void]$layout.Controls.Add($window)
+    $placeRow = New-FujiFlow -NoWrap
+    $point = New-FujiButton -Text (Get-FujiText 'cred.point') -Tip (Get-FujiText 'cred.pointTip')
+    $point.Add_Click({ Invoke-FujiUi { Start-FujiCredentialPoint } })
+    $program = New-FujiLabel -Text (Get-FujiCredentialProgramText $programText)
+    [void]$placeRow.Controls.Add($point)
+    [void]$placeRow.Controls.Add($program)
+    [void]$layout.Controls.Add($placeRow)
     $err = New-FujiLabel -Text '' -MaxWidth $inner
     $err.ForeColor = Get-FujiColor '#c62828'
     [void]$layout.Controls.Add($err)
     $bar = New-FujiButtonBar
-    $script:Ui.CredDialog = @{ Target = $Target; User = $user; Pass = $pass; Again = $again; Error = $err; Result = '' }
+    $script:Ui.CredDialog = @{ Target = $Target; User = $user; Pass = $pass; Again = $again; Error = $err; Result = ''
+        Window = $window; Program = $programText; ProgramLabel = $program; Timer = $null; Remaining = 0 }
     $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
     $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $save = New-FujiButton -Text (Get-FujiText 'cred.save')
@@ -55,6 +71,7 @@ function Show-FujiCredentialDialog {
     [void]$f.Controls.Add($layout)
     [void]$f.Controls.Add($bar)
     $f.Add_Shown({ if ($script:Ui.CredDialog.User.Text) { $script:Ui.CredDialog.Pass.Focus() } else { $script:Ui.CredDialog.User.Focus() } })
+    $f.Add_FormClosed({ if ($script:Ui.CredDialog.Timer) { $script:Ui.CredDialog.Timer.Stop(); $script:Ui.CredDialog.Timer.Dispose() } })
     [void](Show-FujiDialog -Form $f)
     $f.Dispose()
     $result = $script:Ui.CredDialog.Result
@@ -67,11 +84,12 @@ function Complete-FujiCredentialDialog {
     $d = $script:Ui.CredDialog
     if ($d.Pass.Text -eq '') { $d.Error.Text = Get-FujiText 'cred.empty'; return }
     if ($d.Pass.Text -cne $d.Again.Text) { $d.Error.Text = Get-FujiText 'cred.mismatch'; return }
+    if ($d.Window.Text.Trim() -eq '') { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
     $secret = New-Object -TypeName System.Security.SecureString
     foreach ($ch in $d.Pass.Text.ToCharArray()) { $secret.AppendChar($ch) }
     $secret.MakeReadOnly()
     try {
-        Write-FujiCredential -Target $d.Target -Account $d.User.Text.Trim() -Secret $secret
+        Write-FujiCredential -Target $d.Target -Account $d.User.Text.Trim() -Secret $secret -Program $d.Program -Window $d.Window.Text.Trim()
     } catch {
         $d.Error.Text = Get-FujiText 'cred.failed' $_.Exception.Message
         return
@@ -102,4 +120,41 @@ function Get-FujiCredentialStatus {
     try { $c = Read-FujiCredential -Target $Target } catch { return (Get-FujiText 'cred.failed' $_.Exception.Message) }
     if ($null -eq $c) { return (Get-FujiText 'cred.statusNone') }
     return (Get-FujiText 'cred.statusSet' $c.User)
+}
+
+function Get-FujiCredentialProgramText {
+    param([AllowEmptyString()][string]$Program)
+    if ($Program) { return (Get-FujiText 'cred.program' $Program) }
+    return (Get-FujiText 'cred.programNone')
+}
+
+# "Point at the window": 3 seconds to click the login window, then its title and program are taken
+function Start-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d.Timer) {
+        $d.Timer = New-Object -TypeName System.Windows.Forms.Timer
+        $d.Timer.Interval = 1000
+        $d.Timer.Add_Tick({ Invoke-FujiUi { Step-FujiCredentialPoint } })
+    }
+    $d.Remaining = 3
+    $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining
+    $d.Timer.Start()
+}
+
+function Step-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d) { return }
+    $d.Remaining--
+    if ($d.Remaining -gt 0) { $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining; return }
+    $d.Timer.Stop()
+    $front = Get-FujiForegroundWindowInfo
+    $form = $d.Window.FindForm()
+    if ($null -eq $front -or (Test-FujiSelfForeground)) {
+        $d.ProgramLabel.Text = Get-FujiText 'cred.pointNone'
+    } else {
+        $d.Window.Text = $front.Title
+        $d.Program = $front.Program
+        $d.ProgramLabel.Text = Get-FujiCredentialProgramText $front.Program
+    }
+    [void](Invoke-FujiWindowActivate -Handle $form.Handle)
 }

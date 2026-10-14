@@ -496,7 +496,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]')
+        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'app' }
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
@@ -537,6 +537,7 @@ function New-FakeIo {
         SaveText = { param($Path, $Text) $script:Fake.Saved[$Path] = $Text }
         GetSecret = { param($Target) if ($script:Fake.Secrets.ContainsKey($Target)) { return $script:Fake.Secrets[$Target] }; return $null }
         TypeSecret = { param($Text) $script:Fake.Calls.Add('SECRET ' + $Text.Length) }
+        ForegroundWindow = { return $script:Fake.Front }
     }
 }
 
@@ -894,16 +895,42 @@ Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'table: read'
 $tablePath = Join-Path 'D' 't_1.csv'
 Assert-Equal ("h1,h2`r`na,'=1+1`r`nb,c`r`n") $script:Fake.Saved[$tablePath] 'table: saved next to the macros, formula-like text kept as text'
 Assert-Equal '2' $run.Vars['count'] 'table: row count'
+foreach ($bad in @('..\fujikyun', 'C:\Windows\x', '\x', "a`r`nb")) {
+    $run = New-TestRun -Steps @(@('TABLE_READ', '{"name":"","path":"out\\{{1}}.csv","var":""}')) -Rows @(, [string[]]@($bad))
+    Assert-Equal 'error' (Invoke-FujiRun -Run $run) ('table: an inserted path part is refused: ' + ($bad -replace '\s', ' '))
+    Assert-Equal 0 $script:Fake.Saved.Count 'table: nothing saved for a refused path'
+}
+$run = New-TestRun -Steps @(@('TABLE_READ', '{"name":"","path":"{{1}}","var":""}')) -Rows @(, [string[]]@('fujikyun.ps1'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'table: only a .csv file is written'
+$run = New-TestRun -Steps @(@('TABLE_READ', '{"name":"","path":"out\\{{1}}.csv","var":""}')) -Rows @(, [string[]]@('2026\list'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'table: an inserted sub folder is fine'
+Assert-True ($script:Fake.Saved.ContainsKey((Join-Path 'D' 'out\2026\list.csv'))) 'table: saved under the macro folder'
+Assert-True ((Test-FujiStepSetting -Cmd 'TABLE_READ' -Settings @{ name = ''; path = 'a.txt'; var = '' }) -ne '') 'TABLE_READ path must be a .csv'
 
 # passwords
 $secretName = 'kikan'
 $run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"USER"}')), @('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
-$script:Fake.Secrets[$secretName] = @{ User = 'user1'; Password = 'p+w(1)' }
+$script:Fake.Secrets[$secretName] = @{ User = 'user1'; Password = 'p+w(1)'; Program = 'APP'; Window = 'login' }
 Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'secret: typed'
 Assert-Equal 'SECRET 5 | SECRET 6' (Get-FakeCall 'SECRET') 'secret: user name and password typed'
 Assert-Equal 0 @($script:Fake.Logs | Where-Object { $_.Contains('p+w') -or $_.Contains('user1') }).Count 'secret: values never in the log'
 $run = New-TestRun -Steps @(@('SECRET', '{"target":"none","part":"PASSWORD"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: not registered'
+$run = New-TestRun -Steps @(@('TRY_START', 't'), @('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')), @('CATCH', ''), @('KEY', 'caught'), @('TRY_END', ''))
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'app'; Window = 'login' }
+$script:Fake.Front = @{ Title = 'memo - Notepad'; Program = 'notepad' }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: another window in front stops the run'
+Assert-True ((Get-FakeCall 'SECRET') -eq '' -and (Get-FakeCall 'KEYS') -eq '') 'secret: nothing typed into another window, and "on error" does not catch it'
+$run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'app'; Window = 'login' }
+$script:Fake.Front = @{ Title = 'login copy.txt - Notepad'; Program = 'notepad' }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: the title alone is not enough when a program was registered'
+$run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = ''; Window = '' }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: no window registered'
+Assert-True (Test-FujiSecretPlace -Foreground @{ Title = 'Kikan Login'; Program = 'kikan' } -Program '' -Window 'login') 'secret place: title only'
+Assert-Equal 'prog|title|x' (ConvertTo-FujiSecretPlace -Program 'pr|og' -Window ' title|x ') 'secret place written'
+Assert-True ((ConvertFrom-FujiSecretPlace 'prog|title|x').Window -eq 'title|x' -and (ConvertFrom-FujiSecretPlace '').Window -eq '') 'secret place read'
 Assert-Equal 'a{+}b{^}{%}{~}{(}{)}{{}{}}{[}{]}' (ConvertTo-FujiSendKeyLiteral 'a+b^%~(){}[]') 'secret: SendKeys characters typed as they are'
 
 # commands: settings, values, labels
@@ -1011,8 +1038,8 @@ Assert-True ($null -ne $native.GetMethod('GetWindowRect') -and $null -ne $native
 $cred = Get-FujiCredNativeType
 Assert-True ($null -ne $cred.GetMethod('CredReadW') -and $null -ne $cred.GetMethod('CredWriteW') -and $null -ne $cred.GetMethod('CredDeleteW') -and $null -ne $cred.GetMethod('CredFree')) 'credential functions declared'
 $cl = Get-FujiCredLayout
-if ([IntPtr]::Size -eq 8) { $expect = '4,8,32,40,48,72,80' } else { $expect = '4,8,24,28,32,48,52' }
-Assert-Equal $expect (($cl.Type, $cl.TargetName, $cl.BlobSize, $cl.Blob, $cl.Persist, $cl.UserName, $cl.Size) -join ',') 'CREDENTIALW offsets (Type, TargetName, CredentialBlobSize, CredentialBlob, Persist, UserName, size)'
+if ([IntPtr]::Size -eq 8) { $expect = '4,8,16,32,40,48,72,80' } else { $expect = '4,8,12,24,28,32,48,52' }
+Assert-Equal $expect (($cl.Type, $cl.TargetName, $cl.Comment, $cl.BlobSize, $cl.Blob, $cl.Persist, $cl.UserName, $cl.Size) -join ',') 'CREDENTIALW offsets (Type, TargetName, Comment, CredentialBlobSize, CredentialBlob, Persist, UserName, size)'
 $wins = @(@{ Handle = 1; Title = 'Book1 - Excel' }, @{ Handle = 2; Title = 'Notepad' }, @{ Handle = 3; Title = 'notepad memo' })
 Assert-Equal 2 (Select-FujiWindow -Windows $wins -Title 'NOTEPAD').Handle 'window title: exact match first (case ignored)'
 Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Book1').Handle 'window title: prefix'

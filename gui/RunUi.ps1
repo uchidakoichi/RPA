@@ -335,6 +335,7 @@ function New-FujiWinIo {
         SaveText = { param($Path, $Text) Save-FujiRunText -Path $Path -Text $Text }
         GetSecret = { param($Target) Read-FujiCredential -Target $Target }
         TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
+        ForegroundWindow = { Get-FujiForegroundWindowInfo }
     }
 }
 
@@ -357,6 +358,35 @@ function Get-FujiTopWindow {
         $list.Add(@{ Handle = $h; Title = $sb.ToString() })
     }
     return , $list.ToArray()
+}
+
+# @{ Title; Program } of the window in front (Program: its process name, e.g. "msedge"), $null if none
+function Get-FujiForegroundWindowInfo {
+    $native = Get-FujiNativeType
+    $h = $native::GetForegroundWindow()
+    if ($h -eq [IntPtr]::Zero) { return $null }
+    $len = $native::GetWindowTextLength($h)
+    $title = ''
+    if ($len -gt 0) {
+        $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($len + 1)
+        [void]$native::GetWindowText($h, $sb, $sb.Capacity)
+        $title = $sb.ToString()
+    }
+    # GetWindowThreadProcessId writes the process id where its second argument points
+    $mem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
+    try {
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($mem, 0)
+        [void]$native::GetWindowThreadProcessId($h, $mem)
+        $processId = [System.Runtime.InteropServices.Marshal]::ReadInt32($mem)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
+    }
+    $program = ''
+    if ($processId -gt 0) {
+        $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        if ($null -ne $p) { $program = [string]$p.ProcessName }
+    }
+    return @{ Title = $title; Program = $program }
 }
 
 function Test-FujiSelfForeground {

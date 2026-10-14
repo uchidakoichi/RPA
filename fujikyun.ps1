@@ -344,7 +344,9 @@ function Test-FujiStepSetting {
             if ($Cmd -eq 'FIELD_GET') { return (Get-FujiVarNameError $s['var']) }
         }
         'TABLE_READ' {
-            if (([string]$s['path']).Trim() -eq '') { return (Get-FujiText 'validate.tablePath') }
+            $path = ([string]$s['path']).Trim().Trim('"')
+            if ($path -eq '') { return (Get-FujiText 'validate.tablePath') }
+            if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiText 'validate.tablePathCsv') }
             if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
         }
         'SECRET' { if ($s['target'] -eq '') { return (Get-FujiText 'validate.secretTarget') } }
@@ -525,10 +527,35 @@ function Get-FujiCredLayout {
     if ($p -eq 8) { $blob = $blobSize + 8 }
     $persist = $blob + $p
     $userName = $persist + 8 + 2 * $p
-    return @{ Type = 4; TargetName = 8; BlobSize = $blobSize; Blob = $blob; Persist = $persist; UserName = $userName; Size = $userName + $p }
+    return @{ Type = 4; TargetName = 8; Comment = 8 + $p; BlobSize = $blobSize; Blob = $blob; Persist = $persist; UserName = $userName; Size = $userName + $p }
 }
 
-# @{ User; Password } or $null when nothing is registered under Target
+# Where a password may be typed: kept in the credential's comment as "program|title part"
+function ConvertTo-FujiSecretPlace {
+    param([AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    return (([string]$Program).Trim().Replace('|', '') + '|' + ([string]$Window).Trim())
+}
+
+function ConvertFrom-FujiSecretPlace {
+    param([AllowNull()][AllowEmptyString()][string]$Text)
+    $t = [string]$Text
+    $i = $t.IndexOf('|')
+    if ($i -lt 0) { return @{ Program = ''; Window = '' } }
+    return @{ Program = $t.Substring(0, $i); Window = $t.Substring($i + 1) }
+}
+
+# A password goes only into the window it was registered for: the window in front must have the
+# registered text in its title and, when a program was registered, belong to that program
+function Test-FujiSecretPlace {
+    param([hashtable]$Foreground, [AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    if (-not $Window -or $null -eq $Foreground) { return $false }
+    $ic = [System.StringComparison]::OrdinalIgnoreCase
+    if (([string]$Foreground.Title).IndexOf($Window, $ic) -lt 0) { return $false }
+    if ($Program -and -not [string]::Equals([string]$Foreground.Program, $Program, $ic)) { return $false }
+    return $true
+}
+
+# @{ User; Password; Program; Window } or $null when nothing is registered under Target
 function Read-FujiCredential {
     param([Parameter(Mandatory)][string]$Target)
     $t = Get-FujiCredNativeType
@@ -546,7 +573,8 @@ function Read-FujiCredential {
             $password = [System.Text.Encoding]::Unicode.GetString($bytes)
             [Array]::Clear($bytes, 0, $bytes.Length)
         }
-        return @{ User = [string]$user; Password = $password }
+        $place = ConvertFrom-FujiSecretPlace ([System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, $l.Comment)))
+        return @{ User = [string]$user; Password = $password; Program = $place.Program; Window = $place.Window }
     } finally {
         $t::CredFree($ptr)
     }
@@ -554,8 +582,10 @@ function Read-FujiCredential {
 
 # Account: the user name (may be empty). Secret: the password; its characters go from the
 # SecureString's own unmanaged copy straight to Windows and that copy is wiped afterwards.
+# Program / Window: the only window it may be typed into (Test-FujiSecretPlace).
 function Write-FujiCredential {
-    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$Account, [Parameter(Mandatory)][System.Security.SecureString]$Secret)
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$Account, [Parameter(Mandatory)][System.Security.SecureString]$Secret,
+        [AllowEmptyString()][string]$Program = '', [Parameter(Mandatory)][string]$Window)
     $bytes = $Secret.Length * 2
     if ($bytes -gt $script:FujiCredLimits.MaxBlobBytes) { throw (Get-FujiText 'cred.tooLong') }
     $l = Get-FujiCredLayout
@@ -563,11 +593,13 @@ function Write-FujiCredential {
     $cred = $m::AllocHGlobal($l.Size)
     $name = $m::StringToHGlobalUni($script:FujiCredPrefix + $Target)
     $userPtr = $m::StringToHGlobalUni($Account)
+    $comment = $m::StringToHGlobalUni((ConvertTo-FujiSecretPlace -Program $Program -Window $Window))
     $blob = $m::SecureStringToGlobalAllocUnicode($Secret)
     try {
         for ($i = 0; $i -lt $l.Size; $i++) { $m::WriteByte($cred, $i, 0) }
         $m::WriteInt32($cred, $l.Type, $script:FujiCredLimits.Type)
         $m::WriteIntPtr($cred, $l.TargetName, $name)
+        $m::WriteIntPtr($cred, $l.Comment, $comment)
         $m::WriteInt32($cred, $l.BlobSize, $bytes)
         $m::WriteIntPtr($cred, $l.Blob, $blob)
         $m::WriteInt32($cred, $l.Persist, $script:FujiCredLimits.Persist)
@@ -575,6 +607,7 @@ function Write-FujiCredential {
         if (-not (Get-FujiCredNativeType)::CredWriteW($cred, [uint32]0)) { throw (Get-FujiText 'cred.writeFailed') }
     } finally {
         $m::ZeroFreeGlobalAllocUnicode($blob)
+        $m::FreeHGlobal($comment)
         $m::FreeHGlobal($userPtr)
         $m::FreeHGlobal($name)
         $m::FreeHGlobal($cred)
@@ -2209,6 +2242,8 @@ $script:FujiCommandUnsafe = New-Object -TypeName System.Text.RegularExpressions.
 # A RUN that starts PowerShell also refuses PowerShell's own quote, variable, statement and block characters
 # (PowerShell reads the curly quotes U+2018-U+201E as quotes too), so a value cannot leave its '...' or end the statement
 $script:FujiPowerShellUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["&|<>^%\r\n\x27`$;(){}\u2018-\u201E]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+# A value inserted into a file path a step writes: no "..", no drive or stream ":", no root at the start
+$script:FujiPathUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\.\.|[:\r\n]|^[\\/]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
 $script:FujiPowerShellCommand = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\b(powershell|pwsh)\b', ([System.Text.RegularExpressions.RegexOptions]::CultureInvariant -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
 
 # The characters RUN refuses in inserted values: Command is the RUN text before insertion
@@ -2442,7 +2477,8 @@ function Add-FujiRecordedStep {
 #    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
-#    GetSecret {Target} -> @{ User; Password } or $null   TypeSecret {Text} (never logged)
+#    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
+#    ForegroundWindow {} -> @{ Title; Program } of the window in front
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -3779,7 +3815,12 @@ function Invoke-FujiFieldGet {
 
 function Invoke-FujiTableRead {
     param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
-    $path = (Expand-FujiRunText -Run $Run -Text $Settings['path']).Trim().Trim('"')
+    # Inserted values (CSV, screen) only name a file: they cannot climb out of the folder ("..") or
+    # point to another drive or root, and the file is always a .csv (never fujikyun.ps1 and the like)
+    $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $path = (Expand-FujiPlaceholder -Text $Settings['path'] -Context (Get-FujiRunContext $Run) -Unsafe $unsafe -UnsafePattern $script:FujiPathUnsafe).Trim().Trim('"')
+    if ($unsafe.Count -gt 0) { return (Get-FujiRunError (Get-FujiText 'run.tablePathUnsafe' ($unsafe -join ([string][char]0x3001)))) }
+    if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiRunError (Get-FujiText 'run.tablePathCsv' $path)) }
     if (-not [System.IO.Path]::IsPathRooted($path)) { $path = Join-Path $Run.Directory $path }
     $request = @{ Name = ([string]$Settings['name']).Trim(); Window = $Run.ActiveTitle }
     Write-FujiRunLog $Run (Get-FujiText 'run.tableSearch')
@@ -3815,6 +3856,13 @@ function Invoke-FujiSecret {
     if ($value -eq '') { return (Get-FujiRunError (Get-FujiText 'run.secretEmpty' $target $part)) }
     $err = Confirm-FujiInputTarget -Run $Run
     if ($err) { return $err }
+    # Only into the window it was registered for: a macro (an imported one too) cannot type it into
+    # Notepad and copy it out. "On error" does not catch this stop.
+    if (-not $cred.Window) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
+    $front = & $Run.Io.ForegroundWindow
+    if (-not (Test-FujiSecretPlace -Foreground $front -Program $cred.Program -Window $cred.Window)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretWrongPlace' $target ([string]$front.Title) $cred.Window) -Uncatchable $true)
+    }
     & $Run.Io.TypeSecret $value
     Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)
     return (Get-FujiRunNext)
@@ -4966,12 +5014,13 @@ function Open-FujiFolder {
 
 # ----------------------------------------------------------------- the dialog: register, change, remove
 # Returns the status text for the step dialog
+# DefaultWindow: the window title offered when nothing is registered yet (the macro's target window)
 function Show-FujiCredentialDialog {
-    param([Parameter(Mandatory)][string]$Target)
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$DefaultWindow = '')
     $existing = $null
     try { $existing = Read-FujiCredential -Target $Target } catch { $existing = $null }
     $width = Get-FujiScaled 480
-    $f = New-FujiDialogForm -Title (Get-FujiText 'cred.title' $Target) -Width $width -Height (Get-FujiScaled 330)
+    $f = New-FujiDialogForm -Title (Get-FujiText 'cred.title' $Target) -Width $width -Height (Get-FujiScaled 470)
     $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
     $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -4993,11 +5042,26 @@ function Show-FujiCredentialDialog {
     $again = New-FujiTextBox -Width $inner
     $again.UseSystemPasswordChar = $true
     [void]$layout.Controls.Add($again)
+    # the only window the password may be typed into
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.place') -MaxWidth $inner))
+    $windowText = $DefaultWindow
+    $programText = ''
+    if ($null -ne $existing -and $existing.Window) { $windowText = $existing.Window; $programText = $existing.Program }
+    $window = New-FujiTextBox -Text $windowText -Width $inner
+    [void]$layout.Controls.Add($window)
+    $placeRow = New-FujiFlow -NoWrap
+    $point = New-FujiButton -Text (Get-FujiText 'cred.point') -Tip (Get-FujiText 'cred.pointTip')
+    $point.Add_Click({ Invoke-FujiUi { Start-FujiCredentialPoint } })
+    $program = New-FujiLabel -Text (Get-FujiCredentialProgramText $programText)
+    [void]$placeRow.Controls.Add($point)
+    [void]$placeRow.Controls.Add($program)
+    [void]$layout.Controls.Add($placeRow)
     $err = New-FujiLabel -Text '' -MaxWidth $inner
     $err.ForeColor = Get-FujiColor '#c62828'
     [void]$layout.Controls.Add($err)
     $bar = New-FujiButtonBar
-    $script:Ui.CredDialog = @{ Target = $Target; User = $user; Pass = $pass; Again = $again; Error = $err; Result = '' }
+    $script:Ui.CredDialog = @{ Target = $Target; User = $user; Pass = $pass; Again = $again; Error = $err; Result = ''
+        Window = $window; Program = $programText; ProgramLabel = $program; Timer = $null; Remaining = 0 }
     $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
     $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $save = New-FujiButton -Text (Get-FujiText 'cred.save')
@@ -5016,6 +5080,7 @@ function Show-FujiCredentialDialog {
     [void]$f.Controls.Add($layout)
     [void]$f.Controls.Add($bar)
     $f.Add_Shown({ if ($script:Ui.CredDialog.User.Text) { $script:Ui.CredDialog.Pass.Focus() } else { $script:Ui.CredDialog.User.Focus() } })
+    $f.Add_FormClosed({ if ($script:Ui.CredDialog.Timer) { $script:Ui.CredDialog.Timer.Stop(); $script:Ui.CredDialog.Timer.Dispose() } })
     [void](Show-FujiDialog -Form $f)
     $f.Dispose()
     $result = $script:Ui.CredDialog.Result
@@ -5028,11 +5093,12 @@ function Complete-FujiCredentialDialog {
     $d = $script:Ui.CredDialog
     if ($d.Pass.Text -eq '') { $d.Error.Text = Get-FujiText 'cred.empty'; return }
     if ($d.Pass.Text -cne $d.Again.Text) { $d.Error.Text = Get-FujiText 'cred.mismatch'; return }
+    if ($d.Window.Text.Trim() -eq '') { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
     $secret = New-Object -TypeName System.Security.SecureString
     foreach ($ch in $d.Pass.Text.ToCharArray()) { $secret.AppendChar($ch) }
     $secret.MakeReadOnly()
     try {
-        Write-FujiCredential -Target $d.Target -Account $d.User.Text.Trim() -Secret $secret
+        Write-FujiCredential -Target $d.Target -Account $d.User.Text.Trim() -Secret $secret -Program $d.Program -Window $d.Window.Text.Trim()
     } catch {
         $d.Error.Text = Get-FujiText 'cred.failed' $_.Exception.Message
         return
@@ -5063,6 +5129,43 @@ function Get-FujiCredentialStatus {
     try { $c = Read-FujiCredential -Target $Target } catch { return (Get-FujiText 'cred.failed' $_.Exception.Message) }
     if ($null -eq $c) { return (Get-FujiText 'cred.statusNone') }
     return (Get-FujiText 'cred.statusSet' $c.User)
+}
+
+function Get-FujiCredentialProgramText {
+    param([AllowEmptyString()][string]$Program)
+    if ($Program) { return (Get-FujiText 'cred.program' $Program) }
+    return (Get-FujiText 'cred.programNone')
+}
+
+# "Point at the window": 3 seconds to click the login window, then its title and program are taken
+function Start-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d.Timer) {
+        $d.Timer = New-Object -TypeName System.Windows.Forms.Timer
+        $d.Timer.Interval = 1000
+        $d.Timer.Add_Tick({ Invoke-FujiUi { Step-FujiCredentialPoint } })
+    }
+    $d.Remaining = 3
+    $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining
+    $d.Timer.Start()
+}
+
+function Step-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d) { return }
+    $d.Remaining--
+    if ($d.Remaining -gt 0) { $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining; return }
+    $d.Timer.Stop()
+    $front = Get-FujiForegroundWindowInfo
+    $form = $d.Window.FindForm()
+    if ($null -eq $front -or (Test-FujiSelfForeground)) {
+        $d.ProgramLabel.Text = Get-FujiText 'cred.pointNone'
+    } else {
+        $d.Window.Text = $front.Title
+        $d.Program = $front.Program
+        $d.ProgramLabel.Text = Get-FujiCredentialProgramText $front.Program
+    }
+    [void](Invoke-FujiWindowActivate -Handle $form.Handle)
 }
 
 # ===== gui/Diagnostics.ps1 =====
@@ -6910,6 +7013,7 @@ function New-FujiWinIo {
         SaveText = { param($Path, $Text) Save-FujiRunText -Path $Path -Text $Text }
         GetSecret = { param($Target) Read-FujiCredential -Target $Target }
         TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
+        ForegroundWindow = { Get-FujiForegroundWindowInfo }
     }
 }
 
@@ -6932,6 +7036,35 @@ function Get-FujiTopWindow {
         $list.Add(@{ Handle = $h; Title = $sb.ToString() })
     }
     return , $list.ToArray()
+}
+
+# @{ Title; Program } of the window in front (Program: its process name, e.g. "msedge"), $null if none
+function Get-FujiForegroundWindowInfo {
+    $native = Get-FujiNativeType
+    $h = $native::GetForegroundWindow()
+    if ($h -eq [IntPtr]::Zero) { return $null }
+    $len = $native::GetWindowTextLength($h)
+    $title = ''
+    if ($len -gt 0) {
+        $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($len + 1)
+        [void]$native::GetWindowText($h, $sb, $sb.Capacity)
+        $title = $sb.ToString()
+    }
+    # GetWindowThreadProcessId writes the process id where its second argument points
+    $mem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
+    try {
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($mem, 0)
+        [void]$native::GetWindowThreadProcessId($h, $mem)
+        $processId = [System.Runtime.InteropServices.Marshal]::ReadInt32($mem)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
+    }
+    $program = ''
+    if ($processId -gt 0) {
+        $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        if ($null -ne $p) { $program = [string]$p.ProcessName }
+    }
+    return @{ Title = $title; Program = $program }
 }
 
 function Test-FujiSelfForeground {
@@ -8328,7 +8461,7 @@ function Register-FujiStepCredential {
     $d = $script:StepDlg
     $target = $d.Inputs['target'].Text.Trim()
     if (-not $target) { $d.Status['cred'].Text = Get-FujiText 'cred.statusNoTarget'; return }
-    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target
+    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target -DefaultWindow ([string](Get-FujiCurrentMacro $script:Ed).targetWindow)
 }
 
 function Update-FujiStepCredentialStatus {

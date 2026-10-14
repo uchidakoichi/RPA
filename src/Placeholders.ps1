@@ -16,6 +16,8 @@ $script:FujiCommandUnsafe = New-Object -TypeName System.Text.RegularExpressions.
 # A RUN that starts PowerShell also refuses PowerShell's own quote, variable, statement and block characters
 # (PowerShell reads the curly quotes U+2018-U+201E as quotes too), so a value cannot leave its '...' or end the statement
 $script:FujiPowerShellUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["&|<>^%\r\n\x27`$;(){}\u2018-\u201E]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+# A value inserted into a file path a step writes: no "..", no drive or stream ":", no root at the start
+$script:FujiPathUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\.\.|[:\r\n]|^[\\/]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
 $script:FujiPowerShellCommand = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\b(powershell|pwsh)\b', ([System.Text.RegularExpressions.RegexOptions]::CultureInvariant -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
 
 # The characters RUN refuses in inserted values: Command is the RUN text before insertion

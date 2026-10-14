@@ -313,7 +313,9 @@ function Test-FujiStepSetting {
             if ($Cmd -eq 'FIELD_GET') { return (Get-FujiVarNameError $s['var']) }
         }
         'TABLE_READ' {
-            if (([string]$s['path']).Trim() -eq '') { return (Get-FujiText 'validate.tablePath') }
+            $path = ([string]$s['path']).Trim().Trim('"')
+            if ($path -eq '') { return (Get-FujiText 'validate.tablePath') }
+            if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiText 'validate.tablePathCsv') }
             if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
         }
         'SECRET' { if ($s['target'] -eq '') { return (Get-FujiText 'validate.secretTarget') } }

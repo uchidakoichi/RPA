@@ -19,7 +19,8 @@
 #    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
-#    GetSecret {Target} -> @{ User; Password } or $null   TypeSecret {Text} (never logged)
+#    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
+#    ForegroundWindow {} -> @{ Title; Program } of the window in front
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -1356,7 +1357,12 @@ function Invoke-FujiFieldGet {
 
 function Invoke-FujiTableRead {
     param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
-    $path = (Expand-FujiRunText -Run $Run -Text $Settings['path']).Trim().Trim('"')
+    # Inserted values (CSV, screen) only name a file: they cannot climb out of the folder ("..") or
+    # point to another drive or root, and the file is always a .csv (never fujikyun.ps1 and the like)
+    $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $path = (Expand-FujiPlaceholder -Text $Settings['path'] -Context (Get-FujiRunContext $Run) -Unsafe $unsafe -UnsafePattern $script:FujiPathUnsafe).Trim().Trim('"')
+    if ($unsafe.Count -gt 0) { return (Get-FujiRunError (Get-FujiText 'run.tablePathUnsafe' ($unsafe -join ([string][char]0x3001)))) }
+    if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiRunError (Get-FujiText 'run.tablePathCsv' $path)) }
     if (-not [System.IO.Path]::IsPathRooted($path)) { $path = Join-Path $Run.Directory $path }
     $request = @{ Name = ([string]$Settings['name']).Trim(); Window = $Run.ActiveTitle }
     Write-FujiRunLog $Run (Get-FujiText 'run.tableSearch')
@@ -1392,6 +1398,13 @@ function Invoke-FujiSecret {
     if ($value -eq '') { return (Get-FujiRunError (Get-FujiText 'run.secretEmpty' $target $part)) }
     $err = Confirm-FujiInputTarget -Run $Run
     if ($err) { return $err }
+    # Only into the window it was registered for: a macro (an imported one too) cannot type it into
+    # Notepad and copy it out. "On error" does not catch this stop.
+    if (-not $cred.Window) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
+    $front = & $Run.Io.ForegroundWindow
+    if (-not (Test-FujiSecretPlace -Foreground $front -Program $cred.Program -Window $cred.Window)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretWrongPlace' $target ([string]$front.Title) $cred.Window) -Uncatchable $true)
+    }
     & $Run.Io.TypeSecret $value
     Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)
     return (Get-FujiRunNext)
