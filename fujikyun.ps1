@@ -2862,6 +2862,7 @@ function Invoke-FujiRunCommand {
     if ($cmd -eq 'RUN' -and -not [object]::ReferenceEquals($unsafePattern, $script:FujiPowerShellUnsafe) -and $script:FujiPowerShellCommand.IsMatch($val)) {
         # PowerShell named by an inserted value (e.g. {{1}} -Command ...): check the values again as for PowerShell
         $unsafe.Clear()
+        $unsafePattern = $script:FujiPowerShellUnsafe
         $val = Expand-FujiRunText -Run $Run -Text ([string]$Step.val) -Unsafe $unsafe -UnsafePattern $script:FujiPowerShellUnsafe
     }
     $p = ConvertFrom-FujiStepValue -Cmd $cmd -Value ([string]$Step.val)
@@ -2925,7 +2926,9 @@ function Invoke-FujiRunCommand {
         }
         'RUN' {
             if ($unsafe.Count -gt 0) {
-                $why = Get-FujiText 'run.runUnsafe' ($unsafe -join ([string][char]0x3001))
+                $whyKey = 'run.runUnsafe'
+                if ([object]::ReferenceEquals($unsafePattern, $script:FujiPowerShellUnsafe)) { $whyKey = 'run.runUnsafePs' }
+                $why = Get-FujiText $whyKey ($unsafe -join ([string][char]0x3001))
                 Write-FujiRunLog $Run ([string][char]0x26A0 + ' ' + $why) 'error'
                 Add-FujiErrorRow -Run $Run -Reason $why
                 Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultSkip') -Note $why
