@@ -114,6 +114,8 @@ function Show-FujiDiagnostic {
     $close = New-FujiButton -Text (Get-FujiText 'gui.close')
     $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($close)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'setup' -Anchor (Get-FujiText 'gui.docAnchors.trouble') -TextKey 'gui.docTrouble'))
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.diagnostics')))
     $f.CancelButton = $close
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($hint)

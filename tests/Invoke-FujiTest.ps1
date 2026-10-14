@@ -202,7 +202,7 @@ foreach ($t in $golden.templateLabels) {
     $ps = Get-Golden $t 'ps'
     if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
 }
-Assert-Equal 162 $templates['templates'].Count 'template count'
+Assert-Equal 272 $templates['templates'].Count 'template count'
 $cats = $templates['categories']
 foreach ($t in $templates['templates']) { Assert-True ($cats.Contains($t['category'])) ('{0}: category is listed' -f $t['id']) }
 $tplHits = { param($q) $ids = New-Object -TypeName 'System.Collections.Generic.List[string]'; foreach ($t in $templates['templates']) { if (Test-FujiTemplateMatch -Template $t -Query $q) { $ids.Add($t['id']) } }; , $ids.ToArray() }
@@ -1039,6 +1039,63 @@ try {
 $rec = ConvertFrom-FujiRecording -Payload ("F`tNo`t10`t20`nW`t1500`nT`t123`nF`tName`t5`t6`nK`t{TAB}")
 Assert-Equal 'WAIT FIELD_SET CLICK_POS KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: the pause, the field, a field click without typing stays a click'
 Assert-Equal '{"name":"No","text":"123","nth":"1","how":"AUTO"}' $rec[1].val 'recording: typed text goes into the field by name'
+
+# the window's look on this PC: text size, place, size, pane split
+$ui = [ordered]@{ ui = [ordered]@{} }
+Assert-Equal 1.0 (Get-FujiZoom -Settings $ui) 'zoom: standard when not set'
+Set-FujiUiSetting -Settings $ui -Key 'zoom' -Value '1.3'
+Assert-Equal 1.3 (Get-FujiZoom -Settings $ui) 'zoom: a chosen size'
+Set-FujiUiSetting -Settings $ui -Key 'zoom' -Value '9'
+Assert-Equal 2.0 (Get-FujiZoom -Settings $ui) 'zoom: a hand-edited value snaps to the nearest offered size'
+Set-FujiUiSetting -Settings $ui -Key 'zoom' -Value 'big'
+Assert-Equal 1.0 (Get-FujiZoom -Settings $ui) 'zoom: not a number'
+Set-FujiUiSetting -Settings $ui -Key 'window' -Value (ConvertTo-FujiWindowPlacementText -X -1600 -Y 20 -Width 1200 -Height 800 -Maximized $true)
+Set-FujiUiSetting -Settings $ui -Key 'split' -Value '0.400'
+$wp = Get-FujiWindowPlacement -Settings $ui
+Assert-True ($wp.X -eq -1600 -and $wp.Width -eq 1200 -and $wp.Maximized -and $wp.Split -eq 0.4) 'window placement read back'
+$screensNow = @(@{ X = 0; Y = 0; Width = 1920; Height = 1040 })
+Assert-True (-not (Test-FujiWindowPlacementVisible -Placement $wp -Screens $screensNow)) 'window placement: on a monitor that is gone'
+Assert-True (Test-FujiWindowPlacementVisible -Placement $wp -Screens @(@{ X = -1920; Y = 0; Width = 1920; Height = 1040 }, $screensNow[0])) 'window placement: on the left monitor'
+Assert-True (Test-FujiWindowPlacementVisible -Placement @{ X = 1800; Y = 100; Width = 900; Height = 600 } -Screens $screensNow) 'window placement: partly off the screen but its top edge can be grabbed'
+Set-FujiUiSetting -Settings $ui -Key 'split' -Value '0.99'
+Assert-Equal 0.0 (Get-FujiWindowPlacement -Settings $ui).Split 'window placement: an odd split is not used'
+Set-FujiUiSetting -Settings $ui -Key 'window' -Value '10,10,50,50'
+Assert-True ($null -eq (Get-FujiWindowPlacement -Settings $ui)) 'window placement: too small to use'
+$udir = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_ui_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $udir)
+try {
+    $set = Read-FujiSetting -Directory $udir
+    Set-FujiUiSetting -Settings $set -Key 'zoom' -Value '1.5'
+    Save-FujiSetting -Directory $udir -Settings $set
+    Assert-Equal 1.5 (Get-FujiZoom -Settings (Read-FujiSetting -Directory $udir)) 'zoom kept in the settings file'
+} finally {
+    Remove-Item -LiteralPath $udir -Recurse -Force
+}
+
+# manuals opened from the window: every place the app points to exists in the built pages
+$docIds = @{}
+foreach ($pg in $script:FujiDocPages) {
+    $html = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
+    $docIds[$pg] = @{}
+    foreach ($m in [regex]::Matches($html, 'id="([^"]+)"')) { $docIds[$pg][[System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)] = $true }
+}
+$badDoc = New-Object -TypeName 'System.Collections.Generic.List[string]'
+foreach ($c in Get-FujiCommandName) { $a = Get-FujiCommandDocAnchor -Cmd $c; if (-not $docIds['manual'].ContainsKey($a)) { $badDoc.Add($c + ' -> ' + $a) } }
+Assert-True ($badDoc.Count -eq 0) ('every command explained at a place in manual.html: ' + ($badDoc -join ', '))
+Assert-True ($docIds['manual'].ContainsKey((Get-FujiText 'gui.docCommandAnchor'))) 'the command list anchor exists'
+foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'))) {
+    Assert-True ($docIds[$pair[0]].ContainsKey((Get-FujiText ('gui.docAnchors.' + $pair[1])))) ('dialog help anchor exists: ' + $pair[1])
+}
+$missingTpl = @(foreach ($t in $templates['templates']) { if (-not $docIds['templates'].ContainsKey([string]$t['id'])) { $t['id'] } })
+Assert-Equal 0 $missingTpl.Count ('every template has its anchor in templates.html: ' + ($missingTpl -join ', '))
+$docRoot = Join-Path 'R' 'app'
+$found = Find-FujiDocFile -Directory $docRoot -Page 'manual' -FileExists { param($p) $p -eq (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') }
+Assert-Equal (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') $found 'manual found in the extracted zip folder'
+Assert-Equal '' (Find-FujiDocFile -Directory $docRoot -Page 'manual' -FileExists { param($p) $null = $p; $false }) 'no manual here'
+Assert-Equal '' (Find-FujiDocFile -Directory $docRoot -Page '..\x' -FileExists { param($p) $null = $p; $true }) 'only the known pages'
+$docUrl = ConvertTo-FujiDocUrl -Path ([System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'manual.html')) -Anchor ([string][char]0x8868 + 'a b')
+Assert-True ($docUrl.StartsWith('file:///') -and $docUrl.EndsWith('#%E8%A1%A8a%20b')) 'manual address with its place'
+Assert-True ((New-FujiDocForwardHtml -Url 'file:///a"><b>').Contains('url=file:///a&quot;&gt;&lt;b&gt;"')) 'forwarding page keeps the address one attribute'
 
 # ----------------------------------------------------------------- Windows API declarations (built, not called here)
 $native = Get-FujiNativeType

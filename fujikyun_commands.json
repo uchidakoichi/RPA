@@ -15,7 +15,8 @@
           "type": "keypreset",
           "placeholder": "{TAB}"
         }
-      ]
+      ],
+      "doc": "8-キーの書き方sendkeys"
     },
     "TEXT": {
       "title": "文字列貼付",
@@ -32,7 +33,8 @@
           "placeholders": true,
           "raw": true
         }
-      ]
+      ],
+      "doc": "入力"
     },
     "CSV": {
       "title": "CSV列を貼付",
@@ -48,7 +50,8 @@
           "type": "csvcol",
           "placeholder": "1"
         }
-      ]
+      ],
+      "doc": "入力"
     },
     "COPY": {
       "title": "コピーして変数へ",
@@ -65,7 +68,8 @@
           "placeholder": "例: 伝票番号"
         }
       ],
-      "definesVar": "name"
+      "definesVar": "name",
+      "doc": "入力"
     },
     "FIELD_SET": {
       "title": "欄に入力（名前で）",
@@ -121,7 +125,8 @@
         "nth": "1",
         "how": "AUTO"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "欄に入力欄の値を読む名前でのコツ"
     },
     "SECRET": {
       "title": "パスワードを入力",
@@ -162,7 +167,8 @@
         "target": "",
         "part": "PASSWORD"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "パスワードの扱いsecret"
     },
     "WAIT": {
       "title": "待機",
@@ -178,7 +184,8 @@
           "type": "text",
           "placeholder": "1000"
         }
-      ]
+      ],
+      "doc": "待つ確かめる"
     },
     "WAIT_FOR": {
       "title": "ウィンドウ出現待ち",
@@ -213,7 +220,8 @@
         "key": "",
         "timeout": "30"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "待つ確かめる"
     },
     "WINDOW_CHECK": {
       "title": "ウィンドウ検知（異常時）",
@@ -261,7 +269,8 @@
         "key": "",
         "mode": "STOP"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "待つ確かめる"
     },
     "CONFIRM": {
       "title": "確認ポイント（人が確認）",
@@ -278,7 +287,8 @@
           "placeholders": true,
           "raw": true
         }
-      ]
+      ],
+      "doc": "待つ確かめる"
     },
     "CLICK_NAME": {
       "title": "名前でクリック",
@@ -299,7 +309,8 @@
           "label": "ボタンをマウスで指して決める",
           "type": "uiapick"
         }
-      ]
+      ],
+      "doc": "click_name-のコツ"
     },
     "CLICK_POS": {
       "title": "座標でクリック",
@@ -351,7 +362,8 @@
         "y": "0",
         "kind": "LEFT"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "click_pos-のコツ"
     },
     "CLICK_IMG": {
       "title": "画像でクリック",
@@ -380,7 +392,8 @@
         "path": "",
         "threshold": "0.9"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "click_img-のコツ"
     },
     "CLICK_TEXT": {
       "title": "文字でクリック（OCR）",
@@ -457,7 +470,8 @@
         "h": "",
         "nth": "1"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "click_textread_text-のコツ文字認識"
     },
     "READ_TEXT": {
       "title": "文字を読み取る（OCR）",
@@ -531,7 +545,8 @@
         "name": ""
       },
       "definesVar": "name",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "click_textread_text-のコツ文字認識"
     },
     "FIELD_GET": {
       "title": "欄の値を読む（名前で）",
@@ -571,7 +586,8 @@
         "var": ""
       },
       "definesVar": "var",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "欄に入力欄の値を読む名前でのコツ"
     },
     "TABLE_READ": {
       "title": "表を読み取ってCSVに保存",
@@ -612,7 +628,8 @@
         "var": ""
       },
       "definesVar": "var",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "表を読み取るtable_readのコツ"
     },
     "SWITCH": {
       "title": "ウィンドウ切替",
@@ -629,7 +646,8 @@
           "placeholder": "例: メモ帳",
           "placeholders": true
         }
-      ]
+      ],
+      "doc": "9-ウィンドウ名の合わせ方"
     },
     "RUN": {
       "title": "アプリ起動",
@@ -646,7 +664,8 @@
           "placeholder": "notepad.exe",
           "placeholders": true
         }
-      ]
+      ],
+      "doc": "アプリ画面"
     },
     "SCREENSHOT": {
       "title": "画面を撮影して保存",
@@ -683,7 +702,8 @@
         "name": "",
         "scope": "WINDOW"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "アプリ画面"
     },
     "MAIL": {
       "title": "メールを作る・送る",
@@ -770,7 +790,8 @@
         "body": "",
         "attach": ""
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "11-メール"
     },
     "LOOP_START": {
       "title": "繰り返し",
@@ -905,7 +926,8 @@
         "max": "1000"
       },
       "definesVar": "counter",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "繰り返しloop_start"
     },
     "LOOP_END": {
       "title": "繰り返しここまで",
@@ -914,7 +936,8 @@
       "format": "none",
       "help": "繰り返しの終わりの目印だよ。ここまで来ると「繰り返し」の先頭に戻るキュン。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "繰り返しloop_start"
     },
     "BREAK": {
       "title": "繰り返しを抜ける",
@@ -923,7 +946,8 @@
       "format": "none",
       "help": "いちばん内側の繰り返しを途中で終わらせて、「繰り返しここまで」の次へ進むキュン（break）。「もし〜なら」と組み合わせて使ってね。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "繰り返しloop_start"
     },
     "CONTINUE": {
       "title": "次の繰り返しへ",
@@ -932,7 +956,8 @@
       "format": "none",
       "help": "残りのコマンドを飛ばして、次の回の繰り返しに進むキュン（continue）。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "繰り返しloop_start"
     },
     "IF_START": {
       "title": "もし〜なら",
@@ -1029,7 +1054,8 @@
         "op": "EQ",
         "right": ""
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "もしならif_start"
     },
     "ELSE": {
       "title": "そうでなければ",
@@ -1038,7 +1064,8 @@
       "format": "none",
       "help": "「もし〜なら」の条件が合わなかったときに、ここから下を実行するキュン（else）。「もし〜なら」の中に1つだけ置けるよ。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "もしならif_start"
     },
     "IF_END": {
       "title": "もし〜ならここまで",
@@ -1047,7 +1074,8 @@
       "format": "none",
       "help": "「もし〜なら」の終わりの目印だよ。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "もしならif_start"
     },
     "TRY_START": {
       "title": "エラー時の処理",
@@ -1064,7 +1092,8 @@
           "placeholder": "例: 登録でエラーが出たら記録して次へ"
         }
       ],
-      "hideVal": true
+      "hideVal": true,
+      "doc": "エラー時の処理try_start"
     },
     "CATCH": {
       "title": "エラーのとき",
@@ -1073,7 +1102,8 @@
       "format": "none",
       "help": "「エラー時の処理」の中でエラーが起きたら、ここから下を実行するキュン。エラーの内容は {{$エラー内容}} だよ。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "エラー時の処理try_start"
     },
     "TRY_END": {
       "title": "エラー時の処理ここまで",
@@ -1082,7 +1112,8 @@
       "format": "none",
       "help": "「エラー時の処理」の終わりの目印だよ。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "エラー時の処理try_start"
     },
     "RETRY_START": {
       "title": "うまくいくまでやり直す",
@@ -1109,7 +1140,8 @@
         "times": "3",
         "wait": "2000"
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "うまくいくまでやり直すretry_start"
     },
     "RETRY_END": {
       "title": "やり直しここまで",
@@ -1118,7 +1150,8 @@
       "format": "none",
       "help": "「うまくいくまでやり直す」の終わりの目印だよ。ここまでエラーなしで来たら成功だキュン。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "うまくいくまでやり直すretry_start"
     },
     "CALL_MACRO": {
       "title": "マクロを呼び出す",
@@ -1138,7 +1171,8 @@
         "id": "",
         "name": ""
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "12-マクロの呼び出し部品化"
     },
     "RETURN": {
       "title": "呼び出し元に戻る",
@@ -1147,7 +1181,8 @@
       "format": "none",
       "help": "呼び出されたマクロの途中で、呼び出し元に戻るキュン（return）。いちばん外側のマクロで使うと、この行の残りを飛ばして次の行に進むよ。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "12-マクロの呼び出し部品化"
     },
     "SET_VAR": {
       "title": "変数に値を入れる",
@@ -1192,7 +1227,8 @@
         "mode": "TEXT"
       },
       "definesVar": "name",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "変数"
     },
     "STR_OP": {
       "title": "文字を加工する",
@@ -1299,7 +1335,8 @@
         "b": ""
       },
       "definesVar": "name",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "文字を加工するstr_op"
     },
     "ASK": {
       "title": "値を入力してもらう",
@@ -1335,7 +1372,8 @@
         "defaultValue": ""
       },
       "definesVar": "name",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "askrecordexcel"
     },
     "RECORD": {
       "title": "結果に記録する",
@@ -1363,7 +1401,8 @@
         "name": "",
         "value": ""
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "askrecordexcel"
     },
     "EXCEL_READ": {
       "title": "Excelのセルを読む",
@@ -1408,7 +1447,8 @@
         "name": ""
       },
       "definesVar": "name",
-      "hideVal": true
+      "hideVal": true,
+      "doc": "askrecordexcel"
     },
     "EXCEL_WRITE": {
       "title": "Excelのセルに書く",
@@ -1453,7 +1493,8 @@
         "cell": "A1",
         "value": ""
       },
-      "hideVal": true
+      "hideVal": true,
+      "doc": "askrecordexcel"
     },
     "GROUP_START": {
       "title": "グループ",
@@ -1489,7 +1530,8 @@
           ],
           "prop": true
         }
-      ]
+      ],
+      "doc": "グループの実行タイミング"
     },
     "GROUP_END": {
       "title": "グループ終了",
@@ -1498,7 +1540,8 @@
       "format": "none",
       "help": "グループの終わりの目印だよ。設定する項目はないキュン。",
       "defaultVal": "",
-      "fields": []
+      "fields": [],
+      "doc": "グループの実行タイミング"
     },
     "COMMENT": {
       "title": "コメント",
@@ -1514,7 +1557,8 @@
           "type": "textarea",
           "raw": true
         }
-      ]
+      ],
+      "doc": "整理"
     }
   },
   "palette": [

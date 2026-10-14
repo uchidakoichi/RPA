@@ -61,6 +61,7 @@ function Show-FujiCredentialDialog {
     # RightToLeft bar: the last added is leftmost
     [void]$bar.Controls.Add($cancel)
     [void]$bar.Controls.Add($save)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.secret')))
     if ($null -ne $existing) {
         $remove = New-FujiButton -Text (Get-FujiText 'cred.remove')
         $remove.Add_Click({ Invoke-FujiUi { Remove-FujiCredentialFromDialog } })

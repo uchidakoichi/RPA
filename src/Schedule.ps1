@@ -14,7 +14,7 @@ $script:FujiScheduleKinds = @('TIME', 'HOTKEY', 'FILE', 'WINDOW')
 
 function Read-FujiSetting {
     param([Parameter(Mandatory)][string]$Directory)
-    $settings = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+    $settings = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]'); ui = [ordered]@{} }
     $path = Join-Path $Directory $script:FujiSettingsFile
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $settings }
     try {
@@ -22,6 +22,10 @@ function Read-FujiSetting {
     } catch {
         # a broken settings file only means no schedules
         return $settings
+    }
+    # the window's look on this PC: text size, window place and size, where the panes are split
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('ui') -and $s['ui'] -is [System.Collections.IDictionary]) {
+        foreach ($k in $s['ui'].Keys) { $settings.ui[[string]$k] = $s['ui'][$k] }
     }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
@@ -247,4 +251,64 @@ function Get-FujiScheduleWhenText {
     $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $Schedule 'repeat'))
     if (Get-FujiScheduleValue $Schedule 'date') { $repeat += ' ' + $Schedule.date }
     return ([string](Get-FujiScheduleValue $Schedule 'time') + ' ' + $repeat)
+}
+
+# ----------------------------------------------------------------- the window's look on this PC
+# Text size: how much larger than standard everything is drawn (text and the room around it)
+$script:FujiZoomLevels = @(0.9, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0)
+
+function Get-FujiZoom {
+    param([System.Collections.IDictionary]$Settings)
+    $text = ''
+    if ($null -ne $Settings -and $Settings.Contains('ui') -and $Settings['ui'].Contains('zoom')) { $text = [string]$Settings['ui']['zoom'] }
+    $z = 0.0
+    if (-not [double]::TryParse($text, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$z)) { return 1.0 }
+    # the nearest of the offered sizes (a hand-edited file cannot make the window unusable)
+    $best = 1.0
+    foreach ($l in $script:FujiZoomLevels) { if ([Math]::Abs($l - $z) -lt [Math]::Abs($best - $z)) { $best = $l } }
+    return $best
+}
+
+function Set-FujiUiSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [Parameter(Mandatory)][string]$Key, $Value)
+    if (-not $Settings.Contains('ui') -or $Settings['ui'] -isnot [System.Collections.IDictionary]) { $Settings['ui'] = [ordered]@{} }
+    $Settings['ui'][$Key] = $Value
+}
+
+# The saved place of the main window: @{ X; Y; Width; Height; Maximized; Split } or $null.
+# Split: the left pane's share of the window width (0.15 - 0.85).
+function Get-FujiWindowPlacement {
+    param([System.Collections.IDictionary]$Settings)
+    if ($null -eq $Settings -or -not $Settings.Contains('ui') -or -not $Settings['ui'].Contains('window')) { return $null }
+    $w = [string]$Settings['ui']['window']
+    $m = [regex]::Match($w, '^(-?[0-9]+),(-?[0-9]+),([0-9]+),([0-9]+)(,max)?$')
+    if (-not $m.Success) { return $null }
+    $p = @{ X = [int]$m.Groups[1].Value; Y = [int]$m.Groups[2].Value; Width = [int]$m.Groups[3].Value; Height = [int]$m.Groups[4].Value; Maximized = $m.Groups[5].Success; Split = 0.0 }
+    if ($p.Width -lt 200 -or $p.Height -lt 150) { return $null }
+    $split = 0.0
+    if ($Settings['ui'].Contains('split') -and [double]::TryParse([string]$Settings['ui']['split'], [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$split)) {
+        if ($split -ge 0.15 -and $split -le 0.85) { $p.Split = $split }
+    }
+    return $p
+}
+
+function ConvertTo-FujiWindowPlacementText {
+    param([int]$X, [int]$Y, [int]$Width, [int]$Height, [bool]$Maximized)
+    $t = '{0},{1},{2},{3}' -f $X, $Y, $Width, $Height
+    if ($Maximized) { $t += ',max' }
+    return $t
+}
+
+# The window comes back where it was only if its top edge (where it is dragged) is on a screen
+# that is still there: at least 120 x 40 pixels of it inside a screen's working area.
+# Screens: @(@{ X; Y; Width; Height }, ...)
+function Test-FujiWindowPlacementVisible {
+    param([Parameter(Mandatory)][hashtable]$Placement, [AllowEmptyCollection()][object[]]$Screens)
+    $top = @{ X = $Placement.X; Y = $Placement.Y; Width = $Placement.Width; Height = [Math]::Min(40, $Placement.Height) }
+    foreach ($s in $Screens) {
+        $w = [Math]::Min($top.X + $top.Width, $s.X + $s.Width) - [Math]::Max($top.X, $s.X)
+        $h = [Math]::Min($top.Y + $top.Height, $s.Y + $s.Height) - [Math]::Max($top.Y, $s.Y)
+        if ($w -ge [Math]::Min(120, $top.Width) -and $h -ge [Math]::Min(40, $top.Height)) { return $true }
+    }
+    return $false
 }

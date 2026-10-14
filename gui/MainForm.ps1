@@ -20,8 +20,10 @@ function Show-FujiMainForm {
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
     $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
     $form.Size = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min((Get-FujiScaled 1280), $area.Width)), ([Math]::Min((Get-FujiScaled 900), $area.Height))
-    $form.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 640), (Get-FujiScaled 480)
+    # large text on a small screen: the smallest size still fits the screen
+    $form.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min((Get-FujiScaled 640), $area.Width)), ([Math]::Min((Get-FujiScaled 480), $area.Height))
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    Restore-FujiWindowPlacement -Form $form
     $form.KeyPreview = $true
     $form.BackColor = Get-FujiColor '#fdf7fb'
     $script:Ui.Form = $form
@@ -40,6 +42,7 @@ function Show-FujiMainForm {
     $split.Dock = [System.Windows.Forms.DockStyle]::Fill
     $split.FixedPanel = [System.Windows.Forms.FixedPanel]::Panel1
     $split.SplitterDistance = [int]($form.ClientSize.Width * 0.5)
+    $script:Ui.Split = $split
     $split.Panel1MinSize = Get-FujiScaled 280
     $split.Panel2MinSize = Get-FujiScaled 280
     # the splitter shows the container's colour: a visible bar to drag, the panels keep the window's
@@ -62,9 +65,16 @@ function Show-FujiMainForm {
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
 
     $form.Add_KeyDown({ $e = $_; Invoke-FujiUi { Invoke-FujiShortcut -KeyEvent $e } })
-    $form.Add_FormClosing({ $e = $_; Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e } })
+    $form.Add_FormClosing({
+            $e = $_
+            Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e }
+            # a restart for the new text size waits for the next close if this one was called off
+            if ($e.Cancel) { $script:RestartAfterClose = $false }
+        })
+    $form.Add_FormClosed({ Invoke-FujiUi { Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
+                Restore-FujiSplitPlacement
                 foreach ($entry in $script:LogBuffer) { Add-FujiLogLine -Box $script:Ui.Log -Line $entry[0] -Level $entry[1] }
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
@@ -78,6 +88,93 @@ function Show-FujiMainForm {
     Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
+}
+
+# ----------------------------------------------------------------- the window's place, size and text size (this PC)
+$script:RestartAfterClose = $false
+
+function Restore-FujiWindowPlacement {
+    param([Parameter(Mandatory)][System.Windows.Forms.Form]$Form)
+    $p = Get-FujiWindowPlacement -Settings $script:Settings
+    if ($null -eq $p) { return }
+    $screens = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($sc in [System.Windows.Forms.Screen]::AllScreens) {
+        $w = $sc.WorkingArea
+        $screens.Add(@{ X = $w.X; Y = $w.Y; Width = $w.Width; Height = $w.Height })
+    }
+    # a monitor taken away since: the window opens in the middle of the screen as usual
+    if (-not (Test-FujiWindowPlacementVisible -Placement $p -Screens $screens.ToArray())) { return }
+    $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $Form.Location = New-Object -TypeName System.Drawing.Point -ArgumentList $p.X, $p.Y
+    $Form.Size = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Max($Form.MinimumSize.Width, $p.Width)), ([Math]::Max($Form.MinimumSize.Height, $p.Height))
+    if ($p.Maximized) { $Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized }
+}
+
+# The pane split is kept as a share of the width: it fits again after a size or text-size change
+function Restore-FujiSplitPlacement {
+    $p = Get-FujiWindowPlacement -Settings $script:Settings
+    $split = $script:Ui.Split
+    if ($null -eq $p -or $p.Split -le 0 -or $null -eq $split) { return }
+    $max = $split.Width - $split.Panel2MinSize - $split.SplitterWidth
+    $d = [int]($split.Width * $p.Split)
+    if ($max -gt $split.Panel1MinSize) { $split.SplitterDistance = [Math]::Max($split.Panel1MinSize, [Math]::Min($max, $d)) }
+}
+
+function Save-FujiWindowPlacement {
+    $f = $script:Ui.Form
+    if ($null -eq $f -or $null -eq $script:Settings) { return }
+    # a maximized or minimized window: the place it goes back to
+    $b = $f.Bounds
+    if ($f.WindowState -ne [System.Windows.Forms.FormWindowState]::Normal) { $b = $f.RestoreBounds }
+    $max = $f.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized
+    Set-FujiUiSetting -Settings $script:Settings -Key 'window' -Value (ConvertTo-FujiWindowPlacementText -X $b.X -Y $b.Y -Width $b.Width -Height $b.Height -Maximized $max)
+    $split = $script:Ui.Split
+    if ($null -ne $split -and $split.Width -gt 0) {
+        Set-FujiUiSetting -Settings $script:Settings -Key 'split' -Value (([double]$split.SplitterDistance / $split.Width).ToString('0.000', [System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    try { Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings } catch { $null = $_ }
+}
+
+function New-FujiZoomCombo {
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($z in $script:FujiZoomLevels) {
+        $key = 'gui.zoomLevel'
+        if ($z -eq 1.0) { $key = 'gui.zoomStandard' }
+        $labels.Add((Get-FujiText $key ([int][Math]::Round($z * 100))))
+        $values.Add($z.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    $c = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 170)
+    $c.SelectedIndex = [Array]::IndexOf([object[]]$c.Tag, [object]$script:Ui.Zoom.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+    $script:Ui.ToolTip.SetToolTip($c, (Get-FujiText 'gui.zoomTip'))
+    $c.Add_SelectedIndexChanged({ Invoke-FujiUi { Set-FujiZoomUi } })
+    $script:Ui.ZoomCombo = $c
+    return $c
+}
+
+# A new text size is kept for this PC and used from the next start (the window is built at that size)
+function Set-FujiZoomUi {
+    $c = $script:Ui.ZoomCombo
+    if ($c.SelectedIndex -lt 0) { return }
+    $value = [string]([object[]]$c.Tag)[$c.SelectedIndex]
+    $current = $script:Ui.Zoom.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    Set-FujiUiSetting -Settings $script:Settings -Key 'zoom' -Value $value
+    try { Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings } catch { Write-FujiUiLog -Message (Get-FujiText 'editor.saveFailed' $_.Exception.Message) -Level 'error'; return }
+    if ($value -eq $current) { return }
+    Write-FujiUiLog -Message (Get-FujiText 'gui.zoomSaved' ([int][Math]::Round([double]::Parse($value, [System.Globalization.CultureInfo]::InvariantCulture) * 100))) -Level 'ok'
+    if ($script:RunCtl.Running -or $null -ne $script:Rec) { return }
+    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.zoomTitle') -Message (Get-FujiText 'gui.zoomRestart') -Buttons @((Get-FujiText 'gui.zoomRestartNow'), (Get-FujiText 'gui.zoomLater'))
+    if ($answer -ne 0) { return }
+    $script:RestartAfterClose = $true
+    # the usual close: unsaved changes are asked about first
+    $script:Ui.Form.Close()
+}
+
+# The same start as fujikyun.bat
+function Start-FujiAppAgain {
+    $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $script:AppScriptPath
+    Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $script:Ed.Directory
 }
 
 # How long the start took: from the PowerShell process start (includes reading this script),
@@ -120,7 +217,8 @@ function New-FujiTopPanel {
     $script:Ui.ScheduleState = $next
     $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
     $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
-    foreach ($c in @($save, $state, $sched, $diag, $next)) { [void]$row.Controls.Add($c) }
+    $zoomLabel = New-FujiLabel -Text (Get-FujiText 'gui.zoom')
+    foreach ($c in @($save, $state, $sched, $diag, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -850,7 +948,7 @@ function Show-FujiTemplateGallery {
         $values.Add([string]$c)
     }
     $combo = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 300)
-    $combo.MaxDropDownItems = 25
+    $combo.MaxDropDownItems = 40
     [void]$topRow.Controls.Add($combo)
     $hits = New-FujiLabel -Text ''
     $hits.ForeColor = Get-FujiColor '#6b5aa6'
@@ -879,6 +977,10 @@ function Show-FujiTemplateGallery {
     $create.DialogResult = [System.Windows.Forms.DialogResult]::OK
     [void]$bar.Controls.Add($close)
     [void]$bar.Controls.Add($create)
+    # the chosen template's page in the templates manual (each template has its id as an anchor)
+    $read = New-FujiButton -Text (Get-FujiText 'gui.docTemplate') -Tip (Get-FujiText 'gui.docTemplateTip')
+    $read.Add_Click({ Invoke-FujiUi { Open-FujiTemplateDoc } })
+    [void]$bar.Controls.Add($read)
     $f.AcceptButton = $create
     $f.CancelButton = $close
     [void]$f.Controls.Add($split)
@@ -909,6 +1011,15 @@ function Show-FujiTemplateGallery {
     $f.Dispose()
     $script:Ui.Gallery = $null
     return $chosen
+}
+
+function Open-FujiTemplateDoc {
+    $g = $script:Ui.Gallery
+    if ($null -eq $g -or $g.List.SelectedIndex -lt 0 -or $g.List.SelectedIndex -ge $g.Shown.Count) {
+        Open-FujiDoc -Page 'templates'
+        return
+    }
+    Open-FujiDoc -Page 'templates' -Anchor ([string]$g.Shown[$g.List.SelectedIndex]['id'])
 }
 
 function Update-FujiTemplateList {
@@ -1127,7 +1238,8 @@ function Invoke-FujiShortcut {
     }
     # function keys work even while a text box has the focus (they type nothing)
     $fkey = $true
-    if ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
+    if ($k -eq $keys::F1) { Open-FujiContextDoc }
+    elseif ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
     elseif ($k -eq $keys::F6) { [void](Start-FujiRunUi -Partial 'from') }
     elseif ($k -eq $keys::F9) { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } }
     elseif ($k -eq $keys::F10) { [void](Start-FujiRunUi -Stepping) }
