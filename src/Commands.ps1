@@ -110,12 +110,26 @@ function Get-FujiOcrAreaText {
 
 function Get-FujiFileName { param([AllowEmptyString()][string]$Path) return ($Path -replace '^.*[\\/]', '') }
 
+# " (2nd)" after a field's label when the step uses a later field of the same name
+function Get-FujiNthText {
+    param([AllowEmptyString()][string]$Nth)
+    $n = Get-FujiInt -Text $Nth -Default 1
+    if ($n -le 1) { return '' }
+    return (Get-FujiLabelText 'nth' @{ nth = $n })
+}
+
 # ----------------------------------------------------------------- value <-> settings
+# A field that is only a button in the step dialog (pick a point, an area, a part; register a password)
+function Test-FujiButtonField {
+    param([System.Collections.IDictionary]$Field)
+    return ([string]$Field['type'] -in @('capture', 'rectcapture', 'uiapick', 'credential'))
+}
+
 function Get-FujiValueFieldId {
     param([System.Collections.IDictionary]$Def)
     $ids = @()
     foreach ($f in $Def['fields']) {
-        if (-not $f.Contains('prop') -and $f['type'] -ne 'capture' -and $f['type'] -ne 'rectcapture') { $ids += [string]$f['id'] }
+        if (-not $f.Contains('prop') -and -not (Test-FujiButtonField $f)) { $ids += [string]$f['id'] }
     }
     return , $ids
 }
@@ -141,6 +155,8 @@ function ConvertFrom-FujiStepValue {
         'WINDOW_CHECK' { $settings['mode'] = Get-FujiCheckMode $settings['mode'] }
         'CLICK_POS' { if ($settings['kind'] -ne 'DOUBLE' -and $settings['kind'] -ne 'RIGHT') { $settings['kind'] = 'LEFT' } }
         'SCREENSHOT' { if ($settings['scope'] -ne 'FULL') { $settings['scope'] = 'WINDOW' } }
+        'FIELD_SET' { if ($settings['how'] -ne 'PASTE') { $settings['how'] = 'AUTO' } }
+        'SECRET' { if ($settings['part'] -ne 'USER') { $settings['part'] = 'PASSWORD' } }
     }
     return $settings
 }
@@ -179,6 +195,13 @@ function ConvertTo-FujiStepValue {
         'CLICK_IMG' { $v['threshold'] = (Get-FujiThreshold $v['threshold']).ToString('R', [System.Globalization.CultureInfo]::InvariantCulture) }
         'SCREENSHOT' { if ($v['scope'] -ne 'FULL') { $v['scope'] = 'WINDOW' } }
         'CALL_MACRO' { $v['name'] = $MacroName }
+        { $_ -in @('FIELD_SET', 'FIELD_GET') } { $v['nth'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['nth'] -Default 1)) }
+        'FIELD_SET' { if ($v['how'] -ne 'PASTE') { $v['how'] = 'AUTO' } }
+        'SECRET' { if ($v['part'] -ne 'USER') { $v['part'] = 'PASSWORD' } }
+        'RETRY_START' {
+            $v['times'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['times'] -Default 3))
+            $v['wait'] = [string][Math]::Max(0, (Get-FujiInt -Text $v['wait'] -Default 2000))
+        }
     }
     if ($def['format'] -eq 'text') {
         $ids = Get-FujiValueFieldId -Def $def
@@ -284,6 +307,20 @@ function Test-FujiStepSetting {
             if (([string]$s['path']).Trim() -eq '') { return (Get-FujiText 'validate.bookPath') }
             if (([string]$s['cell']).Trim() -eq '') { return (Get-FujiText 'validate.cell') }
         }
+        { $_ -in @('FIELD_SET', 'FIELD_GET') } {
+            if ($s['name'] -eq '') { return (Get-FujiText 'validate.fieldName') }
+            if ($s['nth'] -ne '' -and -not (Test-FujiPositiveInt $s['nth'] 1)) { return (Get-FujiText 'validate.nth') }
+            if ($Cmd -eq 'FIELD_GET') { return (Get-FujiVarNameError $s['var']) }
+        }
+        'TABLE_READ' {
+            if (([string]$s['path']).Trim() -eq '') { return (Get-FujiText 'validate.tablePath') }
+            if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
+        }
+        'SECRET' { if ($s['target'] -eq '') { return (Get-FujiText 'validate.secretTarget') } }
+        'RETRY_START' {
+            if (-not (Test-FujiPositiveInt $s['times'] 1)) { return (Get-FujiText 'validate.retryTimes') }
+            if (-not (Test-FujiPositiveInt $s['wait'] 0)) { return (Get-FujiText 'validate.waitMs') }
+        }
         'GROUP_START' { if ($s['name'] -eq '') { return (Get-FujiText 'validate.groupName') } }
         'COMMENT' { if ($s['memo'] -eq '') { return (Get-FujiText 'validate.memo') } }
     }
@@ -379,6 +416,26 @@ function Get-FujiStepLabel {
         'RECORD' { return (Get-FujiLabelText 'record' @{ name = $p['name']; value = (Format-FujiShort $p['value'] 30) }) }
         'EXCEL_READ' { return (Get-FujiLabelText 'excelRead' @{ file = (Get-FujiFileName $p['path']); cell = $p['cell']; name = $p['name'] }) }
         'EXCEL_WRITE' { return (Get-FujiLabelText 'excelWrite' @{ file = (Get-FujiFileName $p['path']); cell = $p['cell']; value = (Format-FujiShort $p['value'] 20) }) }
+        'FIELD_SET' {
+            if ($p['text'] -eq '') { $text = Get-FujiLabelText 'fieldClear' @{ name = (Format-FujiShort $p['name'] 20) } }
+            else { $text = Get-FujiLabelText 'fieldSet' @{ name = (Format-FujiShort $p['name'] 20); text = (Format-FujiShort $p['text'] 24) } }
+            return $text + (Get-FujiNthText $p['nth'])
+        }
+        'FIELD_GET' { return (Get-FujiLabelText 'fieldGet' @{ name = (Format-FujiShort $p['name'] 20); var = $p['var'] }) + (Get-FujiNthText $p['nth']) }
+        'TABLE_READ' {
+            $name = Get-FujiText 'label.tableLargest'
+            if ($p['name']) { $name = Get-FujiLabelText 'tableNamed' @{ name = (Format-FujiShort $p['name'] 20) } }
+            return (Get-FujiLabelText 'tableRead' @{ name = $name; file = (Get-FujiFileName $p['path']) })
+        }
+        'SECRET' {
+            $part = Get-FujiText 'label.secretPassword'
+            if ($p['part'] -eq 'USER') { $part = Get-FujiText 'label.secretUser' }
+            return (Get-FujiLabelText 'secret' @{ target = $p['target']; part = $part })
+        }
+        'RETRY_START' {
+            $sec = ([decimal](Get-FujiInt -Text $p['wait'] -Default 2000) / 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+            return (Get-FujiLabelText 'retry' @{ times = $p['times']; sec = $sec })
+        }
         'GROUP_START' { return $val }
         'COMMENT' { return (Format-FujiShort $val 40) }
     }

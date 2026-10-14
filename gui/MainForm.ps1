@@ -279,6 +279,17 @@ function New-FujiTopPanel {
         $btn.Add_Click($b[2])
         [void]$row.Controls.Add($btn)
     }
+    # debugging while making a macro: stop here, run from here, try only this step
+    foreach ($b in @(
+            @('gui.breakpoint', 'gui.breakpointTip', { Invoke-FujiUi { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } } }),
+            @('gui.runFrom', 'gui.runFromTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'from') } }),
+            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } })
+        )) {
+        $btn = New-FujiButton -Text (Get-FujiText $b[0]) -Tip (Get-FujiText $b[1])
+        $btn.Add_Click($b[2])
+        $btn.BackColor = Get-FujiColor '#fff0f3'
+        [void]$row.Controls.Add($btn)
+    }
     $recBtn = New-FujiButton -Text (Get-FujiText 'rec.button') -Tip (Get-FujiText 'rec.buttonTip')
     $recBtn.Add_Click({ Invoke-FujiUi { Switch-FujiRecording } })
     $script:Ui.RecordButton = $recBtn
@@ -425,6 +436,13 @@ function Show-FujiStepRow {
         [void](Write-FujiRowText -Graphics $g -Text $glyph -Font $script:Ui.SmallFont -Color $grey -X $lay.Toggle -Bounds $b)
     }
     $x = $lay.ToggleEnd
+    if ($step.Contains('breakpoint') -and $step['breakpoint']) {
+        # a breakpoint: a red dot in front of the step number
+        $d = Get-FujiScaled 10
+        $dot = New-Object -TypeName System.Drawing.SolidBrush -ArgumentList (Get-FujiColor '#e53935')
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        try { $g.FillEllipse($dot, $x, $b.Y + [int](($b.Height - $d) / 2), $d, $d) } finally { $dot.Dispose(); $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::Default }
+    }
     $no = New-Object -TypeName System.Drawing.Rectangle -ArgumentList $x, $b.Y, (Get-FujiScaled 36), $b.Height
     [System.Windows.Forms.TextRenderer]::DrawText($g, [string]($row.Index + 1), $script:Ui.SmallFont, $no, $grey, ($script:TextFlags -bor [System.Windows.Forms.TextFormatFlags]::Right))
     $x += Get-FujiScaled 44
@@ -1098,9 +1116,23 @@ function Invoke-FujiShortcut {
         if ($k -eq $keys::Escape) {
             $script:RunCtl.StopReason = Get-FujiText 'run.stopEsc'
             $KeyEvent.SuppressKeyPress = $true
+        } elseif ($k -eq $keys::F10) {
+            Step-FujiRunUi
+            $KeyEvent.SuppressKeyPress = $true
+        } elseif ($k -eq $keys::F5 -and $script:RunCtl.Paused) {
+            Switch-FujiRunPause
+            $KeyEvent.SuppressKeyPress = $true
         }
         return
     }
+    # function keys work even while a text box has the focus (they type nothing)
+    $fkey = $true
+    if ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
+    elseif ($k -eq $keys::F6) { [void](Start-FujiRunUi -Partial 'from') }
+    elseif ($k -eq $keys::F9) { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } }
+    elseif ($k -eq $keys::F10) { [void](Start-FujiRunUi -Stepping) }
+    else { $fkey = $false }
+    if ($fkey) { $KeyEvent.SuppressKeyPress = $true; $KeyEvent.Handled = $true; return }
     $active = $script:Ui.Form.ActiveControl
     if ($active -is [System.Windows.Forms.TextBoxBase] -or $active -is [System.Windows.Forms.ComboBox]) { return }
     $handled = $true

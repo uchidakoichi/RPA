@@ -796,6 +796,44 @@ function Switch-FujiEditorStepDisabled {
     return $true
 }
 
+# Breakpoint on the selected step: a run stops before it (the step is kept as it is)
+function Switch-FujiEditorBreakpoint {
+    param([Parameter(Mandatory)][hashtable]$Editor)
+    $steps = Get-FujiCurrentStepList $Editor
+    $sel = $Editor.Selected
+    if ($sel -lt 0 -or $sel -ge $steps.Count) {
+        Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.breakSelect') -Level 'warn'
+        return $false
+    }
+    $step = $steps[$sel]
+    if ($step.Contains('breakpoint')) {
+        $step.Remove('breakpoint')
+        $key = 'editor.history.breakOff'
+    } else {
+        if (-not (Test-FujiBreakableStep -Step $step)) {
+            Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.noBreak' ((Get-FujiCommandDef $step.cmd)['title'])) -Level 'warn'
+            return $false
+        }
+        $step['breakpoint'] = $true
+        $key = 'editor.history.breakOn'
+    }
+    Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText $key (Get-FujiStepCaption $step))
+    return $true
+}
+
+# Where a partial run starts and ends. Mode 'from': the selected step to the end of the macro;
+# 'only': the selected step (a block start: the whole block). @{ StartAt; EndAt } or @{ Error }.
+function Get-FujiPartialRun {
+    param([Parameter(Mandatory)][hashtable]$Editor, [ValidateSet('from', 'only')][string]$Mode)
+    $steps = Get-FujiCurrentStepList $Editor
+    $sel = $Editor.Selected
+    if ($sel -lt 0 -or $sel -ge $steps.Count) { return @{ Error = (Get-FujiText 'editor.partialSelect') } }
+    $cmd = [string]$steps[$sel].cmd
+    if ((Test-FujiBlockEnd $cmd) -or (Test-FujiBlockMiddle $cmd)) { return @{ Error = (Get-FujiText 'editor.partialMarker' ((Get-FujiCommandDef $cmd)['title'])) } }
+    if ($Mode -eq 'from') { return @{ StartAt = $sel; EndAt = -1 } }
+    return @{ StartAt = $sel; EndAt = (Get-FujiBlockRange -Steps $steps -Index $sel).To }
+}
+
 # ----------------------------------------------------------------- the step editor dialog
 # @{ Values = ordered settings by field id (prop fields too); CustomLabel = label typed by the user }
 function Get-FujiStepEditState {
@@ -821,7 +859,7 @@ function Complete-FujiStepEdit {
     $def = Get-FujiCommandDef $Cmd
     $v = [ordered]@{}
     foreach ($f in $def['fields']) {
-        if ($f['type'] -eq 'capture' -or $f['type'] -eq 'rectcapture') { continue }
+        if (Test-FujiButtonField $f) { continue }
         $id = [string]$f['id']
         $text = ''
         if ($Raw.Contains($id) -and $null -ne $Raw[$id]) { $text = [string]$Raw[$id] }
@@ -874,6 +912,14 @@ function Get-FujiCsvHeaderName {
     return ''
 }
 
+# Set by the window: { param($Path) ... } giving an Excel book's first sheet as CSV text
+$script:FujiWorkbookReader = $null
+
+function Test-FujiWorkbookPath {
+    param([AllowEmptyString()][string]$Path)
+    return ([string]$Path -match '\.(xlsx|xlsm|xls)$')
+}
+
 # Reads a CSV into the editor. Returns @{ Ok; HeaderForced } (HeaderForced: a results / error CSV
 # turns "first line is the header" on)
 function Import-FujiEditorCsv {
@@ -888,7 +934,13 @@ function Import-FujiEditorCsv {
         return @{ Ok = $false; HeaderForced = $false }
     }
     try {
-        $res = Read-FujiCsvText -Path $p -Encoding $Encoding
+        if (Test-FujiWorkbookPath -Path $p) {
+            # An Excel book: its first sheet, as Excel shows it (dates and numbers as displayed)
+            if ($null -eq $script:FujiWorkbookReader) { throw (Get-FujiText 'editor.csv.bookUnsupported') }
+            $res = @{ Text = [string](& $script:FujiWorkbookReader $p); Encoding = 'xlsx' }
+        } else {
+            $res = Read-FujiCsvText -Path $p -Encoding $Encoding
+        }
         $parsed = ConvertFrom-FujiCsv -Text $res.Text
     } catch {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.failed' $_.Exception.Message) -Level 'error'

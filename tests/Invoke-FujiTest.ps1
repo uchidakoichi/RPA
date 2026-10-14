@@ -202,7 +202,7 @@ foreach ($t in $golden.templateLabels) {
     $ps = Get-Golden $t 'ps'
     if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
 }
-Assert-Equal 157 $templates['templates'].Count 'template count'
+Assert-Equal 162 $templates['templates'].Count 'template count'
 $cats = $templates['categories']
 foreach ($t in $templates['templates']) { Assert-True ($cats.Contains($t['category'])) ('{0}: category is listed' -f $t['id']) }
 $tplHits = { param($q) $ids = New-Object -TypeName 'System.Collections.Generic.List[string]'; foreach ($t in $templates['templates']) { if (Test-FujiTemplateMatch -Template $t -Query $q) { $ids.Add($t['id']) } }; , $ids.ToArray() }
@@ -495,6 +495,8 @@ function New-FakeIo {
         Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'
+        FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
+        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]')
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
@@ -525,6 +527,16 @@ function New-FakeIo {
         Alarm = { $script:Fake.Calls.Add('ALARM') }
         Notify = { $script:Fake.Calls.Add('NOTIFY') }
         EndRun = { $script:Fake.Calls.Add('END') }
+        Break = { param($Message) $script:Fake.Breaks.Add($Message); $script:Fake.Calls.Add('BREAK'); return $script:Fake.Answers.Dequeue() }
+        SetField = { param($Request)
+            $script:Fake.Calls.Add(('FIELD {0}#{1}={2} {3}' -f $Request.Name, $Request.Nth, $Request.Text, $Request.Mode))
+            if ($script:Fake.FieldFails -gt 0) { $script:Fake.FieldFails--; throw 'field not found' }
+            return $script:Fake.FieldMode }
+        GetField = { param($Request) $script:Fake.Calls.Add(('GETFIELD {0}#{1}' -f $Request.Name, $Request.Nth)); return ($script:Fake.FieldValue + "`r`n") }
+        ReadTable = { param($Request) $script:Fake.Calls.Add('TABLE ' + $Request.Name); return $script:Fake.Table }
+        SaveText = { param($Path, $Text) $script:Fake.Saved[$Path] = $Text }
+        GetSecret = { param($Target) if ($script:Fake.Secrets.ContainsKey($Target)) { return $script:Fake.Secrets[$Target] }; return $null }
+        TypeSecret = { param($Text) $script:Fake.Calls.Add('SECRET ' + $Text.Length) }
     }
 }
 
@@ -597,7 +609,8 @@ Assert-True ($csv.Records[1][0] -eq 'x' -and $csv.Records[1][2] -eq '1') 'error 
 $rerun = Get-FujiRunRow -CsvRows @(, [string[]]@($csv.Records[1])) -Header ([string[]]$csv.Records[0])
 Assert-True ($rerun.Rows[0].No -eq 1 -and $rerun.Logs.Count -eq 1) 'error CSV re-run keeps the original row number'
 $res = ConvertFrom-FujiCsv -Text (ConvertTo-FujiResultCsv -Run $run)
-Assert-Equal (& $J @((Get-FujiText 'run.colPrefix' 1), (Get-FujiText 'run.colPrefix' 2), (Get-FujiText 'run.colResult'), (Get-FujiText 'run.colNote'), (Get-FujiText 'run.colOrigNo'), (Get-FujiText 'run.colStart'))) (& $J $res.Records[0]) 'result CSV header'
+Assert-Equal (& $J @((Get-FujiText 'run.colPrefix' 1), (Get-FujiText 'run.colPrefix' 2), (Get-FujiText 'run.errorShotColumn'), (Get-FujiText 'run.colResult'), (Get-FujiText 'run.colNote'), (Get-FujiText 'run.colOrigNo'), (Get-FujiText 'run.colStart'))) (& $J $res.Records[0]) 'result CSV header'
+Assert-True ((Get-FakeCall 'SHOT') -eq ('SHOT ' + (Join-Path (Join-Path (Join-Path 'D' 'evidence') '20261009') ((Get-FujiText 'run.errorShotName' 1) + '_140512.png')) + ' True') -and $res.Records[1][2].EndsWith('_140512.png')) 'run: the screen saved when a run stops with an error'
 $catchErr = New-TestRun -Steps @(@('TRY_START', 't'), @('KEY', 'a'), @('CATCH', ''), @('SWITCH', 'Missing'), @('TRY_END', ''))
 $script:Fake.Windows = @('App')
 Assert-Equal 'done' (Invoke-FujiRun -Run $catchErr) 'run: CATCH section skipped without an error'
@@ -806,11 +819,200 @@ Assert-True ($watch.Count -eq 2 -and $watch[0][1][0][0] -eq '$v' -and $watch[1][
 for ($i = 0; $i -lt 40; $i++) { [void](Test-FujiExpandValue (Get-FujiCommandDef 'TEXT')); [void](Test-FujiExpandValue (Get-FujiCommandDef 'ELSE')) }
 Assert-True $true 'expand-value check survives compilation'
 
+# ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
+# breakpoints and stepping
+$run = New-TestRun -Steps @(@('KEY', 'a'), @('KEY', 'b', @{ breakpoint = $true }), @('COMMENT', 'c'), @('KEY', 'c'), @('KEY', 'd'))
+$script:Fake.Answers.Enqueue('step'); $script:Fake.Answers.Enqueue('run')
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'debug: run with a breakpoint'
+Assert-Equal 'KEYS a | KEYS b | KEYS c | KEYS d' (Get-FakeCall 'KEYS') 'debug: every step still runs'
+Assert-Equal 2 $script:Fake.Breaks.Count 'debug: stopped at the breakpoint, then once more after "next" (the comment is passed over)'
+Assert-True ($script:Fake.Breaks[0].Contains((Get-FujiText 'run.breakWhere' 2)) -and $script:Fake.Breaks[1].Contains((Get-FujiText 'run.breakWhere' 4))) 'debug: where it stopped'
+$run = New-TestRun -Steps @(@('KEY', 'a', @{ breakpoint = $true }), @('KEY', 'b'))
+$run.Breaks = $false
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'debug: unattended run'
+Assert-Equal 0 $script:Fake.Breaks.Count 'debug: an unattended run never stops at breakpoints'
+$run = New-TestRun -Steps @(@('LOOP_START', '{"mode":"COUNT","count":"2","left":"","op":"NOT_EMPTY","right":"","counter":"n","max":"10"}'), @('KEY', 'x'), @('LOOP_END', ''))
+$run.Stepping = $true
+foreach ($a in @('step', 'step', 'step', 'run')) { $script:Fake.Answers.Enqueue($a) }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'debug: stepping'
+Assert-Equal 4 $script:Fake.Breaks.Count 'debug: stepping stops before the loop start and the step, not at the loop end'
+$run = New-TestRun -Steps @(@('KEY', 'a', @{ breakpoint = $true; disabled = $true }), @('KEY', 'b'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'debug: disabled step'
+Assert-Equal 0 $script:Fake.Breaks.Count 'debug: a disabled step does not stop the run'
+
+# run from here / only this
+$run = New-TestRun -Steps @(@('KEY', 'a'), @('KEY', 'b'), @('KEY', 'c')) -Rows @([string[]]@('1'), [string[]]@('2'))
+$run.StartAt = 1
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'partial: from here'
+Assert-Equal 'KEYS b | KEYS c | KEYS a | KEYS b | KEYS c' (Get-FakeCall 'KEYS') 'partial: the first row starts at the chosen step, the next row from the top'
+$run = New-TestRun -Steps @(@('KEY', 'a'), @('GROUP_START', 'g'), @('KEY', 'b'), @('GROUP_END', ''), @('KEY', 'c'))
+$run.StartAt = 1
+$run.EndAt = 3
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'partial: only this block'
+Assert-True ((Get-FakeCall 'KEYS') -eq 'KEYS b' -and $run.DoneRows -eq 1) 'partial: only the chosen block runs, the row counts as done'
+$run = New-TestRun -Steps @(@('LOOP_START', '{"mode":"COUNT","count":"2","left":"","op":"NOT_EMPTY","right":"","counter":"n","max":"10"}'), @('KEY', 'x'), @('LOOP_END', ''), @('KEY', 'y'))
+$run.StartAt = 1
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'partial: from inside a loop'
+Assert-Equal 'KEYS x | KEYS y' (Get-FakeCall 'KEYS') 'partial: a loop end without its start goes on'
+
+# retry
+$retry = '{"times":"2","wait":"10"}'
+$run = New-TestRun -Steps @(@('RETRY_START', $retry), @('FIELD_SET', '{"name":"f","text":"t","nth":"1","how":"AUTO"}'), @('RETRY_END', ''), @('KEY', 'after'))
+$script:Fake.FieldFails = 1
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'retry: second try works'
+Assert-True ((Get-FakeCall 'FIELD') -eq 'FIELD f#1=t AUTO | FIELD f#1=t AUTO' -and (Get-FakeCall 'KEYS') -eq 'KEYS after') 'retry: the body ran again, then the run went on'
+Assert-Equal '1' $run.Vars[(Get-FujiText 'data.retryVar')] 'retry: the try number in a variable'
+$run = New-TestRun -Steps @(@('RETRY_START', $retry), @('KEY', 'a'), @('SWITCH', 'Missing'), @('RETRY_END', ''), @('KEY', 'after'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'retry: gives up after the last try'
+Assert-True ((Get-FakeCall 'KEYS') -eq 'KEYS a | KEYS a | KEYS a' -and $run.ErrorRows.Count -eq 0) 'retry: first try and two more, then the error stops the run'
+$run = New-TestRun -Steps @(@('TRY_START', 't'), @('RETRY_START', '{"times":"1","wait":"0"}'), @('SWITCH', 'Missing'), @('RETRY_END', ''), @('CATCH', ''), @('KEY', 'caught'), @('TRY_END', ''))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'retry: inside on-error'
+Assert-Equal 'KEYS caught' (Get-FakeCall 'KEYS') 'retry: the last failure goes to the CATCH section around it'
+$run = New-TestRun -Steps @(@('RETRY_START', $retry), @('WINDOW_CHECK', '{"title":"App","key":"","mode":"STOP"}'), @('RETRY_END', ''))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'retry: an emergency stop'
+Assert-Equal 0 @($script:Fake.Logs | Where-Object { $_ -like ('warn*' + (Get-FujiText 'run.retryGaveUp' 2)) }).Count 'retry: an emergency stop is never retried'
+
+# fields
+$run = New-TestRun -Steps @(@('FIELD_SET', '{"name":"No","text":"{{1}}","nth":"2","how":"PASTE"}')) -Rows @(, [string[]]@('123'))
+$script:Fake.FieldMode = 'FOCUSED'
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'field: focused, then pasted'
+Assert-Equal 'FIELD No#2=123 PASTE | KEYS ^a | CLIP 123 | KEYS ^v' ((@($script:Fake.Calls | Where-Object { $_ -match '^(FIELD|KEYS|CLIP)' })) -join ' | ') 'field: replace what the field holds'
+$run = New-TestRun -Steps @(@('FIELD_SET', '{"name":"No","text":"","nth":"1","how":"PASTE"}'))
+$script:Fake.FieldMode = 'FOCUSED'
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'field: emptied'
+Assert-Equal 'KEYS ^a | KEYS {DEL}' (Get-FakeCall 'KEYS') 'field: an empty text clears the field'
+$run = New-TestRun -Steps @(@('FIELD_GET', '{"name":"Due","nth":"1","var":"due"}'), @('TEXT', '[{{$due}}]'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'field: read'
+Assert-True ($run.Vars['due'] -eq 'v1' -and (Get-FakeCall 'CLIP') -eq 'CLIP [v1]' -and $run.ResultRows[0].Values['due'] -eq 'v1') 'field: value in the variable and the result CSV, line end dropped'
+$run = New-TestRun -Steps @(@('FIELD_SET', '{"name":"No","text":"x","nth":"1","how":"AUTO"}'))
+$script:Fake.FieldFails = 1
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'field: not found stops the run'
+
+# table
+$run = New-TestRun -Steps @(@('TABLE_READ', '{"name":"","path":"t_{{ROW}}.csv","var":"count"}')) -Rows @(, [string[]]@('x'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'table: read'
+$tablePath = Join-Path 'D' 't_1.csv'
+Assert-Equal ("h1,h2`r`na,'=1+1`r`nb,c`r`n") $script:Fake.Saved[$tablePath] 'table: saved next to the macros, formula-like text kept as text'
+Assert-Equal '2' $run.Vars['count'] 'table: row count'
+
+# passwords
+$secretName = 'kikan'
+$run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"USER"}')), @('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
+$script:Fake.Secrets[$secretName] = @{ User = 'user1'; Password = 'p+w(1)' }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'secret: typed'
+Assert-Equal 'SECRET 5 | SECRET 6' (Get-FakeCall 'SECRET') 'secret: user name and password typed'
+Assert-Equal 0 @($script:Fake.Logs | Where-Object { $_.Contains('p+w') -or $_.Contains('user1') }).Count 'secret: values never in the log'
+$run = New-TestRun -Steps @(@('SECRET', '{"target":"none","part":"PASSWORD"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: not registered'
+Assert-Equal 'a{+}b{^}{%}{~}{(}{)}{{}{}}{[}{]}' (ConvertTo-FujiSendKeyLiteral 'a+b^%~(){}[]') 'secret: SendKeys characters typed as they are'
+
+# commands: settings, values, labels
+Assert-Equal '{"name":"No","text":"x","nth":"1","how":"AUTO"}' (ConvertTo-FujiStepValue -Cmd 'FIELD_SET' -Settings ([ordered]@{ name = 'No'; text = 'x'; nth = '0'; how = 'odd' })) 'FIELD_SET normalised'
+Assert-Equal '{"times":"3","wait":"0"}' (ConvertTo-FujiStepValue -Cmd 'RETRY_START' -Settings ([ordered]@{ times = 'x'; wait = '-5' })) 'RETRY_START normalised'
+foreach ($b in @(@('FIELD_SET', @{ name = ''; text = ''; nth = '1'; how = 'AUTO' }), @('FIELD_GET', @{ name = 'a'; nth = '1'; var = '' }), @('FIELD_GET', @{ name = 'a'; nth = 'x'; var = 'v' }),
+        @('TABLE_READ', @{ name = ''; path = ' '; var = '' }), @('TABLE_READ', @{ name = ''; path = 'a.csv'; var = 'a b' }), @('SECRET', @{ target = ''; part = 'PASSWORD' }),
+        @('RETRY_START', @{ times = '0'; wait = '1' }))) {
+    Assert-True ((Test-FujiStepSetting -Cmd $b[0] -Settings $b[1]) -ne '') ('{0} invalid settings must be reported' -f $b[0])
+}
+Assert-Equal '' (Test-FujiStepSetting -Cmd 'TABLE_READ' -Settings @{ name = ''; path = 'a.csv'; var = '' }) 'TABLE_READ needs no variable'
+Assert-True ((Get-FujiStepLabel -Cmd 'FIELD_SET' -Value '{"name":"No","text":"x","nth":"2","how":"AUTO"}').EndsWith((Get-FujiLabelText 'nth' @{ nth = 2 }))) 'FIELD_SET label shows the field number'
+Assert-True ((Get-FujiStepLabel -Cmd 'RETRY_START' -Value '{"times":"3","wait":"1500"}').Contains('1.5')) 'RETRY_START label in seconds'
+Assert-Equal @('pick') @(foreach ($f in (Get-FujiCommandDef 'CLICK_NAME')['fields']) { if (Test-FujiButtonField $f) { [string]$f['id'] } }) 'CLICK_NAME has a pick button that is not a value'
+Assert-Equal 'Btn' (ConvertTo-FujiStepValue -Cmd 'CLICK_NAME' -Settings ([ordered]@{ name = 'Btn' })) 'CLICK_NAME value unchanged by the pick button'
+Assert-True (Test-FujiBlockBalanced -Steps @([ordered]@{ cmd = 'RETRY_START'; val = '' }, [ordered]@{ cmd = 'RETRY_END'; val = '' })) 'retry block balanced'
+
+# breakpoints in the file and the editor
+$conv = (ConvertTo-FujiMacroData -Source (ConvertFrom-FujiJson -Json '{"macros":[{"name":"m","steps":[{"cmd":"KEY","val":"a","breakpoint":true},{"cmd":"COMMENT","val":"c","breakpoint":true}]}]}')).Data
+Assert-True ($conv.macros[0].steps[0]['breakpoint'] -eq $true -and -not $conv.macros[0].steps[1].Contains('breakpoint')) 'breakpoint kept in the macros file, not on a comment'
+Assert-True ((ConvertTo-FujiMacroJson -Data $conv).Contains('"breakpoint": true')) 'breakpoint written to the macros file'
+
+# triggers
+$hk = ConvertFrom-FujiHotkeyText -Text ' ctrl + shift + 1 '
+Assert-True ($hk.Ctrl -and $hk.Shift -and -not $hk.Alt -and $hk.Vk -eq 0x31 -and $hk.Text -eq 'Ctrl+Shift+1') 'hotkey parsed'
+Assert-Equal 0x78 (ConvertFrom-FujiHotkeyText -Text 'F9').Vk 'hotkey: F-key alone'
+foreach ($t in @('A', 'Shift+A', 'Ctrl+', 'Ctrl+A+B', 'Ctrl+Space', '')) { Assert-True ($null -eq (ConvertFrom-FujiHotkeyText -Text $t)) ('hotkey refused: "{0}"' -f $t) }
+$st = @{ Seen = @{}; Pending = @{} }
+[void](Update-FujiFileTrigger -State $st -Files @(@{ Name = 'old.csv'; Length = 1; Ticks = 1 }) -First $true)
+Assert-Equal 0 (Update-FujiFileTrigger -State $st -Files @(@{ Name = 'old.csv'; Length = 1; Ticks = 1 }, @{ Name = 'new.csv'; Length = 5; Ticks = 2 })).Count 'file trigger: a new file waits one look'
+Assert-Equal 0 (Update-FujiFileTrigger -State $st -Files @(@{ Name = 'old.csv'; Length = 1; Ticks = 1 }, @{ Name = 'new.csv'; Length = 9; Ticks = 3 })).Count 'file trigger: still growing'
+Assert-Equal @('New.csv') (Update-FujiFileTrigger -State $st -Files @(@{ Name = 'old.csv'; Length = 1; Ticks = 1 }, @{ Name = 'New.csv'; Length = 9; Ticks = 3 })) 'file trigger: ready once it stayed the same'
+Assert-Equal 0 (Update-FujiFileTrigger -State $st -Files @(@{ Name = 'new.csv'; Length = 9; Ticks = 3 })).Count 'file trigger: fires once per file'
+$ws = @{ Present = $false }
+Assert-True (-not (Update-FujiWindowTrigger -State $ws -Present $true -First $true)) 'window trigger: already open at the start'
+Assert-True (-not (Update-FujiWindowTrigger -State $ws -Present $true)) 'window trigger: still open'
+[void](Update-FujiWindowTrigger -State $ws -Present $false)
+Assert-True (Update-FujiWindowTrigger -State $ws -Present $true) 'window trigger: opened again'
+$tr = New-FujiSchedule -MacroId 'm' -MacroName 'M' -CsvPath '' -Header $true -Time '' -Repeat 'DAILY' -DateText '' -CloseAfter $false -Kind 'FILE' -Folder ' C:\in ' -Pattern '' -UseFile $true
+Assert-True ($tr.Schedule.kind -eq 'FILE' -and $tr.Schedule.folder -eq 'C:\in' -and $tr.Schedule.pattern -eq '*' -and $tr.Schedule.useFile) 'file trigger made'
+Assert-Equal (-1) (Get-FujiScheduleMinute $tr.Schedule) 'a trigger has no time'
+Assert-True ($null -eq (Get-FujiNextSchedule -Schedules @($tr.Schedule) -Now ([datetime]'2026-10-09 10:00'))) 'a trigger is not a next scheduled time'
+Assert-True ((New-FujiSchedule -MacroId 'm' -MacroName 'M' -CsvPath '' -Header $true -Time '' -Repeat 'DAILY' -DateText '' -CloseAfter $false -Kind 'HOTKEY' -Hotkey 'X').ContainsKey('Error')) 'hotkey trigger refused'
+Assert-True ((New-FujiSchedule -MacroId 'm' -MacroName 'M' -CsvPath '' -Header $true -Time '' -Repeat 'DAILY' -DateText '' -CloseAfter $false -Kind 'FILE' -Folder 'C:\in' -Pattern 'a\b').ContainsKey('Error')) 'file pattern with a folder refused'
+Assert-True ((New-FujiSchedule -MacroId 'm' -MacroName 'M' -CsvPath '' -Header $true -Time '' -Repeat 'DAILY' -DateText '' -CloseAfter $false -Kind 'WINDOW' -Window 'W').Schedule.window -eq 'W') 'window trigger made'
+$sdir = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_sched_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $sdir)
+try {
+    $set = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+    $set.schedules.Add($tr.Schedule)
+    Save-FujiSetting -Directory $sdir -Settings $set
+    Assert-Equal 1 (Read-FujiSetting -Directory $sdir).schedules.Count 'a trigger survives the settings file'
+} finally {
+    Remove-Item -LiteralPath $sdir -Recurse -Force
+}
+
+# editor: breakpoints and partial runs
+$e = New-TestEditor @('KEY', 'GROUP_START', 'KEY', 'GROUP_END', 'COMMENT')
+$e.Selected = 2
+Assert-True (Switch-FujiEditorBreakpoint -Editor $e) 'breakpoint set'
+Assert-True ((Get-FujiCurrentStepList $e)[2]['breakpoint'] -and $e.Dirty) 'breakpoint on the step, a change to save'
+Assert-True (Switch-FujiEditorBreakpoint -Editor $e) 'breakpoint removed'
+Assert-True (-not (Get-FujiCurrentStepList $e)[2].Contains('breakpoint')) 'breakpoint gone'
+$e.Selected = 4
+Assert-True (-not (Switch-FujiEditorBreakpoint -Editor $e)) 'no breakpoint on a comment'
+$e.Selected = 1
+$pr = Get-FujiPartialRun -Editor $e -Mode 'only'
+Assert-True ($pr.StartAt -eq 1 -and $pr.EndAt -eq 3) 'only this: a block start covers its block'
+$pr = Get-FujiPartialRun -Editor $e -Mode 'from'
+Assert-True ($pr.StartAt -eq 1 -and $pr.EndAt -eq -1) 'from here: to the end'
+$e.Selected = 3
+Assert-True ((Get-FujiPartialRun -Editor $e -Mode 'from').ContainsKey('Error')) 'no partial run from a block end'
+$e.Selected = -1
+Assert-True ((Get-FujiPartialRun -Editor $e -Mode 'only').ContainsKey('Error')) 'no partial run without a selection'
+
+# editor: an Excel book in the CSV box (Excel itself is not here: a stand-in reader)
+$bookDir = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_book_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $bookDir)
+try {
+    $book = Join-Path $bookDir 'list.xlsx'
+    [System.IO.File]::WriteAllBytes($book, [byte[]]@(80, 75))
+    $eb = New-TestEditor @('KEY')
+    $script:FujiWorkbookReader = $null
+    Assert-True (-not (Import-FujiEditorCsv -Editor $eb -Path $book).Ok) 'a book needs Excel'
+    $script:FujiWorkbookReader = { param($Path) $null = $Path; "No,Name`r`n1,A`r`n2,B`r`n" }
+    $r = Import-FujiEditorCsv -Editor $eb -Path $book
+    Assert-True ($r.Ok -and @($eb.Csv.Rows).Count -eq 2 -and $eb.Csv.Header[1] -eq 'Name' -and $eb.Csv.Encoding -eq 'xlsx') 'a book read through the reader, first line the header'
+    Assert-True (Test-FujiWorkbookPath 'a.XLSM') 'book file names'
+} finally {
+    $script:FujiWorkbookReader = $null
+    Remove-Item -LiteralPath $bookDir -Recurse -Force
+}
+
+# recording: a click into a named text box, then typing
+$rec = ConvertFrom-FujiRecording -Payload ("F`tNo`t10`t20`nW`t1500`nT`t123`nF`tName`t5`t6`nK`t{TAB}")
+Assert-Equal 'WAIT FIELD_SET CLICK_POS KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: the pause, the field, a field click without typing stays a click'
+Assert-Equal '{"name":"No","text":"123","nth":"1","how":"AUTO"}' $rec[1].val 'recording: typed text goes into the field by name'
+
 # ----------------------------------------------------------------- Windows API declarations (built, not called here)
 $native = Get-FujiNativeType
 Assert-True ($null -ne $native.GetMethod('SetProcessDPIAware') -and $null -ne $native.GetMethod('SendMessage')) 'native functions declared without a compiler'
 Assert-True ([object]::ReferenceEquals($native, (Get-FujiNativeType))) 'native type made once'
 Assert-True ($null -ne $native.GetMethod('GetWindowRect') -and $null -ne $native.GetMethod('GetCurrentThreadId') -and $null -ne $native.GetMethod('mouse_event')) 'window, keyboard and mouse functions declared'
+# Credential Manager: declared like the others; CREDENTIALW member offsets for this process
+$cred = Get-FujiCredNativeType
+Assert-True ($null -ne $cred.GetMethod('CredReadW') -and $null -ne $cred.GetMethod('CredWriteW') -and $null -ne $cred.GetMethod('CredDeleteW') -and $null -ne $cred.GetMethod('CredFree')) 'credential functions declared'
+$cl = Get-FujiCredLayout
+if ([IntPtr]::Size -eq 8) { $expect = '4,8,32,40,48,72,80' } else { $expect = '4,8,24,28,32,48,52' }
+Assert-Equal $expect (($cl.Type, $cl.TargetName, $cl.BlobSize, $cl.Blob, $cl.Persist, $cl.UserName, $cl.Size) -join ',') 'CREDENTIALW offsets (Type, TargetName, CredentialBlobSize, CredentialBlob, Persist, UserName, size)'
 $wins = @(@{ Handle = 1; Title = 'Book1 - Excel' }, @{ Handle = 2; Title = 'Notepad' }, @{ Handle = 3; Title = 'notepad memo' })
 Assert-Equal 2 (Select-FujiWindow -Windows $wins -Title 'NOTEPAD').Handle 'window title: exact match first (case ignored)'
 Assert-Equal 1 (Select-FujiWindow -Windows $wins -Title 'Book1').Handle 'window title: prefix'
@@ -825,7 +1027,7 @@ $seen = 0
 foreach ($f in $keyFiles) {
     $text = [System.IO.File]::ReadAllText($f.FullName)
     # Get-FujiText 'a.b' and the keys of label / key lists written as 'gui.x' / 'run.x' ...
-    foreach ($m in [regex]::Matches($text, "'((?:gui|run|editor|schedule|rec|diag|calc|csv|data|validate|label|placeholder|date|strOp)\.[A-Za-z0-9_.]+)'")) {
+    foreach ($m in [regex]::Matches($text, "'((?:gui|run|editor|schedule|rec|diag|calc|csv|data|validate|label|placeholder|date|strOp|cred)\.[A-Za-z0-9_.]+)'")) {
         $key = $m.Groups[1].Value
         if ($key.EndsWith('.')) { continue }
         $seen++

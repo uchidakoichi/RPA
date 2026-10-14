@@ -38,6 +38,8 @@ try {
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
+    # An Excel book in the CSV box: Excel reads its first sheet
+    $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
     $textOld = Test-FujiTextVersion
     if ($textOld) {

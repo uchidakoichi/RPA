@@ -16,6 +16,10 @@
 #    Confirm {Caption, Message} -> 'continue'|'skip'|'stop'
 #    Ask {Caption, Message, Default} -> @{ Choice = 'continue'|'skip'|'stop'; Value }
 #    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {}   Notify {}   EndRun {}
+#    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
+#    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
+#    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
+#    GetSecret {Target} -> @{ User; Password } or $null   TypeSecret {Text} (never logged)
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -91,16 +95,25 @@ function New-FujiRun {
         [int]$Interval = 300,
         [bool]$SafeMode = $false,
         [string]$Directory = '',
-        [scriptblock]$ResolvePath = $null
+        [scriptblock]$ResolvePath = $null,
+        [int]$StartAt = -1,
+        [int]$EndAt = -1,
+        [bool]$Breaks = $true,
+        [bool]$Stepping = $false,
+        [System.Collections.IDictionary]$Vars = $null
     )
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($s in $Macro.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
+    # Values handed over by what started the run (the file or window of a trigger)
+    $startVars = [ordered]@{}
+    if ($null -ne $Vars) { foreach ($k in $Vars.Keys) { $startVars[[string]$k] = [string]$Vars[$k] } }
     return @{
         Io = $Io; Directory = $Directory; ResolvePath = $ResolvePath; Macro = $Macro; Macros = $Macros; Header = $Header; Rows = $Rows
         Steps = $steps; RootSteps = $steps; CallStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         TargetWindow = [string]$Macro.targetWindow; ActiveTitle = [string]$Macro.targetWindow
         RowPos = 0; StepIndex = 0; Interval = [Math]::Max(0, $Interval); SafeMode = $SafeMode
-        DoneRows = 0; SkippedRows = 0; Vars = [ordered]@{}
+        StartAt = $StartAt; EndAt = $EndAt; Breaks = $Breaks; Stepping = $Stepping
+        DoneRows = 0; SkippedRows = 0; Vars = $startVars
         LoopStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         TryStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         FinalOnly = $false; FinalGroupEnd = -1
@@ -190,6 +203,12 @@ function ConvertTo-FujiSendKey {
             if ($m.Groups[1].Success) { $n = [int]$m.Groups[1].Value }
             return (' ' * $n)
         }, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Text typed as it is with SendKeys: its special characters + ^ % ~ ( ) { } [ ] each in braces
+function ConvertTo-FujiSendKeyLiteral {
+    param([AllowEmptyString()][string]$Text)
+    return [regex]::Replace([string]$Text, '[+^%~(){}\[\]]', { param($m) '{' + $m.Value + '}' })
 }
 
 # A one-setting command whose field takes placeholders has its whole value expanded
@@ -452,6 +471,21 @@ function Resolve-FujiRunError {
             continue
         }
         $f = $Run.TryStack[$Run.TryStack.Count - 1]
+        if ($f.ContainsKey('Kind') -and $f.Kind -eq 'RETRY') {
+            $text = $Message -replace ('^' + [char]::ConvertFromUtf32(0x1F6A8) + '\s*'), ''
+            if ($f.Attempt -lt $f.Times) {
+                $f.Attempt++
+                $Run.Vars[(Get-FujiText 'data.retryVar')] = [string]$f.Attempt
+                Write-FujiRunLog $Run (Get-FujiText 'run.retrying' $text $f.Attempt $f.Times $f.Wait) 'warn'
+                & $Run.Io.Watch
+                Wait-FujiRun -Run $Run -Ms $f.Wait
+                $Run.StepIndex = $f.Start + 1
+                return $true
+            }
+            Write-FujiRunLog $Run (Get-FujiText 'run.retryGaveUp' $f.Times) 'warn'
+            $Run.TryStack.RemoveAt($Run.TryStack.Count - 1)
+            continue
+        }
         if ($f.CatchIndex -ge 0 -and $Run.StepIndex -gt $f.CatchIndex) {
             # the error happened inside the CATCH section itself: pass it outward
             $Run.TryStack.RemoveAt($Run.TryStack.Count - 1)
@@ -539,6 +573,7 @@ function Complete-FujiRun {
 function Stop-FujiRunWithError {
     param([hashtable]$Run, [hashtable]$Result)
     Write-FujiRunLog $Run $Result.Message 'error'
+    Save-FujiErrorShot -Run $Run
     if ($Result.RecordRow) { Add-FujiErrorRow -Run $Run -Reason $Result.Message }
     if ($Run.FinalOnly -and $null -ne $Run.CurrentResult) {
         # The skipped last row already has its status: keep the error visible in its note
@@ -550,6 +585,49 @@ function Stop-FujiRunWithError {
     Complete-FujiRun -Run $Run -Status 'error'
     & $Run.Io.Alarm
     & $Run.Io.FocusSelf
+}
+
+# The whole screen at the moment a run stops with an error, kept with the other evidence
+function Save-FujiErrorShot {
+    param([hashtable]$Run)
+    try {
+        $now = & $Run.Io.Now
+        $row = Get-FujiRunCurrentRow $Run
+        $name = Get-FujiSafeFileName (Get-FujiText 'run.errorShotName' $row.No)
+        $folder = Join-Path (Join-Path $Run.Directory $script:FujiEvidenceFolder) $now.ToString('yyyyMMdd')
+        $path = Join-Path $folder ($name + '_' + $now.ToString('HHmmss') + '.png')
+        [void](& $Run.Io.Screenshot $path $true)
+        Write-FujiRunLog $Run (Get-FujiText 'run.errorShot' $path) 'warn'
+        Add-FujiResultValue -Run $Run -Name (Get-FujiText 'run.errorShotColumn') -Value $path
+    } catch {
+        # the run is stopping anyway: a failed picture only gets a line in the log
+        Write-FujiRunLog $Run (Get-FujiText 'run.errorShotFailed' $_.Exception.Message) 'warn'
+    }
+}
+
+# Debugging: stop before a step with a breakpoint, or before every step while stepping
+function Test-FujiRunBreakAt {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    if (-not $Run.Breaks) { return $false }
+    if (-not (Test-FujiBreakableStep -Step $Step)) { return $false }
+    return ($Run.Stepping -or ($Step.Contains('breakpoint') -and $Step['breakpoint']))
+}
+
+function Invoke-FujiRunBreak {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    $no = $Run.StepIndex + 1
+    $where = Get-FujiText 'run.breakWhere' $no
+    if ($Run.CallStack.Count -gt 0) { $where = Get-FujiText 'run.breakWhereCalled' $Run.CallStack[$Run.CallStack.Count - 1].Name $no }
+    $label = [string]$Step.label
+    if (-not $label) { $label = Get-FujiStepLabel -Cmd $Step.cmd -Value $Step.val }
+    $key = 'run.breakPoint'
+    if ($Run.Stepping) { $key = 'run.breakStep' }
+    $message = Get-FujiText $key $where (Format-FujiShort $label 40)
+    Write-FujiRunLog $Run $message 'warn'
+    & $Run.Io.Watch
+    $choice = & $Run.Io.Break $message
+    $Run.Stepping = ($choice -eq 'step')
+    Resume-FujiRunTarget -Run $Run
 }
 
 # One CSV row. $false when the run ended (error) during it.
@@ -566,6 +644,11 @@ function Invoke-FujiRunRow {
     $Run.CurrentResult = Start-FujiResultRow -Run $Run -Row $row
     Update-FujiRunProgress -Run $Run
     Write-FujiRunLog $Run (Get-FujiText 'run.rowStart' (Get-FujiRunRowCaption $row) ($Run.RowPos + 1) $Run.Rows.Count) 'run'
+    if ($Run.RowPos -eq 0 -and $Run.StartAt -gt 0 -and $Run.StartAt -lt $Run.Steps.Count) {
+        # "run from here": the first row starts at the chosen step, the rows after it from the top
+        $Run.StepIndex = $Run.StartAt
+        Write-FujiRunLog $Run (Get-FujiText 'run.startAt' ($Run.StartAt + 1))
+    }
     if ($Run.ActiveTitle) {
         if (-not (Invoke-FujiActivate -Run $Run -Title $Run.ActiveTitle)) {
             Stop-FujiRunWithError -Run $Run -Result (Get-FujiRunError (Get-FujiText 'run.targetNotFound' $Run.ActiveTitle $script:FujiRunLimits.WindowRetryMax))
@@ -574,6 +657,10 @@ function Invoke-FujiRunRow {
         Wait-FujiRun -Run $Run -Ms 150
     }
     while ($true) {
+        if ($Run.EndAt -ge 0 -and $Run.CallStack.Count -eq 0 -and -not $Run.FinalOnly -and $Run.StepIndex -gt $Run.EndAt -and $Run.StepIndex -lt $Run.Steps.Count) {
+            # "run only this": the chosen step (block) is done
+            $Run.StepIndex = $Run.Steps.Count
+        }
         if ($Run.FinalOnly -and $Run.StepIndex -gt $Run.FinalGroupEnd) {
             # Only "last row only" groups run for a skipped last row
             $g = Find-FujiFinalGroup -Steps $Run.Steps -From $Run.StepIndex -SkipFirstOnly ($Run.RowPos -ne 0)
@@ -600,7 +687,9 @@ function Invoke-FujiRunRow {
         & $Run.Io.Highlight $highlight
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
-        $res = Invoke-FujiRunStep -Run $Run -Step $Run.Steps[$Run.StepIndex]
+        $current = $Run.Steps[$Run.StepIndex]
+        if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+        $res = Invoke-FujiRunStep -Run $Run -Step $current
         switch ($res.Action) {
             'skipRow' {
                 if ($Run.FinalOnly) {
@@ -846,6 +935,31 @@ function Invoke-FujiRunCommand {
             $Run.TryStack = $keep
             return (Get-FujiRunNext 0)
         }
+        'RETRY_START' {
+            $keep = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($f in $Run.TryStack) { if ($f.Start -ne $Run.StepIndex) { $keep.Add($f) } }
+            $keep.Add(@{ Kind = 'RETRY'; Start = $Run.StepIndex; End = (Find-FujiBlockEnd -Steps $Run.Steps -StartIndex $Run.StepIndex); CatchIndex = -1
+                    Attempt = 0; Times = [Math]::Max(1, (Get-FujiInt -Text $p['times'] -Default 3)); Wait = [Math]::Max(0, (Get-FujiInt -Text $p['wait'] -Default 2000)) })
+            $Run.TryStack = $keep
+            $Run.Vars[(Get-FujiText 'data.retryVar')] = '0'
+            return (Get-FujiRunNext 0)
+        }
+        'RETRY_END' {
+            $keep = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($f in $Run.TryStack) {
+                if ($f.End -eq $Run.StepIndex) {
+                    if ($f.ContainsKey('Attempt') -and $f.Attempt -gt 0) { Write-FujiRunLog $Run (Get-FujiText 'run.retryDone' $f.Attempt) 'ok' }
+                } else {
+                    $keep.Add($f)
+                }
+            }
+            $Run.TryStack = $keep
+            return (Get-FujiRunNext 0)
+        }
+        'FIELD_SET' { return (Invoke-FujiFieldSet -Run $Run -Settings $p) }
+        'FIELD_GET' { return (Invoke-FujiFieldGet -Run $Run -Settings $p) }
+        'TABLE_READ' { return (Invoke-FujiTableRead -Run $Run -Settings $p) }
+        'SECRET' { return (Invoke-FujiSecret -Run $Run -Settings $p) }
         'SET_VAR' {
             $value = Expand-FujiRunText -Run $Run -Text $p['value']
             if ($p['mode'] -eq 'CALC') {
@@ -1196,4 +1310,89 @@ function Invoke-FujiExcel {
         & $Run.Io.Watch
     }
     return (Get-FujiRunNext 0)
+}
+
+# ----------------------------------------------------------------- fields, tables and passwords by UI Automation
+function Get-FujiFieldRequest {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    return @{ Name = ([string]$Settings['name']).Trim(); Nth = [Math]::Max(1, (Get-FujiInt -Text $Settings['nth'] -Default 1)); Window = $Run.ActiveTitle }
+}
+
+function Invoke-FujiFieldSet {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $err = Confirm-FujiInputTarget -Run $Run
+    if ($err) { return $err }
+    $request = Get-FujiFieldRequest -Run $Run -Settings $Settings
+    $request.Text = Expand-FujiRunText -Run $Run -Text $Settings['text']
+    $request.Mode = [string]$Settings['how']
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldSearch' $request.Name)
+    try { $how = [string](& $Run.Io.SetField $request) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.fieldFailed' $request.Name $_.Exception.Message)) }
+    if ($how -eq 'FOCUSED') {
+        # the field has the focus: replace what it holds
+        & $Run.Io.SendKeys '^a'
+        if ($request.Text -eq '') {
+            & $Run.Io.SendKeys '{DEL}'
+            Write-FujiRunLog $Run (Get-FujiText 'run.fieldCleared' $request.Name)
+            return (Get-FujiRunNext)
+        }
+        return (Invoke-FujiPaste -Run $Run -Text $request.Text -What (Get-FujiText 'run.whatField' $request.Name))
+    }
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldSet' $request.Name (Format-FujiShort $request.Text 30))
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiFieldGet {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $request = Get-FujiFieldRequest -Run $Run -Settings $Settings
+    $name = ([string]$Settings['var']).Trim()
+    try { $text = [string](& $Run.Io.GetField $request) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.fieldFailed' $request.Name $_.Exception.Message)) }
+    $text = $text -replace '(\r\n|\n|\r)+$', ''
+    $Run.Vars[$name] = $text
+    Add-FujiResultValue -Run $Run -Name $name -Value $text
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldGot' $request.Name $name (Format-FujiShort $text 40))
+    & $Run.Io.Watch
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiTableRead {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $path = (Expand-FujiRunText -Run $Run -Text $Settings['path']).Trim().Trim('"')
+    if (-not [System.IO.Path]::IsPathRooted($path)) { $path = Join-Path $Run.Directory $path }
+    $request = @{ Name = ([string]$Settings['name']).Trim(); Window = $Run.ActiveTitle }
+    Write-FujiRunLog $Run (Get-FujiText 'run.tableSearch')
+    try { $table = & $Run.Io.ReadTable $request } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.tableFailed' $_.Exception.Message)) }
+    $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    # Screen text that looks like a formula is kept as text when the CSV is opened in Excel
+    $header = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($h in $table.Header) { $header.Add((ConvertTo-FujiSafeCsvValue ([string]$h))) }
+    if ($header.Count -gt 0) { $rows.Add($header.ToArray()) }
+    $count = 0
+    foreach ($r in $table.Rows) {
+        $cells = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        foreach ($c in $r) { $cells.Add((ConvertTo-FujiSafeCsvValue ([string]$c))) }
+        $rows.Add($cells.ToArray())
+        $count++
+    }
+    try { & $Run.Io.SaveText $path (ConvertTo-FujiCsvText -Rows $rows.ToArray()) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.tableSaveFailed' $path $_.Exception.Message)) }
+    $var = ([string]$Settings['var']).Trim()
+    if ($var) { $Run.Vars[$var] = [string]$count; & $Run.Io.Watch }
+    Write-FujiRunLog $Run (Get-FujiText 'run.tableSaved' $count $path) 'ok'
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiSecret {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $target = ([string]$Settings['target']).Trim()
+    $part = Get-FujiText 'label.secretPassword'
+    if ($Settings['part'] -eq 'USER') { $part = Get-FujiText 'label.secretUser' }
+    try { $cred = & $Run.Io.GetSecret $target } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.secretFailed' $target $_.Exception.Message)) }
+    if ($null -eq $cred) { return (Get-FujiRunError (Get-FujiText 'run.secretMissing' $target)) }
+    $value = [string]$cred.Password
+    if ($Settings['part'] -eq 'USER') { $value = [string]$cred.User }
+    if ($value -eq '') { return (Get-FujiRunError (Get-FujiText 'run.secretEmpty' $target $part)) }
+    $err = Confirm-FujiInputTarget -Run $Run
+    if ($err) { return $err }
+    & $Run.Io.TypeSecret $value
+    Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)
+    return (Get-FujiRunNext)
 }

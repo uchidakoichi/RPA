@@ -1,6 +1,7 @@
 # ---------------------------------------------------------------------------------------------
 #  Schedules from the window: the list dialog, the 20-second check while the app is open, Windows
-#  scheduled tasks (ScheduledTasks module) that start the app with -AutoRun <id>
+#  scheduled tasks (ScheduledTasks module) that start the app with -AutoRun <id>, and the triggers
+#  (a key, a new file, a window) watched every 150 ms while the app is open
 # ---------------------------------------------------------------------------------------------
 
 $script:Settings = $null
@@ -14,7 +15,107 @@ function Initialize-FujiSchedule {
     $t.Add_Tick({ Invoke-FujiUi { Invoke-FujiScheduleCheck } })
     $t.Start()
     $script:Ui.ScheduleTimer = $t
+    # triggers: keys are looked at every tick, folders and windows every 3 seconds
+    $tt = New-Object -TypeName System.Windows.Forms.Timer
+    $tt.Interval = 150
+    $tt.Add_Tick({ Invoke-FujiUi { Invoke-FujiTriggerCheck } })
+    $tt.Start()
+    $script:Ui.TriggerTimer = $tt
     Update-FujiScheduleState
+}
+
+# ----------------------------------------------------------------- triggers
+$script:TriggerState = @{}
+$script:TriggerTick = 0
+
+function Get-FujiTriggerState {
+    param([string]$Id)
+    if (-not $script:TriggerState.ContainsKey($Id)) {
+        $script:TriggerState[$Id] = @{ Started = $false; Down = $false; File = @{ Seen = @{}; Pending = @{} }; Window = @{ Present = $false }; Queue = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Missing = $false }
+    }
+    return $script:TriggerState[$Id]
+}
+
+function Test-FujiHotkeyDown {
+    param([hashtable]$Key)
+    $native = Get-FujiNativeType
+    $down = { param($Vk) (([int]$native::GetAsyncKeyState($Vk)) -band 0x8000) -ne 0 }
+    if ($Key.Ctrl -ne (& $down 0x11)) { return $false }
+    if ($Key.Alt -ne (& $down 0x12)) { return $false }
+    if ($Key.Shift -ne (& $down 0x10)) { return $false }
+    return (& $down $Key.Vk)
+}
+
+function Invoke-FujiTriggerCheck {
+    if ($null -eq $script:Settings) { return }
+    $script:TriggerTick++
+    $slow = ($script:TriggerTick % 20) -eq 0
+    $busy = $script:RunCtl.Running -or $null -ne $script:Rec
+    # a copy (not "@(...)" around the List: see Import-FujiEditorCsv)
+    foreach ($s in $script:Settings.schedules.ToArray()) {
+        $kind = Get-FujiScheduleKind $s
+        if ($kind -eq 'TIME' -or -not [bool](Get-FujiScheduleValue $s 'enabled' $false)) { continue }
+        $st = Get-FujiTriggerState -Id ([string]$s.id)
+        switch ($kind) {
+            'HOTKEY' {
+                $k = ConvertFrom-FujiHotkeyText -Text ([string](Get-FujiScheduleValue $s 'hotkey'))
+                if ($null -eq $k) { continue }
+                $down = Test-FujiHotkeyDown -Key $k
+                if ($down -and -not $st.Down -and -not $busy) { $st.Queue.Add('') }
+                $st.Down = $down
+            }
+            'FILE' {
+                if (-not $slow) { continue }
+                $folder = [string](Get-FujiScheduleValue $s 'folder')
+                if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+                    if (-not $st.Missing) { Write-FujiUiLog -Message (Get-FujiText 'schedule.folderMissing' $folder) -Level 'warn'; $st.Missing = $true }
+                    continue
+                }
+                $st.Missing = $false
+                $files = @(Get-ChildItem -LiteralPath $folder -Filter ([string](Get-FujiScheduleValue $s 'pattern' '*')) -File -ErrorAction SilentlyContinue | ForEach-Object { @{ Name = $_.Name; Length = $_.Length; Ticks = $_.LastWriteTimeUtc.Ticks } })
+                foreach ($name in (Update-FujiFileTrigger -State $st.File -Files $files -First (-not $st.Started))) { $st.Queue.Add((Join-Path $folder $name)) }
+                $st.Started = $true
+            }
+            'WINDOW' {
+                if (-not $slow) { continue }
+                $want = [string](Get-FujiScheduleValue $s 'window')
+                $present = $false
+                foreach ($w in (Get-FujiTopWindow)) { if ($w.Title.Contains($want)) { $present = $true; break } }
+                if (Update-FujiWindowTrigger -State $st.Window -Present $present -First (-not $st.Started)) { $st.Queue.Add($want) }
+                $st.Started = $true
+            }
+        }
+        if ($st.Queue.Count -eq 0 -or $busy) { continue }
+        if (Test-FujiDialogOpen) {
+            if ($slow) { Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn' }
+            if ($kind -eq 'HOTKEY') { $st.Queue.Clear() }
+            continue
+        }
+        $what = $st.Queue[0]
+        $st.Queue.RemoveAt(0)
+        [void](Invoke-FujiTrigger -Schedule $s -Kind $kind -What $what)
+        # one run per tick; the others wait for the next ticks
+        return
+    }
+}
+
+function Invoke-FujiTrigger {
+    param([System.Collections.IDictionary]$Schedule, [string]$Kind, [string]$What)
+    $vars = [ordered]@{}
+    $csv = ''
+    switch ($Kind) {
+        'HOTKEY' { Write-FujiUiLog -Message (Get-FujiText 'schedule.firedHotkey' (Get-FujiScheduleValue $Schedule 'hotkey')) -Level 'run' }
+        'FILE' {
+            $vars[(Get-FujiText 'data.triggerFileVar')] = $What
+            Write-FujiUiLog -Message (Get-FujiText 'schedule.firedFile' $What) -Level 'run'
+            if ([bool](Get-FujiScheduleValue $Schedule 'useFile' $false) -and ($What -match '\.(csv|txt)$' -or (Test-FujiWorkbookPath -Path $What))) { $csv = $What }
+        }
+        'WINDOW' {
+            $vars[(Get-FujiText 'data.triggerWindowVar')] = $What
+            Write-FujiUiLog -Message (Get-FujiText 'schedule.firedWindow' $What) -Level 'run'
+        }
+    }
+    return (Invoke-FujiSchedule -Schedule $Schedule -Vars $vars -CsvOverride $csv)
 }
 
 function Save-FujiScheduleSetting {
@@ -69,9 +170,11 @@ function Invoke-FujiScheduleCheck {
 
 # Runs a schedule now. Returns the run status, or '' when it did not start.
 function Invoke-FujiSchedule {
-    param([System.Collections.IDictionary]$Schedule)
-    $Schedule['lastRun'] = Format-FujiDate -Date (Get-Date)
-    Save-FujiScheduleSetting
+    param([System.Collections.IDictionary]$Schedule, [System.Collections.IDictionary]$Vars = $null, [string]$CsvOverride = '')
+    if ((Get-FujiScheduleKind $Schedule) -eq 'TIME') {
+        $Schedule['lastRun'] = Format-FujiDate -Date (Get-Date)
+        Save-FujiScheduleSetting
+    }
     $macro = Get-FujiScheduleMacro -Schedule $Schedule
     if ($null -eq $macro) {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.macroMissing' (Get-FujiScheduleValue $Schedule 'macroName')) -Level 'error'
@@ -81,6 +184,7 @@ function Invoke-FujiSchedule {
     $script:Ed.Selected = -1
     Update-FujiAll
     $csv = [string](Get-FujiScheduleValue $Schedule 'csvPath')
+    if ($CsvOverride) { $csv = $CsvOverride }
     if ($csv.Trim()) {
         $script:Refreshing = $true
         try {
@@ -101,7 +205,7 @@ function Invoke-FujiSchedule {
     $script:Ui.StartRow.Text = '1'
     $script:Ui.EndRow.Text = ''
     Write-FujiUiLog -Message (Get-FujiText 'schedule.starting' $macro.name) -Level 'run'
-    $status = Start-FujiRunUi -Unattended
+    $status = Start-FujiRunUi -Unattended -Vars $Vars
     Update-FujiScheduleState
     return $status
 }
@@ -168,6 +272,10 @@ function Get-FujiTaskName {
 
 function Register-FujiScheduleTask {
     param([System.Collections.IDictionary]$Schedule)
+    if ((Get-FujiScheduleKind $Schedule) -ne 'TIME') {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.registerTimeOnly') -Level 'warn'
+        return
+    }
     $name = Get-FujiTaskName -Schedule $Schedule
     try {
         $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -219,7 +327,7 @@ function Show-FujiScheduleDialog {
     $lv.MultiSelect = $false
     $lv.HideSelection = $false
     $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
-    foreach ($c in @(@('schedule.colTime', 70), @('schedule.colRepeat', 150), @('schedule.colMacro', 240), @('schedule.colCsv', 260), @('schedule.colState', 170))) {
+    foreach ($c in @(@('schedule.colWhen', 300), @('schedule.colMacro', 220), @('schedule.colCsv', 230), @('schedule.colState', 150))) {
         [void]$lv.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1]))
     }
     # buttons for the selected schedule
@@ -247,6 +355,16 @@ function Show-FujiScheduleDialog {
     if ($macro.Items.Count -gt 0) { $macro.SelectedIndex = [Math]::Max(0, $script:Ed.MacroIndex) }
     $csv = New-FujiTextBox -Text ([string]$script:Ed.Csv.Path) -Width (Get-FujiScaled 560)
     $header = New-FujiCheck -Text (Get-FujiText 'schedule.header') -Checked $true
+    $kindLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($k in $script:FujiScheduleKinds) { $kindLabels.Add((Get-FujiText ('schedule.kinds.' + $k))) }
+    $kind = New-FujiComboBox -Items $kindLabels.ToArray() -Values $script:FujiScheduleKinds -Width (Get-FujiScaled 420)
+    $kind.SelectedIndex = 0
+    $kind.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleKindUi } })
+    $hotkey = New-FujiTextBox -Width (Get-FujiScaled 200)
+    $folder = New-FujiTextBox -Width (Get-FujiScaled 560)
+    $pattern = New-FujiTextBox -Text '*.csv' -Width (Get-FujiScaled 160)
+    $useFile = New-FujiCheck -Text (Get-FujiText 'schedule.useFile') -Checked $true
+    $window = New-FujiTextBox -Width (Get-FujiScaled 360)
     $time = New-FujiTextBox -Width (Get-FujiScaled 90)
     $repLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($r in $script:FujiScheduleRepeats) { $repLabels.Add((Get-FujiScheduleRepeatName $r)) }
@@ -257,7 +375,8 @@ function Show-FujiScheduleDialog {
     $err = New-FujiLabel -Text ''
     $err.ForeColor = Get-FujiColor '#c62828'
     $row = 1
-    foreach ($pair in @(@('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close), @('', $err))) {
+    foreach ($pair in @(@('schedule.kind', $kind), @('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close),
+            @('schedule.hotkey', $hotkey), @('schedule.folder', $folder), @('schedule.pattern', $pattern), @('', $useFile), @('schedule.window', $window), @('', $err))) {
         if ($pair[0]) { $add.Controls.Add((New-FujiLabel -Text (Get-FujiText $pair[0])), 0, $row) }
         $add.Controls.Add($pair[1], 1, $row)
         $row++
@@ -276,8 +395,10 @@ function Show-FujiScheduleDialog {
     [void]$f.Controls.Add($actions)
     [void]$f.Controls.Add($add)
     [void]$f.Controls.Add($bar)
-    $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0] }
-    $f.Add_Shown({ $native = Get-FujiNativeType; [void]$native::SendMessage($script:Ui.SchedDlg.Time.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.timeCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Date.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.dateCue')) })
+    $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0]
+        Kind = $kind; Hotkey = $hotkey; Folder = $folder; Pattern = $pattern; UseFile = $useFile; Window = $window }
+    Update-FujiScheduleKindUi
+    $f.Add_Shown({ $native = Get-FujiNativeType; [void]$native::SendMessage($script:Ui.SchedDlg.Time.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.timeCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Date.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.dateCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Hotkey.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.hotkeyCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Folder.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.folderCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Window.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.windowCue')) })
     $lv.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleToggleText } })
     Update-FujiScheduleList
     [void](Show-FujiDialog -Form $f)
@@ -299,10 +420,8 @@ function Update-FujiScheduleList {
         $state = Get-FujiText 'schedule.disabled'
         if (Get-FujiScheduleValue $s 'enabled' $false) { $state = Get-FujiText 'schedule.enabled' }
         if (Get-FujiScheduleValue $s 'taskName') { $state += Get-FujiText 'schedule.registered' }
-        $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $s 'repeat'))
-        if (Get-FujiScheduleValue $s 'date') { $repeat += ' ' + $s.date }
-        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList ([string]$s.time)
-        foreach ($sub in @($repeat, $macroText, $csv, $state)) { [void]$item.SubItems.Add([string]$sub) }
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList (Get-FujiScheduleWhenText -Schedule $s)
+        foreach ($sub in @($macroText, $csv, $state)) { [void]$item.SubItems.Add([string]$sub) }
         $item.Tag = $s
         [void]$lv.Items.Add($item)
     }
@@ -346,11 +465,25 @@ function Add-FujiScheduleFromDialog {
     if ($d.Macro.SelectedIndex -lt 0) { return }
     $macroId = [string]([object[]]$d.Macro.Tag)[$d.Macro.SelectedIndex]
     $repeat = [string]([object[]]$d.Repeat.Tag)[$d.Repeat.SelectedIndex]
-    $r = New-FujiSchedule -MacroId $macroId -MacroName ([string]$d.Macro.SelectedItem) -CsvPath $d.Csv.Text -Header $d.Header.Checked -Time $d.Time.Text -Repeat $repeat -DateText $d.Date.Text -CloseAfter $d.Close.Checked
+    $kind = [string]([object[]]$d.Kind.Tag)[$d.Kind.SelectedIndex]
+    $r = New-FujiSchedule -MacroId $macroId -MacroName ([string]$d.Macro.SelectedItem) -CsvPath $d.Csv.Text -Header $d.Header.Checked -Time $d.Time.Text -Repeat $repeat -DateText $d.Date.Text -CloseAfter $d.Close.Checked `
+        -Kind $kind -Hotkey $d.Hotkey.Text -Folder $d.Folder.Text -Pattern $d.Pattern.Text -Window $d.Window.Text -UseFile $d.UseFile.Checked
     if ($r.ContainsKey('Error')) { $d.Error.Text = $r.Error; return }
     $d.Error.Text = ''
     $script:Settings.schedules.Add($r.Schedule)
     Save-FujiScheduleSetting
-    Write-FujiUiLog -Message (Get-FujiText 'schedule.added' (Get-FujiScheduleRepeatName $repeat) $r.Schedule.time $r.Schedule.macroName) -Level 'ok'
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.added2' (Get-FujiScheduleWhenText -Schedule $r.Schedule) $r.Schedule.macroName) -Level 'ok'
+    if ($kind -ne 'TIME') { Write-FujiUiLog -Message (Get-FujiText 'schedule.triggerNote') }
     Update-FujiScheduleList
+}
+
+# Only the boxes of the chosen kind can be typed in
+function Update-FujiScheduleKindUi {
+    $d = $script:Ui.SchedDlg
+    if ($null -eq $d) { return }
+    $kind = [string]([object[]]$d.Kind.Tag)[$d.Kind.SelectedIndex]
+    foreach ($c in @($d.Time, $d.Repeat, $d.Date, $d.Close)) { $c.Enabled = ($kind -eq 'TIME') }
+    $d.Hotkey.Enabled = ($kind -eq 'HOTKEY')
+    foreach ($c in @($d.Folder, $d.Pattern, $d.UseFile)) { $c.Enabled = ($kind -eq 'FILE') }
+    $d.Window.Enabled = ($kind -eq 'WINDOW')
 }

@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------------------------
 
 $script:Run = $null
-$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null }
+$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null; InBreak = $false; BreakChoice = 'run' }
 $script:EscHoldMs = 1000
 
 # ----------------------------------------------------------------- run controls
@@ -23,10 +23,18 @@ function New-FujiRunBar {
     $stop.Enabled = $false
     $stop.BackColor = Get-FujiColor '#ffd6dc'
     $stop.Add_Click({ $script:RunCtl.StopReason = Get-FujiText 'run.stopButtonReason' })
+    # debugging: start stopping before every step / go one step on while stopped
+    $stepRun = New-FujiButton -Text (Get-FujiText 'gui.stepRun') -Tip (Get-FujiText 'gui.stepRunTip')
+    $stepRun.Add_Click({ Invoke-FujiUi { [void](Start-FujiRunUi -Stepping) } })
+    $next = New-FujiButton -Text (Get-FujiText 'gui.stepNext') -Tip (Get-FujiText 'gui.stepNextTip')
+    $next.Enabled = $false
+    $next.Add_Click({ Invoke-FujiUi { Step-FujiRunUi } })
     $script:Ui.RunButton = $run
     $script:Ui.PauseButton = $pause
     $script:Ui.StopButton = $stop
-    foreach ($c in @($run, $pause, $stop)) { [void]$row.Controls.Add($c) }
+    $script:Ui.StepRunButton = $stepRun
+    $script:Ui.NextButton = $next
+    foreach ($c in @($run, $stepRun, $pause, $next, $stop)) { [void]$row.Controls.Add($c) }
     $script:Ui.StartRow = New-FujiTextBox -Text '1' -Width (Get-FujiScaled 50)
     $script:Ui.EndRow = New-FujiTextBox -Text '' -Width (Get-FujiScaled 50)
     $script:Ui.ToolTip.SetToolTip($script:Ui.EndRow, (Get-FujiText 'gui.endRowAll'))
@@ -88,6 +96,8 @@ function Set-FujiRunUi {
     param([bool]$Running)
     foreach ($bar in $script:Ui.Toolbars) { $bar.Enabled = -not $Running }
     $script:Ui.RunButton.Enabled = -not $Running
+    $script:Ui.StepRunButton.Enabled = -not $Running
+    $script:Ui.NextButton.Enabled = $false
     $script:Ui.PauseButton.Enabled = $Running
     $script:Ui.StopButton.Enabled = $Running
     $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
@@ -114,18 +124,61 @@ function Switch-FujiRunPause {
     $c.Paused = -not $c.Paused
     if ($c.Paused) {
         $script:Ui.PauseButton.Text = Get-FujiText 'gui.resume'
+        $script:Ui.NextButton.Enabled = $true
         $script:Ui.Progress.Text = (Get-FujiText 'run.paused') + $script:Ui.Progress.Text
         Write-FujiUiLog -Message (Get-FujiText 'run.pause') -Level 'warn'
     } else {
+        # resumed: run on to the end (or the next breakpoint)
+        $c.BreakChoice = 'run'
         $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
+        $script:Ui.NextButton.Enabled = $false
     }
+}
+
+# "Next" while stopped: run one step, then stop again before the following one
+function Step-FujiRunUi {
+    $c = $script:RunCtl
+    if (-not $c.Running -or -not $c.Paused) { return }
+    $c.BreakChoice = 'step'
+    if ($null -ne $script:Run) { $script:Run.Stepping = $true }
+    $c.Paused = $false
+    $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
+    $script:Ui.NextButton.Enabled = $false
+}
+
+# Io.Break: the run stops before a step (breakpoint or stepping) until Next, Resume or Stop.
+# Returns 'step' or 'run'; a stop throws like any wait.
+function Invoke-FujiUiBreak {
+    param([string]$Message)
+    $c = $script:RunCtl
+    $c.BreakChoice = 'run'
+    $c.Paused = $true
+    $script:Ui.PauseButton.Text = Get-FujiText 'gui.resume'
+    $script:Ui.NextButton.Enabled = $true
+    $script:Ui.Progress.Text = $Message
+    # the window comes to the front, so the variables and the highlighted step can be looked at
+    [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
+    if ($script:Ui.Watch.Visible) { Update-FujiWatchPanel }
+    $c.InBreak = $true
+    try {
+        while ($c.Paused -and -not $c.StopReason) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 30
+        }
+    } finally {
+        $c.InBreak = $false
+    }
+    if ($c.StopReason) { throw (New-FujiStopException $c.StopReason) }
+    return $c.BreakChoice
 }
 
 # ----------------------------------------------------------------- starting a run
 # Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
 # ('done', 'stopped', 'error') or '' when it did not start.
+# Stepping: stop before the first step. Partial 'from' / 'only': start at the selected step ('only':
+# just it, for one CSV row). Vars: values handed over by a trigger.
 function Start-FujiRunUi {
-    param([switch]$Unattended)
+    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null)
     if ($script:RunCtl.Running) { return '' }
     if ($null -ne $script:Rec) {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
@@ -133,6 +186,14 @@ function Start-FujiRunUi {
     }
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
+    $range = @{ StartAt = -1; EndAt = -1 }
+    if ($Partial) {
+        $range = Get-FujiPartialRun -Editor $script:Ed -Mode $Partial
+        if ($range.ContainsKey('Error')) {
+            Write-FujiUiLog -Message $range.Error -Level 'warn'
+            return ''
+        }
+    }
     $executable = 0
     $usesCsv = $false
     foreach ($s in $steps) {
@@ -163,10 +224,17 @@ function Start-FujiRunUi {
         return ''
     }
     if ($rr.Rows.Count -eq 0) { return '' }
+    $rows = $rr.Rows
+    if ($Partial -eq 'only' -and $rows.Count -gt 1) {
+        # trying one step: the first row of the range only
+        $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        $rows.Add($rr.Rows[0])
+    }
     $interval = [Math]::Max(0, (Get-FujiInt -Text $script:Ui.Interval.Text -Default 300))
-    $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rr.Rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
+    $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
         -Interval $interval -SafeMode $script:Ui.SafeCheck.Checked -Directory $script:Ed.Directory `
-        -ResolvePath { param($Path) Resolve-FujiEditorPath -Editor $script:Ed -Path $Path }
+        -ResolvePath { param($Path) Resolve-FujiEditorPath -Editor $script:Ed -Path $Path } `
+        -StartAt $range.StartAt -EndAt $range.EndAt -Breaks (-not $Unattended) -Stepping $Stepping.IsPresent -Vars $Vars
     $c = $script:RunCtl
     $c.Running = $true
     $c.Paused = $false
@@ -175,7 +243,9 @@ function Start-FujiRunUi {
     $c.Highlight = -1
     Set-FujiRunUi -Running $true
     Update-FujiRunButton
-    Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rr.Rows.Count $rr.Range $interval) -Level 'run'
+    Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rows.Count $rr.Range $interval) -Level 'run'
+    if ($Partial -eq 'only') { Write-FujiUiLog -Message (Get-FujiText 'run.onlyThis' ($range.StartAt + 1) ($range.EndAt + 1)) -Level 'run' }
+    if ($Stepping) { Write-FujiUiLog -Message (Get-FujiText 'run.steppingStart') -Level 'run' }
     $status = ''
     try {
         $status = Invoke-FujiRun -Run $script:Run
@@ -258,6 +328,13 @@ function New-FujiWinIo {
         Alarm = { Invoke-FujiAlarm }
         Notify = { Invoke-FujiNotify }
         EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
+        Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
+        SetField = { param($Request) Set-FujiUiaField -Request $Request }
+        GetField = { param($Request) Get-FujiUiaField -Request $Request }
+        ReadTable = { param($Request) Read-FujiUiaTable -Request $Request }
+        SaveText = { param($Path, $Text) Save-FujiRunText -Path $Path -Text $Text }
+        GetSecret = { param($Target) Read-FujiCredential -Target $Target }
+        TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
     }
 }
 
@@ -402,7 +479,46 @@ function Save-FujiScreenshot {
     return ('{0}x{1}' -f $r.Width, $r.Height)
 }
 
+# A CSV a step writes (a table read from the screen): with a BOM, so Excel opens it as UTF-8
+function Save-FujiRunText {
+    param([string]$Path, [string]$Text)
+    $folder = Split-Path -Path $Path -Parent
+    if ($folder -and -not (Test-Path -LiteralPath $folder -PathType Container)) { [void](New-Item -ItemType Directory -Path $folder) }
+    Write-FujiTextFile -Path $Path -Text $Text -Bom
+}
+
 # ----------------------------------------------------------------- Excel and Outlook (COM)
+# An Excel book as the data of a run: the first sheet saved by Excel as a CSV (UTF-8), which keeps
+# what the cells show (dates and numbers as displayed). The book is opened read-only and its macros
+# never run. Returns the CSV text.
+function Read-FujiWorkbookCsv {
+    param([Parameter(Mandatory)][string]$Path)
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_book_' + [guid]::NewGuid().ToString('N') + '.csv')
+    $app = New-Object -ComObject Excel.Application
+    try {
+        $app.Visible = $false
+        $app.DisplayAlerts = $false
+        $app.AutomationSecurity = 3
+        $wb = $app.Workbooks.Open($Path, 0, $true)
+        try {
+            # Copy() without a place puts the sheet into a new book of its own
+            $wb.Worksheets.Item(1).Copy()
+            $copy = $app.ActiveWorkbook
+            try { $copy.SaveAs($tmp, 62) } finally { $copy.Close($false) }   # 62 = xlCSVUTF8
+        } finally {
+            $wb.Close($false)
+        }
+    } finally {
+        $app.Quit()
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
+    }
+    try {
+        return (Read-FujiCsvText -Path $tmp -Encoding 'auto').Text
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-FujiExcelRequest {
     param([hashtable]$Request)
     $c = $script:RunCtl

@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------------------------
 #  Data model: macros file, steps and block structure
 #  A macro: [ordered]@{ id; name; targetWindow; steps = List[object] }
-#  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] }
+#  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] [; breakpoint = $true] }
 #  The file format is the HTA's fujikyun_macros.json (data version 27).
 # ---------------------------------------------------------------------------------------------
 
@@ -55,6 +55,7 @@ function ConvertTo-FujiMacroData {
             $step = [ordered]@{ cmd = $cmd; val = $val; label = $label }
             if ($cmd -eq 'GROUP_START' -and $s.Contains('when') -and ($s['when'] -eq 'first' -or $s['when'] -eq 'last')) { $step['when'] = [string]$s['when'] }
             if ($s.Contains('disabled') -and $s['disabled'] -eq $true) { $step['disabled'] = $true }
+            if ($s.Contains('breakpoint') -and $s['breakpoint'] -eq $true -and (Test-FujiBreakableStep -Step $step)) { $step['breakpoint'] = $true }
             if (-not $step.label) { $step.label = Get-FujiStepLabel -Cmd $cmd -Value $val }
             $steps.Add($step)
         }
@@ -220,4 +221,12 @@ function Test-FujiExecutableStep {
     if ($Step.Contains('disabled') -and $Step['disabled']) { return $false }
     $c = $Step.cmd
     return -not ($c -eq 'COMMENT' -or (Test-FujiBlockStart $c) -or (Test-FujiBlockEnd $c) -or (Test-FujiBlockMiddle $c))
+}
+
+# A step a run can stop before (a breakpoint, stepping): not a comment, a block end or ELSE / CATCH
+function Test-FujiBreakableStep {
+    param([System.Collections.IDictionary]$Step)
+    if ($Step.Contains('disabled') -and $Step['disabled']) { return $false }
+    $c = [string]$Step.cmd
+    return -not ($c -eq 'COMMENT' -or (Test-FujiBlockEnd $c) -or (Test-FujiBlockMiddle $c))
 }

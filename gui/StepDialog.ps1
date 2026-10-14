@@ -1,7 +1,8 @@
 # ---------------------------------------------------------------------------------------------
 #  Step editor dialog, built from the command's fields in fujikyun_commands.json
 #  Field types: text, textarea, select, keypreset, csvcol, imgpath, capture, rectcapture,
-#  macroselect; "placeholders" adds the insert-a-placeholder list, "hint" a note below.
+#  macroselect, uiapick (point at a part / try to find it), credential (register a password);
+#  "placeholders" adds the insert-a-placeholder list, "hint" a note below.
 # ---------------------------------------------------------------------------------------------
 
 $script:StepDlg = $null
@@ -244,6 +245,30 @@ function Add-FujiStepField {
             $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($d.Status['rect'])
         }
+        'uiapick' {
+            $pick = New-FujiButton -Text (Get-FujiText 'gui.partPick') -Tip (Get-FujiText 'gui.partPickTip')
+            $pick.Add_Click({ Invoke-FujiUi { Start-FujiStepCapture -Mode 'part' } })
+            $try = New-FujiButton -Text (Get-FujiText 'gui.partTry') -Tip (Get-FujiText 'gui.partTryTip')
+            $try.Add_Click({ Invoke-FujiUi { Test-FujiPartFind } })
+            [void]$row.Controls.Add($pick)
+            [void]$row.Controls.Add($try)
+            [void]$Panel.Controls.Add($row)
+            $row = New-FujiFlow -NoWrap
+            $d.Status['part'] = New-FujiHintLabel -Text (Get-FujiText 'gui.partHint') -Width $Width
+            [void]$row.Controls.Add($d.Status['part'])
+        }
+        'credential' {
+            $reg = New-FujiButton -Text (Get-FujiText 'cred.button') -Tip (Get-FujiText 'cred.buttonTip')
+            $reg.Add_Click({ Invoke-FujiUi { Register-FujiStepCredential } })
+            [void]$row.Controls.Add($reg)
+            $target = ''
+            if ($d.Inputs.ContainsKey('target')) {
+                $target = $d.Inputs['target'].Text.Trim()
+                $d.Inputs['target'].Add_Leave({ Invoke-FujiUi { Update-FujiStepCredentialStatus } })
+            }
+            $d.Status['cred'] = New-FujiHintLabel -Text (Get-FujiCredentialStatus -Target $target) -Width ($Width - (Get-FujiScaled 200))
+            [void]$row.Controls.Add($d.Status['cred'])
+        }
         'macroselect' {
             $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
             $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -343,7 +368,7 @@ function Select-FujiImageFile {
 # ----------------------------------------------------------------- mouse position / region / image capture
 # Counts down with a timer (the window stays responsive), then reads the cursor position
 function Start-FujiStepCapture {
-    param([ValidateSet('pos', 'rect1', 'img')][string]$Mode)
+    param([ValidateSet('pos', 'rect1', 'img', 'part')][string]$Mode)
     $d = $script:StepDlg
     if ($null -eq $d.Timer) {
         $d.Timer = New-Object -TypeName System.Windows.Forms.Timer
@@ -365,6 +390,7 @@ function Update-FujiCaptureStatus {
         'rect1' { $d.Status['rect'].Text = Get-FujiText 'gui.rectWait1' $d.Remaining }
         'rect2' { $d.Status['rect'].Text = Get-FujiText 'gui.rectWait2' $d.Remaining }
         'img' { $d.Status['img'].Text = Get-FujiText 'gui.imgWait' $d.Remaining }
+        'part' { $d.Status['part'].Text = Get-FujiText 'gui.partWait' $d.Remaining }
     }
 }
 
@@ -406,7 +432,107 @@ function Step-FujiStepCapture {
             $d.Timer.Stop()
             Save-FujiCursorImage -Cursor $p
         }
+        'part' {
+            $d.Timer.Stop()
+            Complete-FujiPartPick -Cursor $p
+        }
     }
+}
+
+# ----------------------------------------------------------------- parts by UI Automation (point at it, try it)
+# The part under the cursor: its name goes into the step's name field and a red frame shows it
+function Complete-FujiPartPick {
+    param([Parameter(Mandatory)][System.Drawing.Point]$Cursor)
+    $d = $script:StepDlg
+    $mode = 'PICK'
+    if ($d.Cmd -eq 'TABLE_READ') { $mode = 'PICKTABLE' }
+    $d.Status['part'].Text = Get-FujiText 'gui.partLooking'
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        $r = Invoke-FujiUia -Mode $mode -X $Cursor.X -Y $Cursor.Y
+    } catch {
+        $d.Status['part'].Text = Get-FujiText 'gui.partFailed' $_.Exception.Message
+        return
+    }
+    if ($r -is [string]) {
+        $key = 'gui.partNone'
+        if ($r -eq 'NOTABLE') { $key = 'gui.partNoTable' }
+        $d.Status['part'].Text = Get-FujiText $key
+        return
+    }
+    $name = Select-FujiPartName -Cmd $d.Cmd -Info $r
+    $info = Get-FujiText 'gui.partInfo' $r.Kind $r.Name $r.Id $r.Label
+    if ($name) {
+        $d.Inputs['name'].Text = $name
+        $d.Status['part'].Text = (Get-FujiText 'gui.partPicked' $name) + "`r`n" + $info
+    } elseif ($d.Cmd -eq 'TABLE_READ') {
+        $d.Inputs['name'].Text = ''
+        $d.Status['part'].Text = (Get-FujiText 'gui.partTableNoName') + "`r`n" + $info
+    } else {
+        $d.Status['part'].Text = (Get-FujiText 'gui.partNoName') + "`r`n" + $info
+    }
+    Show-FujiPartFrame -Rect $r.Rect
+}
+
+# The name a step should use for a pointed-at part: a field's own name, else its label, else its id;
+# a button's name; a table's name, else its id
+function Select-FujiPartName {
+    param([string]$Cmd, [hashtable]$Info)
+    $n = ([string]$Info.Name).Trim()
+    $id = ([string]$Info.Id).Trim()
+    switch ($Cmd) {
+        'CLICK_NAME' { return $n }
+        'TABLE_READ' { if ($n) { return $n }; return $id }
+    }
+    if ($n) { return $n }
+    if ($Info.Label) { return [string]$Info.Label }
+    return $id
+}
+
+# Looks for the part the step names, the way a run will (in the macro's target window), and
+# shows it with a red frame
+function Test-FujiPartFind {
+    $d = $script:StepDlg
+    $name = ''
+    if ($d.Inputs.ContainsKey('name')) { $name = $d.Inputs['name'].Text.Trim() }
+    if (-not $name -and $d.Cmd -ne 'TABLE_READ') { $d.Status['part'].Text = Get-FujiText 'gui.partTryEmpty'; return }
+    $nth = 1
+    if ($d.Inputs.ContainsKey('nth')) { $nth = [Math]::Max(1, (Get-FujiInt -Text $d.Inputs['nth'].Text -Default 1)) }
+    $hint = [string](Get-FujiCurrentMacro $script:Ed).targetWindow
+    $mode = 'LOCATE'
+    if ($d.Cmd -eq 'CLICK_NAME') { $mode = 'LOCATENAME' } elseif ($d.Cmd -eq 'TABLE_READ') { $mode = 'LOCATETABLE' }
+    $d.Status['part'].Text = Get-FujiText 'gui.partLooking'
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        $r = Invoke-FujiUia -Mode $mode -Name $name -Nth $nth -Hint $hint
+    } catch {
+        $d.Status['part'].Text = Get-FujiText 'gui.partFailed' $_.Exception.Message
+        return
+    }
+    if ($r -is [string]) {
+        $where = Get-FujiText 'gui.partEverywhere'
+        if ($hint) { $where = Get-FujiText 'gui.partInTarget' $hint }
+        $d.Status['part'].Text = Get-FujiText 'gui.partTryNone' $where
+        return
+    }
+    $text = Get-FujiText 'gui.partFound' $r.Kind $r.Name $r.Id
+    if ($r.ContainsKey('Rows')) { $text += Get-FujiText 'gui.partRows' $r.Rows }
+    $d.Status['part'].Text = $text
+    Show-FujiPartFrame -Rect $r.Rect
+}
+
+# ----------------------------------------------------------------- passwords (SECRET)
+function Register-FujiStepCredential {
+    $d = $script:StepDlg
+    $target = $d.Inputs['target'].Text.Trim()
+    if (-not $target) { $d.Status['cred'].Text = Get-FujiText 'cred.statusNoTarget'; return }
+    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target
+}
+
+function Update-FujiStepCredentialStatus {
+    $d = $script:StepDlg
+    if ($null -eq $d -or -not $d.Status.ContainsKey('cred')) { return }
+    $d.Status['cred'].Text = Get-FujiCredentialStatus -Target $d.Inputs['target'].Text.Trim()
 }
 
 function Save-FujiCursorImage {

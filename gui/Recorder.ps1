@@ -64,6 +64,16 @@ public class FujiRecorder {
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // The name of a text box under the point, so typing into it can be "put text into a field by name"
+    static string FieldName(int x, int y) {
+        try {
+            AutomationElement el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
+            if (el == null || el.Current.ControlType != ControlType.Edit) { return ""; }
+            string n = el.Current.Name;
+            if (string.IsNullOrEmpty(n)) { n = el.Current.AutomationId; }
+            return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
+        } catch { return ""; }
+    }
     void Click(bool right) {
         FujiRecPoint p; GetCursorPos(out p);
         FlushText(); imeNoted = false;
@@ -72,7 +82,10 @@ public class FujiRecorder {
             ev[lastClickIndex] = "C\t" + lastClickX + "\t" + lastClickY + "\tDOUBLE"; lastClickTick = 0; return;
         }
         string name = right ? "" : InvokableName(p.X, p.Y);
-        Add(name != "" ? "N\t" + name + "\t" + p.X + "\t" + p.Y : "C\t" + p.X + "\t" + p.Y + "\t" + (right ? "RIGHT" : "LEFT"));
+        string field = right || name != "" ? "" : FieldName(p.X, p.Y);
+        if (name != "") { Add("N\t" + name + "\t" + p.X + "\t" + p.Y); }
+        else if (field != "") { Add("F\t" + field + "\t" + p.X + "\t" + p.Y); }
+        else { Add("C\t" + p.X + "\t" + p.Y + "\t" + (right ? "RIGHT" : "LEFT")); }
         lastClickTick = now; lastClickX = p.X; lastClickY = p.Y; lastClickIndex = ev.Count - 1;
     }
     void Key(int vk, IntPtr fg) {
@@ -208,4 +221,5 @@ function Update-FujiRecordUi {
         $b.UseVisualStyleBackColor = $true
     }
     $script:Ui.RunButton.Enabled = -not $recording -and -not $script:RunCtl.Running
+    $script:Ui.StepRunButton.Enabled = -not $recording -and -not $script:RunCtl.Running
 }
