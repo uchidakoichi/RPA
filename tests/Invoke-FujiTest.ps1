@@ -120,6 +120,21 @@ $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
 $ctx.Row.Data = @($fx.unsafeRow)
 Assert-Equal $golden.unsafe.value (Expand-FujiPlaceholder -Text $golden.unsafe.text -Context $ctx -Unsafe $unsafe) 'placeholder unsafe text'
 Assert-Equal ([int]$golden.unsafe.count) $unsafe.Count 'placeholder unsafe count'
+# A RUN that starts PowerShell also refuses quotes, variables, statement ends and blocks (curly quotes too)
+$normalPattern = (Get-FujiCommandUnsafePattern -Command 'cmd /c echo {{1}}').ToString()
+Assert-Equal $normalPattern (Get-FujiCommandUnsafePattern -Command 'cmd /c echo {{pwsh}}').ToString() 'unsafe pattern: placeholder named pwsh'
+foreach ($cmdText in @('powershell -NoProfile -Command "x {{1}}"', 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -c {{1}}', 'PWSH -c {{1}}', 'cmd /c start powershell {{1}}')) {
+    Assert-True ((Get-FujiCommandUnsafePattern -Command $cmdText).ToString() -ne $normalPattern) ('unsafe pattern for PowerShell: ' + $cmdText)
+}
+$psPattern = Get-FujiCommandUnsafePattern -Command 'powershell -Command "x {{1}}"'
+$ctx.Row.Data = @("x'; Stop-Computer; '", 'C:\RPA\a b.xlsx', '1); (1', ('a' + [char]0x2019 + 'b'), '$env:x', 'a{b}', 'a`b')
+$unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+[void](Expand-FujiPlaceholder -Text "'{{1}}' '{{2}}' {{3}} '{{4}}' {{5}} {{6}} {{7}}" -Context $ctx -Unsafe $unsafe -UnsafePattern $psPattern)
+Assert-Equal 6 $unsafe.Count 'PowerShell unsafe count'
+$unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+[void](Expand-FujiPlaceholder -Text "{{1}} {{2}} {{3}}" -Context $ctx -Unsafe $unsafe)
+Assert-Equal 0 $unsafe.Count 'cmd unsafe count ignores PowerShell characters'
+$ctx.Row.Data = @($fx.unsafeRow)
 
 # ----------------------------------------------------------------- JSON
 $data = [ordered]@{ version = 27; name = "a`"b\c`r`n`t"; list = @(1, 'x', $null, $true); empty = @(); obj = [ordered]@{}; one = @('only') }
@@ -187,7 +202,14 @@ foreach ($t in $golden.templateLabels) {
     $ps = Get-Golden $t 'ps'
     if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
 }
-Assert-Equal 67 $templates['templates'].Count 'template count'
+Assert-Equal 157 $templates['templates'].Count 'template count'
+$cats = $templates['categories']
+foreach ($t in $templates['templates']) { Assert-True ($cats.Contains($t['category'])) ('{0}: category is listed' -f $t['id']) }
+$tplHits = { param($q) $ids = New-Object -TypeName 'System.Collections.Generic.List[string]'; foreach ($t in $templates['templates']) { if (Test-FujiTemplateMatch -Template $t -Query $q) { $ids.Add($t['id']) } }; , $ids.ToArray() }
+Assert-Equal $templates['templates'].Count (& $tplHits ' ').Count 'template search: blank query shows all'
+Assert-True ((& $tplHits ([string][char]0xFF30 + [char]0xFF44 + [char]0xFF46 + [char]0x3000 + 'word')) -contains 'word-to-pdf') 'template search: full-width letters and space, any case'
+Assert-True (-not ((& $tplHits 'PDF Word') -contains 'ppt-to-pdf')) 'template search: every word must match'
+Assert-Equal 0 (& $tplHits 'no-such-word-xyz').Count 'template search: no match'
 foreach ($t in $templates['templates']) {
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($item in $t['steps']) {
@@ -626,6 +648,14 @@ Assert-True ($script:Fake.Calls[$script:Fake.Calls.Count - 1] -eq 'END' -and -no
 $run = New-TestRun -Steps @(@('RUN', 'notepad.exe {{1}}')) -Rows @([string[]]@('a&b'), [string[]]@('ok.txt'))
 Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: unsafe RUN skips the row only'
 Assert-True ((Get-FakeCall 'START') -eq 'START notepad.exe ok.txt' -and $run.ErrorRows.Count -eq 1 -and $run.SkippedRows -eq 1) 'run: unsafe row recorded, safe row started'
+Assert-Equal (Get-FujiText 'run.runUnsafe' ('{{1}}=' + [char]0x300C + 'a&b' + [char]0x300D)) $run.ErrorRows[0].Reason 'run: cmd refusal keeps the cmd message'
+$run = New-TestRun -Steps @(@('RUN', "powershell -Command `"Get-Item '{{1}}'`"")) -Rows @([string[]]@("x'; Stop-Computer; '"), [string[]]@('C:\a b.txt'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: PowerShell RUN with a quote in the value'
+Assert-True ((Get-FakeCall 'START') -eq "START powershell -Command `"Get-Item 'C:\a b.txt'`"" -and $run.ErrorRows.Count -eq 1) 'run: PowerShell injection row recorded, safe row started'
+Assert-Equal (Get-FujiText 'run.runUnsafePs' ('{{1}}=' + [char]0x300C + "x'; Stop-Computer; '" + [char]0x300D)) $run.ErrorRows[0].Reason 'run: PowerShell refusal tells how to rename the file'
+$run = New-TestRun -Steps @(@('RUN', "{{1}} -Command `"Get-Item '{{2}}'`"")) -Rows @([string[]]@('powershell', "x'; Stop-Computer; '"), [string[]]@('powershell', 'C:\a.txt'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: PowerShell named by a value'
+Assert-True ((Get-FakeCall 'START') -eq "START powershell -Command `"Get-Item 'C:\a.txt'`"" -and $run.ErrorRows.Count -eq 1) 'run: PowerShell named by a value is checked strictly'
 
 # variables: calculation, string operations, copy, record, Excel
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"{{1}}*2","mode":"CALC"}'), @('STR_OP', '{"name":"t","src":"  {{2}} ","op":"TRIM","a":"","b":""}'),

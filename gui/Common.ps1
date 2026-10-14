@@ -30,6 +30,10 @@ function Get-FujiScaled {
 function Initialize-FujiUi {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    # RichTextBox (the log) uses the old RichEdit 3.0 in apps that target .NET Framework before 4.7.1,
+    # as powershell.exe does; it shows emoji as a box. Ask for RichEdit 4.1 (msftedit.dll) before
+    # the first RichTextBox is made (Windows Forms reads the switch once).
+    [System.AppContext]::SetSwitch('Switch.System.Windows.Forms.DoNotLoadLatestRichEditControl', $false)
     # Real pixels everywhere (screen capture and clicks use the same coordinates as the screen)
     $native = Get-FujiNativeType
     [void]$native::SetProcessDPIAware()

@@ -176,8 +176,9 @@ function Get-FujiRunContext {
 }
 
 function Expand-FujiRunText {
-    param([hashtable]$Run, [AllowNull()][AllowEmptyString()][string]$Text, [System.Collections.Generic.List[string]]$Unsafe = $null)
-    return (Expand-FujiPlaceholder -Text $Text -Context (Get-FujiRunContext $Run) -Unsafe $Unsafe)
+    param([hashtable]$Run, [AllowNull()][AllowEmptyString()][string]$Text, [System.Collections.Generic.List[string]]$Unsafe = $null,
+        [System.Text.RegularExpressions.Regex]$UnsafePattern = $null)
+    return (Expand-FujiPlaceholder -Text $Text -Context (Get-FujiRunContext $Run) -Unsafe $Unsafe -UnsafePattern $UnsafePattern)
 }
 
 # WScript-style key codes: {SPACE} and {SPACE n} are not key codes, so they become spaces
@@ -673,8 +674,18 @@ function Invoke-FujiRunCommand {
         return (Get-FujiRunNext 0)
     }
     $unsafe = $null
-    if ($cmd -eq 'RUN') { $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]' }
-    if ($null -ne $def -and (Test-FujiExpandValue $def)) { $val = Expand-FujiRunText -Run $Run -Text $val -Unsafe $unsafe }
+    $unsafePattern = $null
+    if ($cmd -eq 'RUN') {
+        $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $unsafePattern = Get-FujiCommandUnsafePattern -Command $val
+    }
+    if ($null -ne $def -and (Test-FujiExpandValue $def)) { $val = Expand-FujiRunText -Run $Run -Text $val -Unsafe $unsafe -UnsafePattern $unsafePattern }
+    if ($cmd -eq 'RUN' -and -not [object]::ReferenceEquals($unsafePattern, $script:FujiPowerShellUnsafe) -and $script:FujiPowerShellCommand.IsMatch($val)) {
+        # PowerShell named by an inserted value (e.g. {{1}} -Command ...): check the values again as for PowerShell
+        $unsafe.Clear()
+        $unsafePattern = $script:FujiPowerShellUnsafe
+        $val = Expand-FujiRunText -Run $Run -Text ([string]$Step.val) -Unsafe $unsafe -UnsafePattern $script:FujiPowerShellUnsafe
+    }
     $p = ConvertFrom-FujiStepValue -Cmd $cmd -Value ([string]$Step.val)
     switch ($cmd) {
         'GROUP_START' {
@@ -736,7 +747,9 @@ function Invoke-FujiRunCommand {
         }
         'RUN' {
             if ($unsafe.Count -gt 0) {
-                $why = Get-FujiText 'run.runUnsafe' ($unsafe -join ([string][char]0x3001))
+                $whyKey = 'run.runUnsafe'
+                if ([object]::ReferenceEquals($unsafePattern, $script:FujiPowerShellUnsafe)) { $whyKey = 'run.runUnsafePs' }
+                $why = Get-FujiText $whyKey ($unsafe -join ([string][char]0x3001))
                 Write-FujiRunLog $Run ([string][char]0x26A0 + ' ' + $why) 'error'
                 Add-FujiErrorRow -Run $Run -Reason $why
                 Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultSkip') -Note $why
