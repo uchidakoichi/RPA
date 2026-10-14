@@ -209,6 +209,11 @@ try {
                 $State.Result = @{ ClickX = $r.X + [int]($r.W / 2); ClickY = $r.Y + [int]($r.H / 2) }
             }
         }
+        'ISPASSWORD' {
+            $focused = $null
+            try { $focused = $AE::FocusedElement } catch { $focused = $null }
+            $State.Result = ($null -ne $focused -and [bool]$focused.Current.IsPassword)
+        }
         'TABLE' {
             $t = Find-InScopes { param($s) Find-Table $s }
             if ($null -eq $t) { $State.Result = 'NOTFOUND'; break }

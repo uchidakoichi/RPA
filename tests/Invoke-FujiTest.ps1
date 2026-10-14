@@ -496,7 +496,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'app' }
+        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
@@ -538,6 +538,7 @@ function New-FakeIo {
         GetSecret = { param($Target) if ($script:Fake.Secrets.ContainsKey($Target)) { return $script:Fake.Secrets[$Target] }; return $null }
         TypeSecret = { param($Text) $script:Fake.Calls.Add('SECRET ' + $Text.Length) }
         ForegroundWindow = { return $script:Fake.Front }
+        FocusIsPassword = { return $script:Fake.PasswordFocus }
     }
 }
 
@@ -910,25 +911,35 @@ Assert-True ((Test-FujiStepSetting -Cmd 'TABLE_READ' -Settings @{ name = ''; pat
 # passwords
 $secretName = 'kikan'
 $run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"USER"}')), @('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
-$script:Fake.Secrets[$secretName] = @{ User = 'user1'; Password = 'p+w(1)'; Program = 'APP'; Window = 'login' }
+$script:Fake.Secrets[$secretName] = @{ User = 'user1'; Password = 'p+w(1)'; Program = 'c:\app\APP.exe'; Window = 'login' }
 Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'secret: typed'
 Assert-Equal 'SECRET 5 | SECRET 6' (Get-FakeCall 'SECRET') 'secret: user name and password typed'
 Assert-Equal 0 @($script:Fake.Logs | Where-Object { $_.Contains('p+w') -or $_.Contains('user1') }).Count 'secret: values never in the log'
 $run = New-TestRun -Steps @(@('SECRET', '{"target":"none","part":"PASSWORD"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: not registered'
 $run = New-TestRun -Steps @(@('TRY_START', 't'), @('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')), @('CATCH', ''), @('KEY', 'caught'), @('TRY_END', ''))
-$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'app'; Window = 'login' }
-$script:Fake.Front = @{ Title = 'memo - Notepad'; Program = 'notepad' }
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'C:\App\app.exe'; Window = 'login' }
+$script:Fake.Front = @{ Title = 'memo - Notepad'; Program = 'C:\Windows\notepad.exe' }
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: another window in front stops the run'
 Assert-True ((Get-FakeCall 'SECRET') -eq '' -and (Get-FakeCall 'KEYS') -eq '') 'secret: nothing typed into another window, and "on error" does not catch it'
 $run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
-$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'app'; Window = 'login' }
-$script:Fake.Front = @{ Title = 'login copy.txt - Notepad'; Program = 'notepad' }
-Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: the title alone is not enough when a program was registered'
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'C:\App\app.exe'; Window = 'login' }
+$script:Fake.Front = @{ Title = 'login copy.txt - app'; Program = 'C:\Users\x\app.exe' }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: a look-alike title and a copied program of the same name are refused'
+$run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')), @('SECRET', ('{"target":"' + $secretName + '","part":"USER"}')))
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'C:\App\app.exe'; Window = 'login' }
+$script:Fake.PasswordFocus = $false
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: a password only into a password field'
+Assert-Equal '' (Get-FakeCall 'SECRET') 'secret: nothing typed into an ordinary field'
+$run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"USER"}')))
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = 'C:\App\app.exe'; Window = 'login' }
+$script:Fake.PasswordFocus = $false
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'secret: the user name may go into an ordinary field'
 $run = New-TestRun -Steps @(@('SECRET', ('{"target":"' + $secretName + '","part":"PASSWORD"}')))
-$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = ''; Window = '' }
-Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: no window registered'
-Assert-True (Test-FujiSecretPlace -Foreground @{ Title = 'Kikan Login'; Program = 'kikan' } -Program '' -Window 'login') 'secret place: title only'
+$script:Fake.Secrets[$secretName] = @{ User = 'u'; Password = 'p'; Program = ''; Window = 'login' }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'secret: no program registered'
+Assert-True (-not (Test-FujiSecretPlace -Foreground @{ Title = 'Kikan Login'; Program = 'C:\k.exe' } -Program '' -Window 'login')) 'secret place: a title alone is never enough'
+Assert-True (Test-FujiSecretPlace -Foreground @{ Title = 'Kikan Login'; Program = 'C:\K.EXE' } -Program 'c:\k.exe' -Window 'login') 'secret place: title and program path'
 Assert-Equal 'prog|title|x' (ConvertTo-FujiSecretPlace -Program 'pr|og' -Window ' title|x ') 'secret place written'
 Assert-True ((ConvertFrom-FujiSecretPlace 'prog|title|x').Window -eq 'title|x' -and (ConvertFrom-FujiSecretPlace '').Window -eq '') 'secret place read'
 Assert-Equal 'a{+}b{^}{%}{~}{(}{)}{{}{}}{[}{]}' (ConvertTo-FujiSendKeyLiteral 'a+b^%~(){}[]') 'secret: SendKeys characters typed as they are'

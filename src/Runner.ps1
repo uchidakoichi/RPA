@@ -20,7 +20,8 @@
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
-#    ForegroundWindow {} -> @{ Title; Program } of the window in front
+#    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
+#    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -1400,10 +1401,15 @@ function Invoke-FujiSecret {
     if ($err) { return $err }
     # Only into the window it was registered for: a macro (an imported one too) cannot type it into
     # Notepad and copy it out. "On error" does not catch this stop.
-    if (-not $cred.Window) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
+    if (-not $cred.Window -or -not $cred.Program) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
     $front = & $Run.Io.ForegroundWindow
     if (-not (Test-FujiSecretPlace -Foreground $front -Program $cred.Program -Window $cred.Window)) {
         return (Get-FujiRunError -Message (Get-FujiText 'run.secretWrongPlace' $target ([string]$front.Title) $cred.Window) -Uncatchable $true)
+    }
+    # The password itself only into a password field (it shows dots and cannot be read back or copied):
+    # typed into an ordinary field of the right window, a later step could read it out
+    if ($Settings['part'] -ne 'USER' -and -not [bool](& $Run.Io.FocusIsPassword)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretNotPasswordField' $target) -Uncatchable $true)
     }
     & $Run.Io.TypeSecret $value
     Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)

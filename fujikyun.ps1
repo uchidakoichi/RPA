@@ -545,14 +545,14 @@ function ConvertFrom-FujiSecretPlace {
 }
 
 # A password goes only into the window it was registered for: the window in front must have the
-# registered text in its title and, when a program was registered, belong to that program
+# registered text in its title AND belong to the registered program, compared by the full path of
+# its .exe (a title is easy to imitate, a program name too: a copy of notepad.exe renamed app.exe)
 function Test-FujiSecretPlace {
     param([hashtable]$Foreground, [AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
-    if (-not $Window -or $null -eq $Foreground) { return $false }
+    if (-not $Window -or -not $Program -or $null -eq $Foreground) { return $false }
     $ic = [System.StringComparison]::OrdinalIgnoreCase
     if (([string]$Foreground.Title).IndexOf($Window, $ic) -lt 0) { return $false }
-    if ($Program -and -not [string]::Equals([string]$Foreground.Program, $Program, $ic)) { return $false }
-    return $true
+    return [string]::Equals([string]$Foreground.Program, $Program, $ic)
 }
 
 # @{ User; Password; Program; Window } or $null when nothing is registered under Target
@@ -2478,7 +2478,8 @@ function Add-FujiRecordedStep {
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
-#    ForegroundWindow {} -> @{ Title; Program } of the window in front
+#    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
+#    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -3858,10 +3859,15 @@ function Invoke-FujiSecret {
     if ($err) { return $err }
     # Only into the window it was registered for: a macro (an imported one too) cannot type it into
     # Notepad and copy it out. "On error" does not catch this stop.
-    if (-not $cred.Window) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
+    if (-not $cred.Window -or -not $cred.Program) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
     $front = & $Run.Io.ForegroundWindow
     if (-not (Test-FujiSecretPlace -Foreground $front -Program $cred.Program -Window $cred.Window)) {
         return (Get-FujiRunError -Message (Get-FujiText 'run.secretWrongPlace' $target ([string]$front.Title) $cred.Window) -Uncatchable $true)
+    }
+    # The password itself only into a password field (it shows dots and cannot be read back or copied):
+    # typed into an ordinary field of the right window, a later step could read it out
+    if ($Settings['part'] -ne 'USER' -and -not [bool](& $Run.Io.FocusIsPassword)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretNotPasswordField' $target) -Uncatchable $true)
     }
     & $Run.Io.TypeSecret $value
     Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)
@@ -5093,7 +5099,7 @@ function Complete-FujiCredentialDialog {
     $d = $script:Ui.CredDialog
     if ($d.Pass.Text -eq '') { $d.Error.Text = Get-FujiText 'cred.empty'; return }
     if ($d.Pass.Text -cne $d.Again.Text) { $d.Error.Text = Get-FujiText 'cred.mismatch'; return }
-    if ($d.Window.Text.Trim() -eq '') { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
+    if ($d.Window.Text.Trim() -eq '' -or -not $d.Program) { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
     $secret = New-Object -TypeName System.Security.SecureString
     foreach ($ch in $d.Pass.Text.ToCharArray()) { $secret.AppendChar($ch) }
     $secret.MakeReadOnly()
@@ -7014,6 +7020,7 @@ function New-FujiWinIo {
         GetSecret = { param($Target) Read-FujiCredential -Target $Target }
         TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
+        FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
     }
 }
 
@@ -7038,7 +7045,7 @@ function Get-FujiTopWindow {
     return , $list.ToArray()
 }
 
-# @{ Title; Program } of the window in front (Program: its process name, e.g. "msedge"), $null if none
+# @{ Title; Program } of the window in front (Program: the full path of its .exe), $null if none
 function Get-FujiForegroundWindowInfo {
     $native = Get-FujiNativeType
     $h = $native::GetForegroundWindow()
@@ -7062,7 +7069,9 @@ function Get-FujiForegroundWindowInfo {
     $program = ''
     if ($processId -gt 0) {
         $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
-        if ($null -ne $p) { $program = [string]$p.ProcessName }
+        # Path is empty for a process this user may not look into (e.g. one run as administrator):
+        # then nothing matches and no password is typed
+        if ($null -ne $p) { try { $program = [string]$p.Path } catch { $program = '' } }
     }
     return @{ Title = $title; Program = $program }
 }
@@ -8710,6 +8719,11 @@ try {
                 if ($null -eq $r) { throw }
                 $State.Result = @{ ClickX = $r.X + [int]($r.W / 2); ClickY = $r.Y + [int]($r.H / 2) }
             }
+        }
+        'ISPASSWORD' {
+            $focused = $null
+            try { $focused = $AE::FocusedElement } catch { $focused = $null }
+            $State.Result = ($null -ne $focused -and [bool]$focused.Current.IsPassword)
         }
         'TABLE' {
             $t = Find-InScopes { param($s) Find-Table $s }

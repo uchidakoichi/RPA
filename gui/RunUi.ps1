@@ -336,6 +336,7 @@ function New-FujiWinIo {
         GetSecret = { param($Target) Read-FujiCredential -Target $Target }
         TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
+        FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
     }
 }
 
@@ -360,7 +361,7 @@ function Get-FujiTopWindow {
     return , $list.ToArray()
 }
 
-# @{ Title; Program } of the window in front (Program: its process name, e.g. "msedge"), $null if none
+# @{ Title; Program } of the window in front (Program: the full path of its .exe), $null if none
 function Get-FujiForegroundWindowInfo {
     $native = Get-FujiNativeType
     $h = $native::GetForegroundWindow()
@@ -384,7 +385,9 @@ function Get-FujiForegroundWindowInfo {
     $program = ''
     if ($processId -gt 0) {
         $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
-        if ($null -ne $p) { $program = [string]$p.ProcessName }
+        # Path is empty for a process this user may not look into (e.g. one run as administrator):
+        # then nothing matches and no password is typed
+        if ($null -ne $p) { try { $program = [string]$p.Path } catch { $program = '' } }
     }
     return @{ Title = $title; Program = $program }
 }

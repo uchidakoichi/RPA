@@ -64,14 +64,14 @@ function ConvertFrom-FujiSecretPlace {
 }
 
 # A password goes only into the window it was registered for: the window in front must have the
-# registered text in its title and, when a program was registered, belong to that program
+# registered text in its title AND belong to the registered program, compared by the full path of
+# its .exe (a title is easy to imitate, a program name too: a copy of notepad.exe renamed app.exe)
 function Test-FujiSecretPlace {
     param([hashtable]$Foreground, [AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
-    if (-not $Window -or $null -eq $Foreground) { return $false }
+    if (-not $Window -or -not $Program -or $null -eq $Foreground) { return $false }
     $ic = [System.StringComparison]::OrdinalIgnoreCase
     if (([string]$Foreground.Title).IndexOf($Window, $ic) -lt 0) { return $false }
-    if ($Program -and -not [string]::Equals([string]$Foreground.Program, $Program, $ic)) { return $false }
-    return $true
+    return [string]::Equals([string]$Foreground.Program, $Program, $ic)
 }
 
 # @{ User; Password; Program; Window } or $null when nothing is registered under Target

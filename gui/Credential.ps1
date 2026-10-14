@@ -84,7 +84,7 @@ function Complete-FujiCredentialDialog {
     $d = $script:Ui.CredDialog
     if ($d.Pass.Text -eq '') { $d.Error.Text = Get-FujiText 'cred.empty'; return }
     if ($d.Pass.Text -cne $d.Again.Text) { $d.Error.Text = Get-FujiText 'cred.mismatch'; return }
-    if ($d.Window.Text.Trim() -eq '') { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
+    if ($d.Window.Text.Trim() -eq '' -or -not $d.Program) { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
     $secret = New-Object -TypeName System.Security.SecureString
     foreach ($ch in $d.Pass.Text.ToCharArray()) { $secret.AppendChar($ch) }
     $secret.MakeReadOnly()
