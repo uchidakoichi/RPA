@@ -61,6 +61,9 @@ function Show-FujiStepDialog {
     $ok.Add_Click({ Invoke-FujiUi { Complete-FujiStepDialog } })
     [void]$bar.Controls.Add($cancel)
     [void]$bar.Controls.Add($ok)
+    # where this command is explained in the manual (also F1)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiCommandDocAnchor -Cmd $Cmd) -TextKey 'gui.docCommand'))
+    $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::F1) { $_.Handled = $true; $c = $script:StepDlg.Cmd; Invoke-FujiUi { Open-FujiDoc -Page 'manual' -Anchor (Get-FujiCommandDocAnchor -Cmd $c) } } })
     $form.AcceptButton = $ok
     $form.CancelButton = $cancel
     [void]$form.Controls.Add($panel)

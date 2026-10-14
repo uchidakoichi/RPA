@@ -9,7 +9,7 @@ $script:AutoRunId = ''
 $script:AutoClose = @{ Timer = $null; Elapsed = 0; Enabled = $false }
 
 function Initialize-FujiSchedule {
-    $script:Settings = Read-FujiSetting -Directory $script:Ed.Directory
+    if ($null -eq $script:Settings) { $script:Settings = Read-FujiSetting -Directory $script:Ed.Directory }
     $t = New-Object -TypeName System.Windows.Forms.Timer
     $t.Interval = 20000
     $t.Add_Tick({ Invoke-FujiUi { Invoke-FujiScheduleCheck } })
@@ -389,6 +389,7 @@ function Show-FujiScheduleDialog {
     $closeButton = New-FujiButton -Text (Get-FujiText 'gui.close')
     $closeButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($closeButton)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.schedule')))
     $f.CancelButton = $closeButton
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($help)

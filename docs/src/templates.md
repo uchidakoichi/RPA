@@ -2,7 +2,7 @@
 
 > このファイルは `build/Build-FujiTemplateDoc.ps1` で `fujikyun_templates.json` から自動生成しています。直接編集せず、JSON を直してから再生成してください。
 
-ふじキュン♡のRPAマクロビルダーには **162 種類** のテンプレート（お手本マクロ）が入っています。画面上部の **［📚 テンプレート］** から選んで **［✨ 作る］** を押すと、マクロが追加され、見本CSVが `samples` フォルダに用意されて自動で読み込まれます。
+ふじキュン♡のRPAマクロビルダーには **272 種類** のテンプレート（お手本マクロ）が入っています。画面上部の **［📚 テンプレート］** から選んで **［✨ 作る］** を押すと、マクロが追加され、見本CSVが `samples` フォルダに用意されて自動で読み込まれます。
 
 - 見本CSVの人名・番号・URL・メールアドレスはすべて **架空** です。
 - 画面のボタン名・ウィンドウ名・TAB の回数は職場のシステムごとに違います。各テンプレートの「準備」「カスタマイズのポイント」を読んで合わせてください。
@@ -49,11 +49,19 @@
 | Excel | [各課のブックの合計セルを集めて、集計表に書く](#excel-sum-books) | 中級 | `samples/91_sum_books.csv` |
 | Excel | [Excel の日付の列を和暦にして、となりの列に書く](#excel-wareki-column) | 中級 | `samples/92_wareki_column.csv` |
 | Excel | [ブックを開いて「すべて更新」して保存する（毎朝の集計）](#excel-refresh-save) | 初級 | `samples/93_refresh_save.csv` |
+| Excel | [名簿の全角・半角と空白をそろえて、きれいな名簿にする](#excel-clean-roster) | 初級 | `samples/265_excel-clean-roster.csv` |
+| Excel | [出席日数から出席率を計算して、一覧に書く](#excel-attendance-rate) | 初級 | `samples/266_excel-attendance-rate.csv` |
+| Excel | [金額の合計を計算して、集計表の合計と合っているか確かめる](#excel-sum-check) | 初級 | `samples/267_sum_check.csv` |
 | Word | [Wordで通知文を1件ずつ作成して保存](#word-notice) | 初級 | `samples/08_word_notice.csv` |
 | Word | [Wordの雛形の《差し込み枠》を置換して保存](#word-replace) | 中級 | `samples/09_word_replace.csv` |
 | Word | [Word の表に CSV を1行ずつ流し込む（Tab で次のセルへ）](#word-table-fill) | 初級 | `samples/94_word_table.csv` |
 | Word | [Word の文書に必要な語句が入っているかを確かめる](#word-check-words) | 中級 | `samples/95_word_check.csv` |
 | Word | [会議録の雛形に、会議名・日時・出席者を入れて保存する](#word-minutes) | 中級 | `samples/96_word_minutes.csv` |
+| Word | [書類の送付状を、送り先ごとに作る](#word-cover-letter) | 初級 | `samples/260_word-cover-letter.csv` |
+| Word | [お礼状を、相手の名前と行事名を差し込んで作る](#word-thanks-letter) | 初級 | `samples/261_word-thanks-letter.csv` |
+| Word | [委嘱状・任命書を、1人ずつ作る](#word-appointment-letter) | 中級 | `samples/262_word-appointment-letter.csv` |
+| Word | [表彰状・感謝状を、1人ずつ作る](#word-award) | 初級 | `samples/263_word-award.csv` |
+| Word | [会議の開催通知を、出席者ごとに作る](#word-meeting-invite) | 初級 | `samples/264_word-meeting-invite.csv` |
 | PowerPoint | [CSV の1行を1枚のスライドにする（タイトル＋本文）](#ppt-slides-from-csv) | 中級 | `samples/97_ppt_slides.csv` |
 | PowerPoint | [スライドの言葉をまとめて置き換える（置換リスト）](#ppt-replace-words) | 初級 | `samples/98_ppt_replace.csv` |
 | PowerPoint | [修了証・表彰状を人数分作る（雛形の《氏名》を置換）](#ppt-certificate) | 中級 | `samples/99_certificate.csv` |
@@ -66,6 +74,7 @@
 | PDF・印刷 | [Excel のブックをまとめて PDF にする](#excel-to-pdf) | 中級 | `samples/106_excel_pdf.csv` |
 | PDF・印刷 | [PDF ができたらメールに添付して下書きする](#pdf-then-mail) | 上級 | `samples/107_pdf_mail.csv` |
 | PDF・印刷 | [Excel のブックを、シートと部数を指定して印刷する](#excel-print-sheet) | 中級 | `samples/125_excel_print.csv` |
+| PDF・印刷 | [Excel の帳票（様式）に1行ずつ書き込んで、そのつど印刷する](#excel-form-print) | 中級 | `samples/271_form_print.csv` |
 | ブラウザ・Web | [Web のフォームに1件ずつ入力する（Tab で項目を移動）](#web-form-input) | 中級 | `samples/108_web_form.csv` |
 | ブラウザ・Web | [Web ページの文字をまるごと写して、必要な値だけ取り出す](#web-page-value) | 中級 | `samples/109_web_value.csv` |
 | ブラウザ・Web | [ページを定期的に読み直して、文字が出たら知らせる](#web-watch-text) | 中級 | `samples/110_web_watch.csv` |
@@ -79,6 +88,10 @@
 | メール・Outlook | [添付するファイルがある人にだけ、メールを下書きする](#mail-attach-if-exists) | 中級 | `samples/116_mail_attach_if.csv` |
 | メール・Outlook | [毎週の定型報告メールを、日付入りで下書きする](#mail-weekly-report) | 初級 | `samples/117_weekly_report.csv` |
 | メール・Outlook | [Outlook がない PC で、メールアプリに宛先と件名を入れて開く](#mail-mailto) | 初級 | `samples/118_mailto.csv` |
+| メール・Outlook | [会議・行事の出欠を、相手ごとにメールで問い合わせる](#mail-attendance-ask) | 初級 | `samples/268_mail-attendance-ask.csv` |
+| メール・Outlook | [書類の提出をお願いするメールを、相手ごとに下書き](#mail-document-request) | 初級 | `samples/269_mail-document-request.csv` |
+| メール・Outlook | [年末年始・連休中の連絡先のお知らせを、関係先へ下書き](#mail-holiday-contact) | 初級 | `samples/270_mail-holiday-contact.csv` |
+| メール・Outlook | [行事のあと、参加者へお礼とアンケートのお願いを下書き](#mail-thanks-after-event) | 初級 | `samples/272_thanks_event.csv` |
 | 発見！便利ワザ | [CSVの名前でフォルダを一括作成](#trick-folders) | 初級 | `samples/20_folders.csv` |
 | 発見！便利ワザ | [ファイル名を一覧どおりに一括変更](#trick-rename) | 中級 | `samples/21_rename.csv` |
 | 発見！便利ワザ | [電卓で検算して結果を記録](#trick-calc) | 中級 | `samples/22_calc.csv` |
@@ -104,6 +117,103 @@
 | 文字認識（OCR） | [画面に「完了」の文字が出るまで、文字認識で待つ](#ocr-wait-done) | 中級 | `samples/123_ocr_wait.csv` |
 | 文字認識（OCR） | [検索結果の一覧から、名前の文字を探して開く](#ocr-click-name-in-list) | 中級 | `samples/126_ocr_click_list.csv` |
 | 文字認識（OCR） | [登録のあと画面に出た文字を読んで、成功か失敗かを記録](#ocr-check-message) | 中級 | `samples/127_ocr_check_message.csv` |
+| 職場の共通事務 | [電話メモを、担当者あてのメールで回す](#common-phone-memo) | 初級 | `samples/163_common-phone-memo.csv` |
+| 職場の共通事務 | [来庁者・来客の受付簿を Excel に書く](#common-visitor-log) | 初級 | `samples/164_common-visitor-log.csv` |
+| 職場の共通事務 | [打合せの記録（議事録）を雛形から作る](#common-minutes) | 初級 | `samples/165_common-minutes.csv` |
+| 職場の共通事務 | [提出物の締切が近い人に、お知らせメールを下書き](#common-submit-remind) | 初級 | `samples/166_common-submit-remind.csv` |
+| 職場の共通事務 | [年度・月・種類のフォルダを、係の共有フォルダにまとめて作る](#common-year-folders) | 初級 | `samples/167_common-year-folders.csv` |
+| 職場の共通事務 | [各課から届いた調査票（Excel）の回答を、1つの一覧に集める](#common-survey-sum) | 中級 | `samples/168_common-survey-sum.csv` |
+| 職場の共通事務 | [回覧の依頼メールを、資料を添付して順に下書き](#common-circulate) | 初級 | `samples/169_common-circulate.csv` |
+| 職場の共通事務 | [職員の年次休暇の残り日数を照会して一覧にする](#common-leave-check) | 初級 | `samples/170_common-leave-check.csv` |
+| 職場の共通事務 | [時間外勤務の命令簿を、まとめて入力する](#common-overtime-entry) | 中級 | `samples/171_common-overtime-entry.csv` |
+| 職場の共通事務 | [備品（パソコン・カメラ等）の貸出簿をつける](#common-equipment-loan) | 初級 | `samples/172_common-equipment-loan.csv` |
+| 職場の共通事務 | [郵便番号から住所を確かめる（Webの郵便番号検索）](#common-address-confirm) | 初級 | `samples/173_common-address-confirm.csv` |
+| 消防局・消防署 | [立入検査（査察）の結果を予防業務システムに入力](#fire-inspection-entry) | 中級 | `samples/174_fire-inspection-entry.csv` |
+| 消防局・消防署 | [立入検査の結果通知書を、雛形から1件ずつ作る](#fire-inspection-notice) | 初級 | `samples/175_fire-inspection-notice.csv` |
+| 消防局・消防署 | [消防用設備等の点検結果報告を、受付簿システムに入力](#fire-equipment-report) | 中級 | `samples/176_fire-equipment-report.csv` |
+| 消防局・消防署 | [防火対象物の台帳を照会して、防火管理者と前回の検査日を一覧にする](#fire-object-lookup) | 初級 | `samples/177_fire-object-lookup.csv` |
+| 消防局・消防署 | [各署の救急出動件数（Excel）を集めて、月報の一覧にする](#fire-ems-monthly) | 中級 | `samples/178_fire-ems-monthly.csv` |
+| 消防局・消防署 | [消火栓・防火水槽の点検結果を台帳に書く](#fire-hydrant-check) | 初級 | `samples/179_fire-hydrant-check.csv` |
+| 消防局・消防署 | [訓練の日程を、参加する署所・団にメールで知らせる](#fire-drill-notice) | 初級 | `samples/180_fire-drill-notice.csv` |
+| 消防局・消防署 | [消防団員の名簿（入退団・役職）を Excel に書き足す](#fire-brigade-roster) | 初級 | `samples/181_fire-brigade-roster.csv` |
+| 消防局・消防署 | [防火管理講習・救命講習の修了証を、受講者ごとに作る](#fire-course-certificate) | 初級 | `samples/182_fire-course-certificate.csv` |
+| 消防局・消防署 | [危険物施設の届出（変更・廃止）を受付入力](#fire-hazmat-entry) | 中級 | `samples/183_fire-hazmat-entry.csv` |
+| 消防局・消防署 | [当直・勤務表の PDF を、係員それぞれにメールで配る](#fire-duty-roster) | 初級 | `samples/184_fire-duty-roster.csv` |
+| 消防局・消防署 | [AED の設置場所台帳を照会して、電極パッドの使用期限を確かめる](#fire-aed-lookup) | 初級 | `samples/185_fire-aed-lookup.csv` |
+| 保育園・こども園 | [保護者へのお知らせを、クラスごとに名前を差し込んでメールで下書き](#nursery-notice-mail) | 初級 | `samples/186_nursery-notice-mail.csv` |
+| 保育園・こども園 | [各クラスの出欠表（Excel）から、月の出席日数を集める](#nursery-attendance-sum) | 初級 | `samples/187_nursery-attendance-sum.csv` |
+| 保育園・こども園 | [延長保育の利用回数から利用料を計算して、台帳に書く](#nursery-extended-fee) | 中級 | `samples/188_nursery-extended-fee.csv` |
+| 保育園・こども園 | [健康診断（内科・歯科）の結果のお知らせを、1人ずつ作る](#nursery-health-result) | 初級 | `samples/189_nursery-health-result.csv` |
+| 保育園・こども園 | [入園（利用）申込書の内容を、保育システムに受付入力](#nursery-application-entry) | 中級 | `samples/190_nursery-application-entry.csv` |
+| 保育園・こども園 | [保育料（利用者負担額）を照会して、一覧にする](#nursery-fee-lookup) | 初級 | `samples/191_nursery-fee-lookup.csv` |
+| 保育園・こども園 | [今月の献立表（PDF）を、保護者へメールで配る](#nursery-menu-mail) | 初級 | `samples/192_nursery-menu-mail.csv` |
+| 保育園・こども園 | [行事の出欠の返事を、出欠表に書き込む](#nursery-event-reply) | 初級 | `samples/193_nursery-event-reply.csv` |
+| 保育園・こども園 | [行事の写真を整理するフォルダを、行事・クラスごとに作る](#nursery-photo-folders) | 初級 | `samples/194_nursery-photo-folders.csv` |
+| 保育園・こども園 | [職員の勤務シフト表を、それぞれにメールで配る](#nursery-shift-mail) | 初級 | `samples/195_nursery-shift-mail.csv` |
+| 保育園・こども園 | [避難訓練の記録を、年間の記録表に書く](#nursery-drill-record) | 初級 | `samples/196_nursery-drill-record.csv` |
+| 保育園・こども園 | [保護者の提出書類（就労証明など）の締切が近い人にお知らせ](#nursery-document-remind) | 初級 | `samples/197_nursery-document-remind.csv` |
+| 小学校（先生の校務） | [テストの点数を、成績の一覧表（Excel）に書き込む](#teacher-test-scores) | 初級 | `samples/246_teacher-test-scores.csv` |
+| 小学校（先生の校務） | [学級通信を、雛形に今月の予定と一言を差し込んで作る](#teacher-class-letter) | 初級 | `samples/247_teacher-class-letter.csv` |
+| 小学校（先生の校務） | [児童の名札・机のネームカードを、1人ずつ作る](#teacher-name-tags) | 初級 | `samples/248_teacher-name-tags.csv` |
+| 小学校（先生の校務） | [個人面談の日時を、保護者ごとにメールで知らせる](#teacher-interview-schedule) | 初級 | `samples/249_teacher-interview-schedule.csv` |
+| 小学校（先生の校務） | [欠席・遅刻の連絡を、出欠の記録表に書く](#teacher-absence-log) | 初級 | `samples/250_teacher-absence-log.csv` |
+| 小学校（先生の校務） | [各クラスの体力テストの記録（Excel）を、学年の一覧に集める](#teacher-fitness-sum) | 中級 | `samples/251_teacher-fitness-sum.csv` |
+| 小学校（先生の校務） | [宿題・提出物を出していない児童を、一覧から見つける](#teacher-homework-check) | 初級 | `samples/252_homework.csv` |
+| 小学校（先生の校務） | [児童の作品（写真・データ）を入れるフォルダを、1人ずつ作る](#teacher-work-folders) | 初級 | `samples/253_teacher-work-folders.csv` |
+| 小学校（先生の校務） | [学年だより（PDF）を、保護者へメールで配る](#teacher-grade-letter) | 初級 | `samples/254_teacher-grade-letter.csv` |
+| 小学校（先生の校務） | [朝の健康観察の結果を、記録表に書く](#teacher-health-check) | 初級 | `samples/255_teacher-health-check.csv` |
+| 小学校（先生の校務） | [校外学習のしおりの表紙・班の名簿を、班ごとに作る](#teacher-field-trip-list) | 初級 | `samples/256_teacher-field-trip-list.csv` |
+| 小学校（先生の校務） | [職員会議の資料と連絡を、先生方にメールで回す](#teacher-staff-notice) | 初級 | `samples/257_teacher-staff-notice.csv` |
+| 小学校（先生の校務） | [お便りの返事（出欠票など）がまだの家庭へ、お知らせを下書き](#teacher-reply-remind) | 初級 | `samples/258_teacher-reply-remind.csv` |
+| 小学校（先生の校務） | [読書カードの冊数（Excel）を、クラスごとに集める](#teacher-reading-count) | 初級 | `samples/259_teacher-reading-count.csv` |
+| 学校・教育委員会 | [就学援助の申請を、システムに受付入力](#school-aid-entry) | 中級 | `samples/220_school-aid-entry.csv` |
+| 学校・教育委員会 | [各学校から届いた調査の回答（Excel）を、1つの一覧に集める](#school-survey-sum) | 初級 | `samples/221_school-survey-sum.csv` |
+| 学校・教育委員会 | [教職員研修の案内を、学校ごとにメールで下書き](#school-teacher-training) | 初級 | `samples/222_school-teacher-training.csv` |
+| 学校・教育委員会 | [転入学の通知書を、1件ずつ作る](#school-transfer-notice) | 初級 | `samples/223_school-transfer-notice.csv` |
+| 学校・教育委員会 | [学校施設の修繕の依頼を、修繕台帳に書く](#school-facility-repair) | 初級 | `samples/224_school-facility-repair.csv` |
+| 学校・教育委員会 | [給食の献立表（PDF）を、学校ごとに配る](#school-lunch-allergy) | 初級 | `samples/225_school-lunch-allergy.csv` |
+| 学校・教育委員会 | [学齢簿を照会して、就学する学校を確かめる](#school-student-lookup) | 初級 | `samples/226_school-student-lookup.csv` |
+| 学校・教育委員会 | [学校徴収金の未納がある家庭に、お知らせを下書き](#school-fee-remind) | 初級 | `samples/227_school-fee-remind.csv` |
+| 学校・教育委員会 | [学年・クラスごとの共有フォルダを、年度はじめにまとめて作る](#school-class-folders) | 初級 | `samples/228_school-class-folders.csv` |
+| 学校・教育委員会 | [児童生徒の端末（タブレット）の貸出・修理の記録をつける](#school-ict-loan) | 初級 | `samples/229_school-ict-loan.csv` |
+| 市民病院（事務） | [予約の一覧を照会して、来院予定の日時と診療科を確かめる](#hosp-appointment-check) | 初級 | `samples/198_hosp-appointment-check.csv` |
+| 市民病院（事務） | [紹介状の返書（お返事）が遅れている医療機関の一覧から、催促を下書き](#hosp-referral-reply) | 初級 | `samples/199_hosp-referral-reply.csv` |
+| 市民病院（事務） | [各病棟の日報（Excel）から、在院患者数・入退院数を集める](#hosp-ward-stats) | 中級 | `samples/200_hosp-ward-stats.csv` |
+| 市民病院（事務） | [物品（消耗品）の請求を、請求台帳にまとめて書く](#hosp-supply-request) | 初級 | `samples/201_hosp-supply-request.csv` |
+| 市民病院（事務） | [院内研修（感染対策・医療安全など）の案内を、部署ごとに下書き](#hosp-training-notice) | 初級 | `samples/202_hosp-training-notice.csv` |
+| 市民病院（事務） | [院内研修の出席者を、受講記録の台帳に書く](#hosp-training-attend) | 初級 | `samples/203_hosp-training-attend.csv` |
+| 市民病院（事務） | [患者満足度アンケートの集計表（Excel）から、項目の点数を集める](#hosp-survey-sum) | 初級 | `samples/204_hosp-survey-sum.csv` |
+| 市民病院（事務） | [健診（人間ドック）の予約申込を、予約システムに入力](#hosp-reception-entry) | 中級 | `samples/205_hosp-reception-entry.csv` |
+| 市民病院（事務） | [健診の受診案内（予約日・持ち物）を、1人ずつ作る](#hosp-checkup-guide) | 初級 | `samples/206_hosp-checkup-guide.csv` |
+| 市民病院（事務） | [会計（医事）システムで、未収金の残高を照会する](#hosp-bill-check) | 初級 | `samples/207_hosp-bill-check.csv` |
+| 市民病院（事務） | [当直・日直の担当表を、月の台帳に書く](#hosp-night-duty) | 初級 | `samples/208_hosp-night-duty.csv` |
+| 市民病院（事務） | [委員会の開催通知と資料を、委員それぞれにメールで送る](#hosp-committee-notice) | 初級 | `samples/209_hosp-committee-notice.csv` |
+| 保健センター・健康づくり | [予防接種の実施報告（医療機関から届いた分）を、健康管理システムに入力](#health-vaccine-entry) | 中級 | `samples/210_health-vaccine-entry.csv` |
+| 保健センター・健康づくり | [乳幼児健診の個別のご案内を、1人ずつ作る](#health-checkup-notice) | 初級 | `samples/211_health-checkup-notice.csv` |
+| 保健センター・健康づくり | [予防接種の履歴を照会して、まだの接種を確かめる](#health-vaccine-history) | 初級 | `samples/212_health-vaccine-history.csv` |
+| 保健センター・健康づくり | [がん検診の申込を、検診の予約枠に入力](#health-cancer-booking) | 中級 | `samples/213_health-cancer-booking.csv` |
+| 保健センター・健康づくり | [健康相談・電話相談の記録を、相談記録簿に書く](#health-consult-log) | 初級 | `samples/214_health-consult-log.csv` |
+| 保健センター・健康づくり | [健康教室・講座の参加者へ、前日のお知らせメールを下書き](#health-class-notice) | 初級 | `samples/215_health-class-notice.csv` |
+| 保健センター・健康づくり | [地区ごとの健診受診者数（Excel）を集めて、受診率の一覧にする](#health-checkup-rate) | 中級 | `samples/216_health-checkup-rate.csv` |
+| 保健センター・健康づくり | [母子健康手帳の交付記録を、システムに入力](#health-maternal-entry) | 中級 | `samples/217_health-maternal-entry.csv` |
+| 保健センター・健康づくり | [健診の結果、要精密検査の人で受診の報告がまだの人に、お知らせを下書き](#health-recall) | 初級 | `samples/218_health-recall.csv` |
+| 保健センター・健康づくり | [訪問記録・相談記録を入れるフォルダを、年度・月・地区ごとに作る](#health-visit-folders) | 初級 | `samples/219_health-visit-folders.csv` |
+| 上下水道 | [水道の使用開始（開栓）の申込を、料金システムに入力](#water-open-entry) | 中級 | `samples/230_water-open-entry.csv` |
+| 上下水道 | [水道の使用中止（閉栓）の申込を、料金システムに入力](#water-close-entry) | 中級 | `samples/231_water-close-entry.csv` |
+| 上下水道 | [水道料金・使用水量を照会して、問い合わせに備える](#water-bill-lookup) | 初級 | `samples/232_water-bill-lookup.csv` |
+| 上下水道 | [検針の結果（指針）を、手入力が必要な分だけ入力](#water-meter-entry) | 中級 | `samples/233_water-meter-entry.csv` |
+| 上下水道 | [漏水の通報・修繕の記録を、修繕台帳に書く](#water-leak-log) | 初級 | `samples/234_water-leak-log.csv` |
+| 上下水道 | [給水装置工事の申請状況を照会する](#water-work-lookup) | 初級 | `samples/235_water-work-lookup.csv` |
+| 上下水道 | [漏水の可能性のお知らせを、使用水量が増えた家庭ごとに作る](#water-leak-notice) | 初級 | `samples/236_water-leak-notice.csv` |
+| 上下水道 | [断水・工事のお知らせを、地区の自治会長にメールで下書き](#water-suspension-notice) | 初級 | `samples/237_water-suspension-notice.csv` |
+| 図書館・公民館・施設 | [公共施設の利用申込を、施設予約システムに入力](#facility-booking-entry) | 中級 | `samples/238_facility-booking-entry.csv` |
+| 図書館・公民館・施設 | [返却期限を過ぎた本の利用者へ、お知らせメールを下書き](#library-overdue-mail) | 初級 | `samples/239_library-overdue-mail.csv` |
+| 図書館・公民館・施設 | [リクエストされた本の所蔵と貸出状況を照会する](#library-book-lookup) | 初級 | `samples/240_library-book-lookup.csv` |
+| 図書館・公民館・施設 | [公民館講座の申込を、受講者名簿に書く](#community-course-entry) | 初級 | `samples/241_community-course-entry.csv` |
+| 図書館・公民館・施設 | [各施設の月の利用実績（Excel）を集めて、一覧にする](#facility-usage-sum) | 初級 | `samples/242_facility-usage-sum.csv` |
+| 図書館・公民館・施設 | [施設の利用が近い団体へ、前日の確認メールを下書き](#facility-booking-confirm) | 初級 | `samples/243_facility-booking-confirm.csv` |
+| 図書館・公民館・施設 | [施設の忘れ物・落とし物を、記録簿に書く](#facility-lost-found) | 初級 | `samples/244_facility-lost-found.csv` |
+| 図書館・公民館・施設 | [施設の使用許可書を、申込ごとに作る](#facility-permit) | 初級 | `samples/245_facility-permit.csv` |
 | 文書起案システム | [起案文書を一括作成して一時保存（確認つき）](#kian-draft) | 中級 | `samples/10_kian.csv` |
 | 文書起案システム | [文書番号で検索して決裁状況の画面を保存](#kian-evidence) | 初級 | `samples/11_doc_numbers.csv` |
 | 文書起案システム | [件名で文書を検索して、文書番号を一覧にする](#kian-search-subject) | 初級 | `samples/128_kian_search.csv` |
@@ -1762,6 +1872,144 @@ CSVを画面に出さずに Excel で開き、.xlsx 形式で保存し直しま�
 | --- | --- |
 | C:\RPA作業\日次集計.xlsx | 日次集計 |
 
+<a id="excel-clean-roster"></a>
+
+### 名簿の全角・半角と空白をそろえて、きれいな名簿にする（初級）
+
+名簿の名前の前後の空白を消し、電話番号の全角数字を半角にそろえてから、新しい名簿のブックに書き込みます。
+
+- **こんな時に:** 人によって書き方がばらばらの名簿を、そろえてから使いたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/265_excel-clean-roster.csv`（列: `氏名`・`電話番号`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\名簿_整形.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $氏名 ← {{氏名}} を前後の空白（全角も）を消す` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $電話 ← {{電話番号}} を全角の英数字・記号を半角にする` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 名簿_整形.xlsx の A{{ROW+1}} に {{$氏名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 名簿_整形.xlsx の B{{ROW+1}} に {{$電話}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+- そろえ方は「文字を加工する」で変えます（全角→半角、前後の空白を消す など）
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 電話番号 |
+| --- | --- |
+|  見本　太郎  | ０００－００００－０００１ |
+| 試験 花子 | 000-0000-0002 |
+
+<a id="excel-attendance-rate"></a>
+
+### 出席日数から出席率を計算して、一覧に書く（初級）
+
+出席日数と開催日数から出席率（%・小数第1位まで）を計算し、一覧のブックに書き込みます。
+
+- **こんな時に:** 講座・研修・訓練の出席率を、1人ずつ計算しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/266_excel-attendance-rate.csv`（列: `氏名`・`出席日数`・`開催日数`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\出席率.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `SET_VAR` 変数に値を入れる | `📦 $出席率 ← {{出席日数}}*1000/{{開催日数}}（計算）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $出席率 ← {{$出席率}} を区切って取り出す` |  |
+| 3 | `SET_VAR` 変数に値を入れる | `📦 $出席率 ← {{$出席率}}/10（計算）` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出席率.xlsx の A{{ROW+1}} に {{氏名}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出席率.xlsx の B{{ROW+1}} に {{出席日数}} を書く` |  |
+| 6 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出席率.xlsx の C{{ROW+1}} に {{開催日数}} を書く` |  |
+| 7 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出席率.xlsx の D{{ROW+1}} に {{$出席率}} を書く` |  |
+| 8 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+- 小数の桁は「変数に値を入れる（計算）」の式（×1000 ÷10）で変えます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 出席日数 | 開催日数 |
+| --- | --- | --- |
+| 見本 太郎 | 9 | 10 |
+| 試験 花子 | 7 | 10 |
+
+<a id="excel-sum-check"></a>
+
+### 金額の合計を計算して、集計表の合計と合っているか確かめる（初級）
+
+CSVの金額を1行ずつ足していき、最後の行で集計表（Excel）の合計のセルと比べて、合っているかを記録します。
+
+- **こんな時に:** 手で作った集計表の合計が、元の明細と合っているか検算したいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/267_sum_check.csv`（列: `明細`・`金額`）
+
+**準備**
+
+- 集計表のブックと、合計のセル（見本は C20）を確かめる
+- 集計表のブックは閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `GROUP_START` グループ | `はじめに合計を0にする（最初の1行だけ）` | 最初の1行だけ |
+| 2 | `SET_VAR` 変数に値を入れる | `📦 $合計 ← 0` |  |
+| 3 | `GROUP_END` グループ終了 |  |  |
+| 4 | `STR_OP` 文字を加工する | `✂ $金額 ← {{金額}} をカンマを消す` |  |
+| 5 | `SET_VAR` 変数に値を入れる | `📦 $合計 ← {{$合計}}+{{$金額}}（計算）` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「ここまでの合計」に {{$合計}}` |  |
+| 7 | `GROUP_START` グループ | `最後に集計表と比べる（最後の1行だけ）` | 最後の1行だけ |
+| 8 | `EXCEL_READ` Excelのセルを読む | `📗 集計表.xlsx の C20 を読む → $集計表の合計` |  |
+| 9 | `STR_OP` 文字を加工する | `✂ $集計表の合計 ← {{$集計表の合計}} をカンマを消す` |  |
+| 10 | `IF_START` もし〜なら | `❓ もし 「{{$合計}}」が「{{$集計表の合計}}」と等しい なら` |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「検算」に 合っている` |  |
+| 12 | `ELSE` そうでなければ |  |  |
+| 13 | `RECORD` 結果に記録する | `🧾 結果の「検算」に 合わない（集計表 {{$集計表の合計}}）` |  |
+| 14 | `IF_END` もし〜ならここまで |  |  |
+| 15 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 比べるセルは「Excelのセルを読む」のセル番地で変えます
+
+**応用・発見のヒント**
+
+- 合わないときは、明細と集計表のどちらが違うのか、行ごとの金額の実行結果CSVで見比べられます
+
+**見本CSV（先頭3行）**
+
+| 明細 | 金額 |
+| --- | --- |
+| 消耗品 | 12,000 |
+| 印刷代 | 8,500 |
+| 郵送料 | 3,200 |
+
 ## Word
 
 <a id="word-notice"></a>
@@ -2101,6 +2349,527 @@ Word の表の最初のセルから、CSVの値を Tab で次のセルへ進み�
 | メモ |
 | --- |
 | 1行＝1回作ります |
+
+<a id="word-cover-letter"></a>
+
+### 書類の送付状を、送り先ごとに作る（初級）
+
+送り先の名前・担当者・送る書類・枚数を、送付状の雛形に差し込んで保存します。
+
+- **こんな時に:** 郵送やFAXで書類を送るたびに、送付状を書き換えているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/260_word-cover-letter.csv`（列: `送り先`・`担当者`・`書類`・`枚数`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《送り先》・《担当者》・《書類》・《枚数》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\送付状.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\送付状 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\送付状.dotx を用意してね（差し込む所に 《送り先》・《担当者》・《書類》・《枚数》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\送付状.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《送り先》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《送り先》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{送り先}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《担当者》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《担当者》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{担当者}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《書類》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《書類》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{書類}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《枚数》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《枚数》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{枚数}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\送付状\送付状_{{送り先}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 送り先 | 担当者 | 書類 | 枚数 |
+| --- | --- | --- | --- |
+| 見本商事株式会社 | 見本 太郎 | 見積書 | 2 |
+| 試験市 総務課 | 試験 花子 | 回答書 | 1 |
+
+<a id="word-thanks-letter"></a>
+
+### お礼状を、相手の名前と行事名を差し込んで作る（初級）
+
+相手の名前・行事名・お世話になった内容を、お礼状の雛形に差し込んで保存します。
+
+- **こんな時に:** 講師の先生・協力してくれた団体・寄付をくれた方へ、お礼状を出すとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/261_word-thanks-letter.csv`（列: `相手`・`行事`・`内容`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《相手》・《行事》・《内容》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\お礼状.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\お礼状 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\お礼状.dotx を用意してね（差し込む所に 《相手》・《行事》・《内容》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\お礼状.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《相手》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《相手》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{相手}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《行事》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《行事》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{行事}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《内容》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《内容》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{内容}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 48 | `KEY` キー送信 | `{F12}` |  |
+| 49 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 50 | `TEXT` 文字列貼付 | `C:\RPA作業\お礼状\お礼状_{{ROW}}.docx` |  |
+| 51 | `KEY` キー送信 | `{ENTER}` |  |
+| 52 | `WAIT` 待機 | `2000` |  |
+| 53 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 54 | `KEY` キー送信 | `^w` |  |
+| 55 | `WAIT` 待機 | `1500` |  |
+| 56 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 相手 | 行事 | 内容 |
+| --- | --- | --- |
+| 見本 太郎 様 | 防災講演会 | ご講演をいただき |
+| 試験商店会 様 | 夏祭り | 会場の準備にご協力いただき |
+
+<a id="word-appointment-letter"></a>
+
+### 委嘱状・任命書を、1人ずつ作る（中級）
+
+氏名・役職・任期を、委嘱状の雛形に差し込んで保存します。
+
+- **こんな時に:** 委員・推進員・指導員などの委嘱状を、まとめて作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/262_word-appointment-letter.csv`（列: `氏名`・`役職`・`任期の始め`・`任期の終わり`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《氏名》・《役職》・《任期の始め》・《任期の終わり》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\委嘱状.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\委嘱状 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\委嘱状.dotx を用意してね（差し込む所に 《氏名》・《役職》・《任期の始め》・《任期の終わり》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\委嘱状.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《役職》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《役職》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{役職}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《任期の始め》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《任期の始め》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{任期の始め}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《任期の終わり》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《任期の終わり》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{任期の終わり}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\委嘱状\委嘱状_{{氏名}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 役職 | 任期の始め | 任期の終わり |
+| --- | --- | --- | --- |
+| 見本 太郎 | 地域安全推進員 | 2026/04/01 | 2028/03/31 |
+| 試験 花子 | 健康づくり推進員 | 2026/04/01 | 2028/03/31 |
+
+<a id="word-award"></a>
+
+### 表彰状・感謝状を、1人ずつ作る（初級）
+
+氏名・表彰の理由・日付を、表彰状の雛形に差し込んで保存します。
+
+- **こんな時に:** 大会の入賞者・永年勤続・善行の表彰状を、まとめて作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/263_word-award.csv`（列: `氏名`・`理由`・`日付`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《氏名》・《理由》・《日付》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\表彰状.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\表彰状 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\表彰状.dotx を用意してね（差し込む所に 《氏名》・《理由》・《日付》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\表彰状.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《理由》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《理由》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{理由}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《日付》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《日付》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{日付}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 48 | `KEY` キー送信 | `{F12}` |  |
+| 49 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 50 | `TEXT` 文字列貼付 | `C:\RPA作業\表彰状\表彰状_{{氏名}}.docx` |  |
+| 51 | `KEY` キー送信 | `{ENTER}` |  |
+| 52 | `WAIT` 待機 | `2000` |  |
+| 53 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 54 | `KEY` キー送信 | `^w` |  |
+| 55 | `WAIT` 待機 | `1500` |  |
+| 56 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 理由 | 日付 |
+| --- | --- | --- |
+| 見本 太郎 | 作品展において優秀な成績を収めました | 令和8年11月3日 |
+| 試験 花子 | 多年にわたり地域の美化に尽くされました | 令和8年11月3日 |
+
+<a id="word-meeting-invite"></a>
+
+### 会議の開催通知を、出席者ごとに作る（初級）
+
+出席者の所属と名前・会議名・日時・場所を、開催通知の雛形に差し込んで保存します。
+
+- **こんな時に:** 審議会・委員会・連絡会の開催通知を、委員ごとに郵送するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/264_word-meeting-invite.csv`（列: `所属`・`氏名`・`会議名`・`日時`・`場所`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《所属》・《氏名》・《会議名》・《日時》・《場所》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\開催通知.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\開催通知 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\開催通知.dotx を用意してね（差し込む所に 《所属》・《氏名》・《会議名》・《日時》・《場所》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\開催通知.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《所属》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《所属》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{所属}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《会議名》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《会議名》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{会議名}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《日時》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《日時》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{日時}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《場所》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《場所》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{場所}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\開催通知\{{所属}}_{{氏名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 所属 | 氏名 | 会議名 | 日時 | 場所 |
+| --- | --- | --- | --- | --- |
+| 見本町内会 | 見本 太郎 | 地域福祉推進会議 | 2026/11/20 14:00 | 市役所 第1会議室 |
+| 試験婦人会 | 試験 花子 | 地域福祉推進会議 | 2026/11/20 14:00 | 市役所 第1会議室 |
 
 ## PowerPoint
 
@@ -2687,6 +3456,50 @@ CSVの「ブック」を画面に出さずに開き、指定した「シート�
 | C:\RPA作業\会議資料.xlsx | 配布用 | 10 |
 | C:\RPA作業\名簿.xlsx | 名簿 | 2 |
 
+<a id="excel-form-print"></a>
+
+### Excel の帳票（様式）に1行ずつ書き込んで、そのつど印刷する（中級）
+
+名簿の1行ぶんを、Excel の帳票のブックの決まったセルに書き込み、そのシートを1部印刷します。全員分の帳票が順に印刷されます。
+
+- **こんな時に:** 受講票・受付票・領収書の控えなど、1人1枚の帳票を印刷しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/271_form_print.csv`（列: `氏名`・`講座`・`受講番号`）
+
+**準備**
+
+- 帳票のブック（見本は C:\RPA作業\帳票.xlsx）の、名前などを入れるセルを確かめる
+- 帳票のブックは閉じておく
+- 既定のプリンターを確かめる。最初は1行だけで試す
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 帳票.xlsx の C3 に {{氏名}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 帳票.xlsx の C4 に {{講座}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 帳票.xlsx の C5 に {{受講番号}} を書く` |  |
+| 4 | `COMMENT` コメント | `書いたら、別の Excel で1部印刷するよ（実行中のブックは、行が終わるたびに保存されているよ）` |  |
+| 5 | `RUN` アプリ起動 | `powershell -NoProfile -WindowStyle Hidden -Command "$x=New-Object -ComObject Excel.Application; $x.DisplayAlerts=$false; $b=$x.Workbooks.Open('C:\RPA作業\帳票.xlsx',0,$true); $b.Worksheets.Item(1).PrintOut(); $b.Close($false); $x.Quit()"` |  |
+| 6 | `WAIT` 待機 | `8000` |  |
+| 7 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 印刷に送った` |  |
+
+**カスタマイズのポイント**
+
+- 書き込むセルは「Excelのセルに書く」のセル番地で変えます
+- 印刷が終わるまでの待ち時間は WAIT（8000＝8秒）です
+
+**応用・発見のヒント**
+
+- 印刷の代わりに PDF にしたいときは「Excel のブックをまとめて PDF にする」と組み合わせます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 講座 | 受講番号 |
+| --- | --- | --- |
+| 見本 太郎 | はじめての書道 | 001 |
+| 試験 花子 | はじめての書道 | 002 |
+
 ## ブラウザ・Web
 
 <a id="web-form-input"></a>
@@ -3232,6 +4045,154 @@ CSVの「期限」と今日の日付をくらべ、期限まで7日以内でま�
 | 氏名 | メールアドレス |
 | --- | --- |
 | 見本 太郎 | mihon.taro@example.jp |
+
+<a id="mail-attendance-ask"></a>
+
+### 会議・行事の出欠を、相手ごとにメールで問い合わせる（初級）
+
+会議や行事の名前・日時・返事の期限を差し込んで、出欠の問い合わせメールを下書きします。
+
+- **こんな時に:** 外部の委員や関係団体に、出欠を聞いているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/268_mail-attendance-ask.csv`（列: `相手`・`メール`・`行事`・`日時`・`返事の期限`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【出欠のご確認】{{行事}}（{{日時}…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 相手 | メール | 行事 | 日時 | 返事の期限 |
+| --- | --- | --- | --- | --- |
+| 見本 太郎 様 | mihon@example.jp | 地域連絡会 | 2026/11/20 14:00 | 2026/11/10 |
+| 試験 花子 様 | shiken@example.jp | 地域連絡会 | 2026/11/20 14:00 | 2026/11/10 |
+
+<a id="mail-document-request"></a>
+
+### 書類の提出をお願いするメールを、相手ごとに下書き（初級）
+
+必要な書類の名前・提出先・期限を差し込んで、提出のお願いのメールを下書きします。
+
+- **こんな時に:** 補助金の実績報告・名簿・調査票などの提出をお願いするとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/269_mail-document-request.csv`（列: `相手`・`メール`・`書類`・`期限`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【ご提出のお願い】{{書類}}（{{期限…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 相手 | メール | 書類 | 期限 |
+| --- | --- | --- | --- |
+| 見本町内会 様 | chonaikai@example.jp | 活動報告書 | 2026/11/30 |
+| 試験サークル 様 | circle@example.jp | 会員名簿 | 2026/11/30 |
+
+<a id="mail-holiday-contact"></a>
+
+### 年末年始・連休中の連絡先のお知らせを、関係先へ下書き（初級）
+
+休みの期間と、その間の緊急の連絡先を差し込んで、関係先ごとにお知らせのメールを下書きします。
+
+- **こんな時に:** 年末年始やゴールデンウィークの前に、取引先や関係団体へ連絡するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/270_mail-holiday-contact.csv`（列: `相手`・`メール`・`休みの期間`・`緊急の連絡先`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お知らせ】休業期間（{{休みの期間}}…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 相手 | メール | 休みの期間 | 緊急の連絡先 |
+| --- | --- | --- | --- |
+| 見本商事 様 | mihon@example.jp | 12/29〜1/3 | 000-0000-0001（当番） |
+| 試験設備 様 | shiken@example.jp | 12/29〜1/3 | 000-0000-0001（当番） |
+
+<a id="mail-thanks-after-event"></a>
+
+### 行事のあと、参加者へお礼とアンケートのお願いを下書き（初級）
+
+参加者ごとに名前を差し込んで、お礼とアンケート（URL）のお願いのメールを下書きします。
+
+- **こんな時に:** 講座・説明会・イベントのあとに、参加者へお礼を送るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/272_thanks_event.csv`（列: `氏名`・`メール`・`行事`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- アンケートのURLを本文の見本（https://example.jp/...）から書き換える
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お礼】{{行事}}へのご参加ありがとう…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 本文は「メールを作る・送る」の本文で変えます
+
+**応用・発見のヒント**
+
+- 参加しなかった人には、「もし〜なら」で別の文面（資料の送付など）に分けられます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 行事 |
+| --- | --- | --- |
+| 見本 太郎 | sanka1@example.jp | 防災講演会 |
+| 試験 花子 | sanka2@example.jp | 防災講演会 |
 
 ## 発見！便利ワザ
 
@@ -4381,6 +5342,5137 @@ CSVの税抜金額から、消費税（10％・1円未満切り捨て）と税�
 | --- | --- |
 | R08-0001 | 見本の内容 |
 | R08-0002 | 試験の内容 |
+
+## 職場の共通事務
+
+<a id="common-phone-memo"></a>
+
+### 電話メモを、担当者あてのメールで回す（初級）
+
+受けた電話の内容（相手・用件・折り返し先）をCSVにためておき、担当者ごとにメールの下書きを作ります。机に貼った付せんがなくなる心配がありません。
+
+- **こんな時に:** 窓口や係の代表電話で、不在の人あての電話をよく受けるとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/163_common-phone-memo.csv`（列: `担当者のメール`・`相手`・`用件`・`折り返し先`・`受けた時刻`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{担当者のメール}} へ「【電話メモ】{{相手}}（{{受けた時刻…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- CSVを Excel の表にしておき、受けたらすぐ1行足す運用にすると、夕方まとめて回せます
+
+**見本CSV（先頭3行）**
+
+| 担当者のメール | 相手 | 用件 | 折り返し先 | 受けた時刻 |
+| --- | --- | --- | --- | --- |
+| kakari1@example.jp | 見本商事 山田様 | 見積の件 | 000-0000-0001 | 10:15 |
+| kakari2@example.jp | 試験市 総務課 | 照会の回答期限 | 000-0000-0002 | 13:40 |
+
+<a id="common-visitor-log"></a>
+
+### 来庁者・来客の受付簿を Excel に書く（初級）
+
+受付で聞いた来庁者の名前・用件・担当課を、Excel の受付簿に日時つきで書き込みます。手書きの受付簿を転記する手間がなくなります。
+
+- **こんな時に:** 受付簿を紙で書いて、あとで Excel に打ち直しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/164_common-visitor-log.csv`（列: `氏名`・`用件`・`担当課`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\受付簿.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 受付簿.xlsx の A{{ROW+1}} に {{TODAY}} {{NOW}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 受付簿.xlsx の B{{ROW+1}} に {{氏名}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 受付簿.xlsx の C{{ROW+1}} に {{用件}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 受付簿.xlsx の D{{ROW+1}} に {{担当課}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 「ASK（値を入力してもらう）」で氏名を聞くようにすると、CSVなしで1件ずつ受付できます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 用件 | 担当課 |
+| --- | --- | --- |
+| 見本 太郎 | 会議の打合せ | 総務課 |
+| 試験 花子 | 書類の提出 | 企画課 |
+
+<a id="common-minutes"></a>
+
+### 打合せの記録（議事録）を雛形から作る（初級）
+
+会議名・日時・出席者・決まったことを、Word の議事録の雛形に差し込んで保存します。毎回同じ書式で記録が残ります。
+
+- **こんな時に:** 係内の打合せや定例会議の記録を、いつも同じ書式で残したいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/165_common-minutes.csv`（列: `会議名`・`日時`・`場所`・`出席者`・`決まったこと`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《会議名》・《日時》・《場所》・《出席者》・《決まったこと》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\議事録.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\議事録 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\議事録.dotx を用意してね（差し込む所に 《会議名》・《日時》・《場所》・《出席者》・《決まったこと》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\議事録.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《会議名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《会議名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{会議名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《日時》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《日時》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{日時}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《場所》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《場所》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{場所}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《出席者》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《出席者》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{出席者}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《決まったこと》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《決まったこと》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{決まったこと}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\議事録\{{会議名}}_{{ROW}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 会議名 | 日時 | 場所 | 出席者 | 決まったこと |
+| --- | --- | --- | --- | --- |
+| 係内打合せ | 2026/10/20 10:00 | 第1会議室 | 見本・試験・練習 | 次回は11月に実施する |
+| 定例会議 | 2026/10/27 14:00 | 大会議室 | 各係長 | 資料の締切を1週間早める |
+
+<a id="common-submit-remind"></a>
+
+### 提出物の締切が近い人に、お知らせメールを下書き（初級）
+
+提出物の一覧から、締切が5日以内でまだ「済」になっていない人にだけ、お知らせのメールを下書きします。
+
+- **こんな時に:** 研修の報告書・調査の回答・申請書類など、職員からの提出物を取りまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/166_common-submit-remind.csv`（列: `氏名`・`メール`・`提出物`・`締切`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{締切}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お知らせ】{{提出物}}の締切（{{締…」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（5）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 提出物 | 締切 | 状況 |
+| --- | --- | --- | --- | --- |
+| 見本 太郎 | mihon@example.jp | 研修報告書 | 2026/10/20 |  |
+| 試験 花子 | shiken@example.jp | 研修報告書 | 2026/10/20 | 済 |
+
+<a id="common-year-folders"></a>
+
+### 年度・月・種類のフォルダを、係の共有フォルダにまとめて作る（初級）
+
+CSVに書いた「年度」「月」「種類」の組み合わせで、共有フォルダの中に整理用のフォルダを一度に作ります。
+
+- **こんな時に:** 年度はじめに、毎年同じフォルダ構成を手で作っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/167_common-year-folders.csv`（列: `年度`・`月`・`種類`）
+
+**準備**
+
+- CSVの値を自分の職場のものに書き換える（見本はすべて架空です）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `フォルダは C:\RPA作業\共有\{{年度}}\{{月}}\{{種類}} の形で作るよ。途中のフォルダもまとめて作るよ` |  |
+| 2 | `RUN` アプリ起動 | `cmd /c if not exist "C:\RPA作業\共有\{{年度}}\{{月}}\{{種類}}" mkdir "C:\RPA作業\共有\{{年度}}\{{月}}\{{種類}}"` |  |
+| 3 | `WAIT` 待機 | `500` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 作った（あれば何もしない）` |  |
+
+**カスタマイズのポイント**
+
+- フォルダの場所と形は RUN の C:\RPA作業\共有\{{年度}}\{{月}}\{{種類}} の部分で変えます
+
+**応用・発見のヒント**
+
+- 年度はじめに1回動かすだけで、1年分のフォルダがそろいます
+
+**見本CSV（先頭3行）**
+
+| 年度 | 月 | 種類 |
+| --- | --- | --- |
+| 令和8年度 | 04月 | 起案文書 |
+| 令和8年度 | 04月 | 会議資料 |
+| 令和8年度 | 05月 | 起案文書 |
+
+<a id="common-survey-sum"></a>
+
+### 各課から届いた調査票（Excel）の回答を、1つの一覧に集める（中級）
+
+各課から届いた同じ様式の調査票（Excel）を開いて、決まったセルの回答を読み取り、1行ずつ一覧にします。
+
+- **こんな時に:** 照会や調査の回答を、ファイルを1つずつ開いて写しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/168_common-survey-sum.csv`（列: `課名`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $回答者` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C7 を読む → $件数` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C9 を読む → $意見` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「回答者」に {{$回答者}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「件数」に {{$件数}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「意見」に {{$意見}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- 回答の届いたファイルを「フォルダのファイル名一覧をExcelに貼る」で並べると、CSVづくりが速いです
+
+**見本CSV（先頭3行）**
+
+| 課名 | ブック | シート |
+| --- | --- | --- |
+| 総務課 | C:\RPA作業\回答\総務課.xlsx | 1 |
+| 企画課 | C:\RPA作業\回答\企画課.xlsx | 1 |
+
+<a id="common-circulate"></a>
+
+### 回覧の依頼メールを、資料を添付して順に下書き（初級）
+
+回覧する資料（PDFなど）を添付して、回覧先ごとに「確認したら次の人へ」の依頼メールを下書きします。
+
+- **こんな時に:** 紙の回覧をやめて、メールで順に回したいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/169_common-circulate.csv`（列: `宛先`・`氏名`・`次の人`・`資料`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{資料}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{宛先}} へ「【回覧】研修の案内」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 宛先 | 氏名 | 次の人 | 資料 |
+| --- | --- | --- | --- |
+| kakari1@example.jp | 見本 太郎 | 試験 花子 | C:\RPA作業\回覧\研修案内.pdf |
+| kakari2@example.jp | 試験 花子 | （最後） | C:\RPA作業\回覧\研修案内.pdf |
+
+<a id="common-leave-check"></a>
+
+### 職員の年次休暇の残り日数を照会して一覧にする（初級）
+
+職員番号で庶務事務（勤怠）システムを照会し、年次休暇の残り日数を読み取って一覧にします。
+
+- **こんな時に:** 年度末に、取得が少ない職員へ声をかける準備をするとき。
+- **対象ウィンドウ:** `庶務事務`
+- **見本CSV:** `samples/170_common-leave-check.csv`（列: `職員番号`・`氏名`）
+
+**準備**
+
+- 対象ウィンドウ「庶務事務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `休暇照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「職員番号」に「{{職員番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「残日数」の値を読む → $残日数` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「取得日数」の値を読む → $取得日数` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「職員の年次休暇の_{{職員番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 職員番号 | 氏名 |
+| --- | --- |
+| A0001 | 見本 太郎 |
+| A0002 | 試験 花子 |
+
+<a id="common-overtime-entry"></a>
+
+### 時間外勤務の命令簿を、まとめて入力する（中級）
+
+係でまとめた時間外勤務の予定（日付・時間・内容）を、庶務事務システムの命令の画面に入力します。登録の前に確認ポイントで止まります。
+
+- **こんな時に:** 係長が係員の時間外勤務を、まとめて入力しているとき。
+- **対象ウィンドウ:** `庶務事務`
+- **見本CSV:** `samples/171_common-overtime-entry.csv`（列: `職員番号`・`日付`・`開始`・`終了`・`内容`）
+
+**準備**
+
+- 対象ウィンドウ「庶務事務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `時間外勤務命令` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「職員番号」に「{{職員番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「日付」に「{{日付}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「開始」に「{{開始}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「終了」に「{{終了}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「内容」に「{{内容}}」を入れる` |  |
+| 8 | `CONFIRM` 確認ポイント（人が確認） | `{{職員番号}}：{{日付}} {{開始}}〜{{終了}}（{{内容}}）で合っているか確認してね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 9 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 10 | `WAIT` 待機 | `2000` |  |
+| 11 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「時間外勤務の命令_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 職員番号 | 日付 | 開始 | 終了 | 内容 |
+| --- | --- | --- | --- | --- |
+| A0001 | 2026/10/20 | 17:30 | 19:00 | 資料作成 |
+| A0002 | 2026/10/21 | 17:30 | 18:30 | 窓口の後片付け |
+
+<a id="common-equipment-loan"></a>
+
+### 備品（パソコン・カメラ等）の貸出簿をつける（初級）
+
+貸し出した備品・借りた人・返す予定日を、Excel の貸出簿に書き込みます。
+
+- **こんな時に:** 共用のノートパソコン・カメラ・プロジェクターなどを貸し出しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/172_common-equipment-loan.csv`（列: `備品`・`借りた人`・`返す予定日`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\貸出簿.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 貸出簿.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 貸出簿.xlsx の B{{ROW+1}} に {{備品}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 貸出簿.xlsx の C{{ROW+1}} に {{借りた人}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 貸出簿.xlsx の D{{ROW+1}} に {{返す予定日}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 返す予定日を過ぎた人には「提出物の締切が近い人に、お知らせメールを下書き」と同じ考え方で連絡できます
+
+**見本CSV（先頭3行）**
+
+| 備品 | 借りた人 | 返す予定日 |
+| --- | --- | --- |
+| ノートPC 1号 | 見本 太郎 | 2026/10/22 |
+| デジタルカメラ | 試験 花子 | 2026/10/25 |
+
+<a id="common-address-confirm"></a>
+
+### 郵便番号から住所を確かめる（Webの郵便番号検索）（初級）
+
+Webの郵便番号検索の画面で、郵便番号を入れて検索し、出てきた住所を読み取ります。名簿の住所の確かめに使えます。
+
+- **こんな時に:** 申込書に書かれた郵便番号と住所が合っているか、まとめて確かめたいとき。
+- **対象ウィンドウ:** `郵便番号`
+- **見本CSV:** `samples/173_common-address-confirm.csv`（列: `郵便番号`・`氏名`）
+
+**準備**
+
+- 対象ウィンドウ「郵便番号」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- ブラウザで郵便番号検索のページを開いておく（使ってよいページかは、職場のルールを確かめてね）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「郵便番号」に「{{郵便番号}}」を入れる` |  |
+| 3 | `KEY` キー送信 | `{ENTER}` |  |
+| 4 | `WAIT` 待機 | `2000` |  |
+| 5 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 6 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 7 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「住所」の値を読む → $住所` |  |
+| 8 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「郵便番号から住所_{{郵便番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 郵便番号 | 氏名 |
+| --- | --- |
+| 0000001 | 見本 太郎 |
+| 0000002 | 試験 花子 |
+
+## 消防局・消防署
+
+<a id="fire-inspection-entry"></a>
+
+### 立入検査（査察）の結果を予防業務システムに入力（中級）
+
+立入検査をした防火対象物ごとに、検査日・検査員・指摘事項の有無・指摘内容を入力して登録します。
+
+- **こんな時に:** 検査が続いた週に、紙の検査記録をまとめてシステムへ入力するとき。
+- **対象ウィンドウ:** `予防業務`
+- **見本CSV:** `samples/174_fire-inspection-entry.csv`（列: `対象物番号`・`検査日`・`検査員`・`指摘の有無`・`指摘内容`）
+
+**準備**
+
+- 対象ウィンドウ「予防業務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `立入検査結果` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「対象物番号」に「{{対象物番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「検査日」に「{{検査日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「検査員」に「{{検査員}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「指摘の有無」に「{{指摘の有無}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「指摘内容」に「{{指摘内容}}」を入れる` |  |
+| 8 | `CONFIRM` 確認ポイント（人が確認） | `{{対象物番号}}：{{検査日}}・指摘{{指摘の有無}}（{{指摘内容}}）で合っているか、検査記録と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 9 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 10 | `WAIT` 待機 | `2000` |  |
+| 11 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「立入検査（査察）_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 対象物番号 | 検査日 | 検査員 | 指摘の有無 | 指摘内容 |
+| --- | --- | --- | --- | --- |
+| F-000101 | 2026/10/14 | 見本 太郎 | あり | 消火器の点検期限切れ |
+| F-000102 | 2026/10/14 | 見本 太郎 | なし |  |
+
+<a id="fire-inspection-notice"></a>
+
+### 立入検査の結果通知書を、雛形から1件ずつ作る（初級）
+
+対象物の名前・所在地・指摘事項・改修の期限を、通知書の雛形に差し込んで保存します。
+
+- **こんな時に:** 指摘事項があった対象物へ、結果を通知する文書をまとめて作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/175_fire-inspection-notice.csv`（列: `対象物名`・`所在地`・`指摘事項`・`改修期限`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《対象物名》・《所在地》・《指摘事項》・《改修期限》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\立入検査結果通知.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\通知書 を作っておく
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\立入検査結果通知.dotx を用意してね（差し込む所に 《対象物名》・《所在地》・《指摘事項》・《改修期限》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\立入検査結果通知.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《対象物名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《対象物名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{対象物名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《所在地》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《所在地》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{所在地}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《指摘事項》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《指摘事項》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{指摘事項}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《改修期限》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《改修期限》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{改修期限}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\通知書\{{対象物名}}_結果通知.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 対象物名 | 所在地 | 指摘事項 | 改修期限 |
+| --- | --- | --- | --- |
+| 見本ビル | 見本市中央1-2-3 | 消火器の点検期限切れ | 2026/11/30 |
+| 試験ストア | 見本市東町4-5-6 | 誘導灯の不点灯 | 2026/11/15 |
+
+<a id="fire-equipment-report"></a>
+
+### 消防用設備等の点検結果報告を、受付簿システムに入力（中級）
+
+届いた点検結果報告書の内容（対象物・点検日・点検業者・不備の有無）を入力して登録し、受付番号を読み取ります。
+
+- **こんな時に:** 点検報告が集中する時期に、受付の入力を手早く済ませたいとき。
+- **対象ウィンドウ:** `予防業務`
+- **見本CSV:** `samples/176_fire-equipment-report.csv`（列: `対象物番号`・`点検日`・`点検業者`・`不備の有無`）
+
+**準備**
+
+- 対象ウィンドウ「予防業務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `点検結果報告` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「対象物番号」に「{{対象物番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「点検日」に「{{点検日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「点検業者」に「{{点検業者}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「不備の有無」に「{{不備の有無}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{対象物番号}}：点検日 {{点検日}}・不備{{不備の有無}}で合っているか確認してね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `WAIT` 待機 | `1000` |  |
+| 12 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「受付番号」の値を読む → $受付番号` |  |
+| 13 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「消防用設備等の点_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 対象物番号 | 点検日 | 点検業者 | 不備の有無 |
+| --- | --- | --- | --- |
+| F-000201 | 2026/10/01 | 見本防災株式会社 | なし |
+| F-000202 | 2026/10/03 | 試験設備株式会社 | あり |
+
+<a id="fire-object-lookup"></a>
+
+### 防火対象物の台帳を照会して、防火管理者と前回の検査日を一覧にする（初級）
+
+対象物番号で台帳を照会し、防火管理者・用途・前回の立入検査日を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 今月の立入検査の予定を立てる前に、対象物の情報をまとめて確かめたいとき。
+- **対象ウィンドウ:** `予防業務`
+- **見本CSV:** `samples/177_fire-object-lookup.csv`（列: `対象物番号`）
+
+**準備**
+
+- 対象ウィンドウ「予防業務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `防火対象物照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「対象物番号」に「{{対象物番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「防火管理者」の値を読む → $防火管理者` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「用途」の値を読む → $用途` |  |
+| 11 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「前回検査日」の値を読む → $前回検査日` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「防火対象物の台帳_{{対象物番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 対象物番号 |
+| --- |
+| F-000101 |
+| F-000102 |
+| F-000103 |
+
+<a id="fire-ems-monthly"></a>
+
+### 各署の救急出動件数（Excel）を集めて、月報の一覧にする（中級）
+
+各署から届いた月ごとの救急出動件数のブックを開き、出動件数・搬送人員・不搬送件数を読み取って1つの一覧にします。
+
+- **こんな時に:** 月報や議会資料のために、各署の数字を集めているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/178_fire-ems-monthly.csv`（列: `署名`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $出動件数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $搬送人員` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C6 を読む → $不搬送件数` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「出動件数」に {{$出動件数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「搬送人員」に {{$搬送人員}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「不搬送件数」に {{$不搬送件数}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 署名 | ブック | シート |
+| --- | --- | --- |
+| 中央署 | C:\RPA作業\月報\中央署_10月.xlsx | 1 |
+| 東署 | C:\RPA作業\月報\東署_10月.xlsx | 1 |
+
+<a id="fire-hydrant-check"></a>
+
+### 消火栓・防火水槽の点検結果を台帳に書く（初級）
+
+点検した消火栓・防火水槽の番号・点検日・結果・メモを、Excel の点検台帳に書き込みます。
+
+- **こんな時に:** 地区ごとに点検した結果を、あとで台帳にまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/179_fire-hydrant-check.csv`（列: `番号`・`点検日`・`結果`・`メモ`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\消火栓点検台帳.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消火栓点検台帳.xlsx の A{{ROW+1}} に {{番号}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消火栓点検台帳.xlsx の B{{ROW+1}} に {{点検日}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消火栓点検台帳.xlsx の C{{ROW+1}} に {{結果}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消火栓点検台帳.xlsx の D{{ROW+1}} に {{メモ}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 「要修理」だけを結果CSVで絞り込めば、修理を頼む一覧になります
+
+**見本CSV（先頭3行）**
+
+| 番号 | 点検日 | 結果 | メモ |
+| --- | --- | --- | --- |
+| H-0101 | 2026/10/10 | 良 |  |
+| H-0102 | 2026/10/10 | 要修理 | ふたの破損 |
+| W-0201 | 2026/10/11 | 良 |  |
+
+<a id="fire-drill-notice"></a>
+
+### 訓練の日程を、参加する署所・団にメールで知らせる（初級）
+
+訓練の名前・日時・場所・持ち物を、参加する署所・分団ごとに差し込んで、案内メールを下書きします。
+
+- **こんな時に:** 合同訓練や消防団の訓練の案内を、相手ごとに送っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/180_fire-drill-notice.csv`（列: `宛先`・`署所名`・`訓練名`・`日時`・`場所`・`持ち物`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{宛先}} へ「【訓練のご案内】{{訓練名}}（{{日時…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 宛先 | 署所名 | 訓練名 | 日時 | 場所 | 持ち物 |
+| --- | --- | --- | --- | --- | --- |
+| chuo@example.jp | 中央署 | 総合訓練 | 2026/11/05 9:00 | 訓練場 | 活動服・ヘルメット |
+| dan1@example.jp | 第1分団 | 総合訓練 | 2026/11/05 9:00 | 訓練場 | 活動服 |
+
+<a id="fire-brigade-roster"></a>
+
+### 消防団員の名簿（入退団・役職）を Excel に書き足す（初級）
+
+入団・退団・役職の変更をCSVにまとめておき、団員名簿のブックに日付つきで書き足します。
+
+- **こんな時に:** 分団から届く入退団の届を、名簿に反映しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/181_fire-brigade-roster.csv`（列: `分団`・`氏名`・`異動`・`役職`・`異動日`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\消防団員名簿_異動.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消防団員名簿_異動.xlsx の A{{ROW+1}} に {{異動日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消防団員名簿_異動.xlsx の B{{ROW+1}} に {{分団}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消防団員名簿_異動.xlsx の C{{ROW+1}} に {{氏名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消防団員名簿_異動.xlsx の D{{ROW+1}} に {{異動}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 消防団員名簿_異動.xlsx の E{{ROW+1}} に {{役職}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 分団 | 氏名 | 異動 | 役職 | 異動日 |
+| --- | --- | --- | --- | --- |
+| 第1分団 | 見本 太郎 | 入団 | 団員 | 2026/10/01 |
+| 第2分団 | 試験 次郎 | 役職変更 | 班長 | 2026/10/01 |
+
+<a id="fire-course-certificate"></a>
+
+### 防火管理講習・救命講習の修了証を、受講者ごとに作る（初級）
+
+受講者の氏名・講習名・修了日・修了証番号を、修了証の雛形に差し込んで保存します。
+
+- **こんな時に:** 講習の受講者が多く、修了証を1枚ずつ作っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/182_fire-course-certificate.csv`（列: `氏名`・`講習名`・`修了日`・`修了証番号`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《氏名》・《講習名》・《修了日》・《修了証番号》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\修了証.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\修了証 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\修了証.dotx を用意してね（差し込む所に 《氏名》・《講習名》・《修了日》・《修了証番号》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\修了証.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《講習名》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《講習名》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{講習名}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《修了日》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《修了日》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{修了日}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《修了証番号》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《修了証番号》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{修了証番号}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\修了証\{{修了証番号}}_{{氏名}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- PowerPoint の「修了証（賞状）を名前を差し込んで1枚ずつ作る」も使えます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 講習名 | 修了日 | 修了証番号 |
+| --- | --- | --- | --- |
+| 見本 太郎 | 普通救命講習 | 2026/10/18 | K-2026-0101 |
+| 試験 花子 | 普通救命講習 | 2026/10/18 | K-2026-0102 |
+
+<a id="fire-hazmat-entry"></a>
+
+### 危険物施設の届出（変更・廃止）を受付入力（中級）
+
+危険物施設の届出の種類・施設番号・届出日・内容を、予防業務システムに入力して登録します。
+
+- **こんな時に:** 危険物の届出の受付を、窓口が空いた時間にまとめて入力するとき。
+- **対象ウィンドウ:** `予防業務`
+- **見本CSV:** `samples/183_fire-hazmat-entry.csv`（列: `施設番号`・`届出の種類`・`届出日`・`内容`）
+
+**準備**
+
+- 対象ウィンドウ「予防業務」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `危険物届出受付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「施設番号」に「{{施設番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「届出の種類」に「{{届出の種類}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「届出日」に「{{届出日}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「内容」に「{{内容}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{施設番号}}：{{届出の種類}}（{{届出日}}）で合っているか、届出書と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「危険物施設の届出_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 施設番号 | 届出の種類 | 届出日 | 内容 |
+| --- | --- | --- | --- |
+| D-000301 | 品名等変更 | 2026/10/08 | 灯油から軽油へ |
+| D-000302 | 廃止 | 2026/10/09 | タンクの撤去 |
+
+<a id="fire-duty-roster"></a>
+
+### 当直・勤務表の PDF を、係員それぞれにメールで配る（初級）
+
+作った勤務表（PDF）を添付して、係員ごとにメールの下書きを作ります。添付ファイルがない人は飛ばして記録します。
+
+- **こんな時に:** 毎月の勤務表を、1人ずつメールで配っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/184_fire-duty-roster.csv`（列: `氏名`・`メール`・`勤務表`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{勤務表}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【勤務表】11月分」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 勤務表 |
+| --- | --- | --- |
+| 見本 太郎 | mihon@example.jp | C:\RPA作業\勤務表\11月_見本.pdf |
+| 試験 花子 | shiken@example.jp | C:\RPA作業\勤務表\11月_試験.pdf |
+
+<a id="fire-aed-lookup"></a>
+
+### AED の設置場所台帳を照会して、電極パッドの使用期限を確かめる（初級）
+
+設置番号で台帳を照会し、設置場所・電極パッドとバッテリーの使用期限を読み取ります。
+
+- **こんな時に:** AED の消耗品の交換時期が近い施設を、まとめて洗い出したいとき。
+- **対象ウィンドウ:** `AED台帳`
+- **見本CSV:** `samples/185_fire-aed-lookup.csv`（列: `設置番号`）
+
+**準備**
+
+- 対象ウィンドウ「AED台帳」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 119番通報の受付・出動指令のシステムには使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「設置番号」に「{{設置番号}}」を入れる` |  |
+| 3 | `KEY` キー送信 | `{ENTER}` |  |
+| 4 | `WAIT` 待機 | `2000` |  |
+| 5 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 6 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 7 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「設置場所」の値を読む → $設置場所` |  |
+| 8 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「パッド期限」の値を読む → $パッド期限` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「バッテリー期限」の値を読む → $バッテリー期限` |  |
+| 10 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「AED の設置場_{{設置番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 設置番号 |
+| --- |
+| AED-001 |
+| AED-002 |
+
+## 保育園・こども園
+
+<a id="nursery-notice-mail"></a>
+
+### 保護者へのお知らせを、クラスごとに名前を差し込んでメールで下書き（初級）
+
+園児の名前・クラス・保護者のメールアドレスの一覧から、行事やお知らせのメールを1人ずつ下書きします。
+
+- **こんな時に:** 遠足・懇談会・持ち物のお知らせを、保護者へメールで送っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/186_nursery-notice-mail.csv`（列: `園児名`・`クラス`・`保護者名`・`メール`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【{{クラス}}】遠足のお知らせ」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 園児名 | クラス | 保護者名 | メール |
+| --- | --- | --- | --- |
+| みほん たろう | ひよこ組 | 見本 花子 | hogosha1@example.jp |
+| しけん さくら | うさぎ組 | 試験 一郎 | hogosha2@example.jp |
+
+<a id="nursery-attendance-sum"></a>
+
+### 各クラスの出欠表（Excel）から、月の出席日数を集める（初級）
+
+クラスごとの出欠表のブックを開き、出席日数・欠席日数・延長保育の回数のセルを読み取って、1つの一覧にします。
+
+- **こんな時に:** 月末に、各クラスの出欠を集計して園長や市へ報告するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/187_nursery-attendance-sum.csv`（列: `クラス`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $出席延べ日数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $欠席延べ日数` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $延長保育回数` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「出席延べ日数」に {{$出席延べ日数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「欠席延べ日数」に {{$欠席延べ日数}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「延長保育回数」に {{$延長保育回数}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| クラス | ブック | シート |
+| --- | --- | --- |
+| ひよこ組 | C:\RPA作業\出欠\ひよこ組_10月.xlsx | 集計 |
+| うさぎ組 | C:\RPA作業\出欠\うさぎ組_10月.xlsx | 集計 |
+
+<a id="nursery-extended-fee"></a>
+
+### 延長保育の利用回数から利用料を計算して、台帳に書く（中級）
+
+園児ごとの延長保育の利用回数に1回あたりの料金を掛けて利用料を計算し、3桁区切りで台帳に書き込みます。
+
+- **こんな時に:** 月末に、延長保育の利用料を電卓で計算しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/188_nursery-extended-fee.csv`（列: `園児名`・`クラス`・`利用回数`・`1回の料金`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\延長保育料.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `SET_VAR` 変数に値を入れる | `📦 $利用料 ← {{利用回数}}*{{1回の料金}}（計算）` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 延長保育料.xlsx の A{{ROW+1}} に {{園児名}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 延長保育料.xlsx の B{{ROW+1}} に {{クラス}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 延長保育料.xlsx の C{{ROW+1}} に {{利用回数}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 延長保育料.xlsx の D{{ROW+1}} に {{$利用料}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+- 料金の計算は「変数に値を入れる（計算）」の式で変えます
+
+**応用・発見のヒント**
+
+- 計算した利用料を「保護者へのお知らせ」のメール本文に差し込むこともできます
+
+**見本CSV（先頭3行）**
+
+| 園児名 | クラス | 利用回数 | 1回の料金 |
+| --- | --- | --- | --- |
+| みほん たろう | ひよこ組 | 6 | 200 |
+| しけん さくら | うさぎ組 | 12 | 200 |
+
+<a id="nursery-health-result"></a>
+
+### 健康診断（内科・歯科）の結果のお知らせを、1人ずつ作る（初級）
+
+園児の名前・クラス・健診の種類・結果・受診のおすすめを、お知らせの雛形に差し込んで保存します。
+
+- **こんな時に:** 園の健康診断のあと、結果のお知らせを保護者へ配るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/189_nursery-health-result.csv`（列: `園児名`・`クラス`・`健診`・`結果`・`おすすめ`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《園児名》・《クラス》・《健診》・《結果》・《おすすめ》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\健診結果のお知らせ.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\健診結果 を作っておく
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\健診結果のお知らせ.dotx を用意してね（差し込む所に 《園児名》・《クラス》・《健診》・《結果》・《おすすめ》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\健診結果のお知らせ.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《園児名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《園児名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{園児名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《クラス》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《クラス》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{クラス}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《健診》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《健診》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{健診}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《結果》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《結果》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{結果}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《おすすめ》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《おすすめ》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{おすすめ}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\健診結果\{{クラス}}_{{園児名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 園児名 | クラス | 健診 | 結果 | おすすめ |
+| --- | --- | --- | --- | --- |
+| みほん たろう | ひよこ組 | 歯科健診 | 異常なし | 特になし |
+| しけん さくら | うさぎ組 | 歯科健診 | むし歯の疑い | 歯科医院での受診をおすすめします |
+
+<a id="nursery-application-entry"></a>
+
+### 入園（利用）申込書の内容を、保育システムに受付入力（中級）
+
+申込書の内容（申込日・児童の氏名・生年月日・希望する園・希望の月）を入力して登録し、受付番号を読み取ります。
+
+- **こんな時に:** 入園申込の時期に、たくさんの申込書を入力するとき。
+- **対象ウィンドウ:** `保育システム`
+- **見本CSV:** `samples/190_nursery-application-entry.csv`（列: `申込日`・`児童氏名`・`生年月日`・`第1希望`・`希望月`）
+
+**準備**
+
+- 対象ウィンドウ「保育システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `利用申込受付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「申込日」に「{{申込日}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「児童氏名」に「{{児童氏名}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「生年月日」に「{{生年月日}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「第1希望」に「{{第1希望}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「希望月」に「{{希望月}}」を入れる` |  |
+| 8 | `CONFIRM` 確認ポイント（人が確認） | `{{児童氏名}}（{{生年月日}}）・第1希望 {{第1希望}}・{{希望月}} で合っているか、申込書と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 9 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 10 | `WAIT` 待機 | `2000` |  |
+| 11 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 12 | `WAIT` 待機 | `1000` |  |
+| 13 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「受付番号」の値を読む → $受付番号` |  |
+| 14 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「入園（利用）申込_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 申込日 | 児童氏名 | 生年月日 | 第1希望 | 希望月 |
+| --- | --- | --- | --- | --- |
+| 2026/10/15 | みほん たろう | 2024/05/10 | さくら保育園 | 2027/04 |
+| 2026/10/15 | しけん はな | 2023/12/01 | ひまわりこども園 | 2027/04 |
+
+<a id="nursery-fee-lookup"></a>
+
+### 保育料（利用者負担額）を照会して、一覧にする（初級）
+
+児童番号で保育システムを照会し、保育料の階層と月額を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 保護者からの問い合わせに備えて、クラスの保育料をまとめて確かめたいとき。
+- **対象ウィンドウ:** `保育システム`
+- **見本CSV:** `samples/191_nursery-fee-lookup.csv`（列: `児童番号`・`児童氏名`）
+
+**準備**
+
+- 対象ウィンドウ「保育システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `保育料照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「児童番号」に「{{児童番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「階層」の値を読む → $階層` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「月額」の値を読む → $月額` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「保育料（利用者負_{{児童番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 児童番号 | 児童氏名 |
+| --- | --- |
+| C00001 | みほん たろう |
+| C00002 | しけん さくら |
+
+<a id="nursery-menu-mail"></a>
+
+### 今月の献立表（PDF）を、保護者へメールで配る（初級）
+
+献立表の PDF を添付して、保護者ごとにメールの下書きを作ります。
+
+- **こんな時に:** 献立表や園だよりを、紙ではなくメールで配りたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/192_nursery-menu-mail.csv`（列: `保護者名`・`メール`・`献立表`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{献立表}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【献立表】11月分」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | メール | 献立表 |
+| --- | --- | --- |
+| 見本 花子 | hogosha1@example.jp | C:\RPA作業\配布\11月_献立表.pdf |
+| 試験 一郎 | hogosha2@example.jp | C:\RPA作業\配布\11月_献立表.pdf |
+
+<a id="nursery-event-reply"></a>
+
+### 行事の出欠の返事を、出欠表に書き込む（初級）
+
+保護者から返ってきた行事の出欠（参加・不参加・人数）を、出欠表のブックに書き込みます。
+
+- **こんな時に:** 運動会・発表会・懇談会の出欠を取りまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/193_nursery-event-reply.csv`（列: `園児名`・`クラス`・`出欠`・`参加人数`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\行事出欠表.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 行事出欠表.xlsx の A{{ROW+1}} に {{クラス}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 行事出欠表.xlsx の B{{ROW+1}} に {{園児名}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 行事出欠表.xlsx の C{{ROW+1}} に {{出欠}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 行事出欠表.xlsx の D{{ROW+1}} に {{参加人数}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 園児名 | クラス | 出欠 | 参加人数 |
+| --- | --- | --- | --- |
+| みほん たろう | ひよこ組 | 参加 | 2 |
+| しけん さくら | うさぎ組 | 不参加 | 0 |
+
+<a id="nursery-photo-folders"></a>
+
+### 行事の写真を整理するフォルダを、行事・クラスごとに作る（初級）
+
+行事の名前とクラスの組み合わせで、写真を入れるフォルダを一度に作ります。
+
+- **こんな時に:** 撮った写真がカメラのフォルダにたまって、整理が追いつかないとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/194_nursery-photo-folders.csv`（列: `年度`・`行事`・`クラス`）
+
+**準備**
+
+- CSVの値を自分の職場のものに書き換える（見本はすべて架空です）
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `フォルダは C:\RPA作業\写真\{{年度}}\{{行事}}\{{クラス}} の形で作るよ。途中のフォルダもまとめて作るよ` |  |
+| 2 | `RUN` アプリ起動 | `cmd /c if not exist "C:\RPA作業\写真\{{年度}}\{{行事}}\{{クラス}}" mkdir "C:\RPA作業\写真\{{年度}}\{{行事}}\{{クラス}}"` |  |
+| 3 | `WAIT` 待機 | `500` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 作った（あれば何もしない）` |  |
+
+**カスタマイズのポイント**
+
+- フォルダの場所と形は RUN の C:\RPA作業\写真\{{年度}}\{{行事}}\{{クラス}} の部分で変えます
+
+**応用・発見のヒント**
+
+- 写真の移動は「ファイルを年度・種類ごとのフォルダへ振り分ける」でできます
+
+**見本CSV（先頭3行）**
+
+| 年度 | 行事 | クラス |
+| --- | --- | --- |
+| 令和8年度 | 運動会 | ひよこ組 |
+| 令和8年度 | 運動会 | うさぎ組 |
+| 令和8年度 | 発表会 | ひよこ組 |
+
+<a id="nursery-shift-mail"></a>
+
+### 職員の勤務シフト表を、それぞれにメールで配る（初級）
+
+職員ごとのシフト表（PDF・Excel）を添付して、メールの下書きを作ります。
+
+- **こんな時に:** 早番・遅番のシフト表を、毎月配っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/195_nursery-shift-mail.csv`（列: `職員名`・`メール`・`シフト表`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{シフト表}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【シフト表】11月分」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 職員名 | メール | シフト表 |
+| --- | --- | --- |
+| 見本 先生 | staff1@example.jp | C:\RPA作業\シフト\11月_見本.pdf |
+| 試験 先生 | staff2@example.jp | C:\RPA作業\シフト\11月_試験.pdf |
+
+<a id="nursery-drill-record"></a>
+
+### 避難訓練の記録を、年間の記録表に書く（初級）
+
+避難訓練の日時・想定（火災・地震など）・避難にかかった時間・反省点を、記録表のブックに書き込みます。
+
+- **こんな時に:** 毎月の避難訓練の記録を、年間の記録表にまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/196_nursery-drill-record.csv`（列: `実施日`・`想定`・`避難時間（分）`・`反省点`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\避難訓練記録.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 避難訓練記録.xlsx の A{{ROW+1}} に {{実施日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 避難訓練記録.xlsx の B{{ROW+1}} に {{想定}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 避難訓練記録.xlsx の C{{ROW+1}} に {{避難時間（分）}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 避難訓練記録.xlsx の D{{ROW+1}} に {{反省点}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 実施日 | 想定 | 避難時間（分） | 反省点 |
+| --- | --- | --- | --- |
+| 2026/10/09 | 地震 | 3 | 0歳児の避難車の準備に時間がかかった |
+| 2026/11/12 | 火災（給食室） | 2 |  |
+
+<a id="nursery-document-remind"></a>
+
+### 保護者の提出書類（就労証明など）の締切が近い人にお知らせ（初級）
+
+提出書類の一覧から、締切が7日以内でまだ「済」になっていない家庭に、お知らせのメールを下書きします。
+
+- **こんな時に:** 就労証明書・家庭状況票・現況届などの提出を取りまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/197_nursery-document-remind.csv`（列: `保護者名`・`メール`・`書類`・`締切`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+- 子どもや保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、職場で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{締切}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【ご提出のお願い】{{書類}}（{{締切…」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（7）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | メール | 書類 | 締切 | 状況 |
+| --- | --- | --- | --- | --- |
+| 見本 花子 | hogosha1@example.jp | 就労証明書 | 2026/10/31 |  |
+| 試験 一郎 | hogosha2@example.jp | 就労証明書 | 2026/10/31 | 済 |
+
+## 小学校（先生の校務）
+
+<a id="teacher-test-scores"></a>
+
+### テストの点数を、成績の一覧表（Excel）に書き込む（初級）
+
+児童ごとのテストの点数を、成績一覧のブックの決まった列に書き込みます。テストを返すたびに打ち込む手間が減ります。
+
+- **こんな時に:** 単元テストの点数を、成績の一覧表に転記しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/246_teacher-test-scores.csv`（列: `出席番号`・`氏名`・`国語`・`算数`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\成績\3年1組_成績一覧.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 3年1組_成績一覧.xlsx の A{{ROW+1}} に {{出席番号}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 3年1組_成績一覧.xlsx の B{{ROW+1}} に {{氏名}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 3年1組_成績一覧.xlsx の C{{ROW+1}} に {{国語}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 3年1組_成績一覧.xlsx の D{{ROW+1}} に {{算数}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+- 単元ごとに列を変えるときは、セル番地の英字（C・D）を変えます
+
+**応用・発見のヒント**
+
+- 点数の平均や順位は、成績一覧のブックの式（AVERAGE など）で出すと安心です
+
+**見本CSV（先頭3行）**
+
+| 出席番号 | 氏名 | 国語 | 算数 |
+| --- | --- | --- | --- |
+| 1 | みほん たろう | 85 | 92 |
+| 2 | しけん はなこ | 78 | 88 |
+| 3 | れんしゅう いちろう | 95 | 70 |
+
+<a id="teacher-class-letter"></a>
+
+### 学級通信を、雛形に今月の予定と一言を差し込んで作る（初級）
+
+学級通信の雛形に、号数・発行日・今月の予定・担任からの一言を差し込んで保存します。毎月同じ形で出せます。
+
+- **こんな時に:** 毎月の学級通信の、決まった部分を作る手間を減らしたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/247_teacher-class-letter.csv`（列: `号数`・`発行日`・`今月の予定`・`担任の一言`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《号数》・《発行日》・《今月の予定》・《担任の一言》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\学級通信.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\学級通信 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\学級通信.dotx を用意してね（差し込む所に 《号数》・《発行日》・《今月の予定》・《担任の一言》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\学級通信.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《号数》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《号数》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{号数}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《発行日》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《発行日》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{発行日}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《今月の予定》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《今月の予定》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{今月の予定}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《担任の一言》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《担任の一言》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{担任の一言}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\学級通信\学級通信_{{号数}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 写真やイラストは雛形に入れておけば、毎月そのまま使えます
+
+**見本CSV（先頭3行）**
+
+| 号数 | 発行日 | 今月の予定 | 担任の一言 |
+| --- | --- | --- | --- |
+| 第7号 | 2026/11/02 | 11/10 遠足、11/20 授業参観 | 朝晩が寒くなりました。上着を持たせてください。 |
+
+<a id="teacher-name-tags"></a>
+
+### 児童の名札・机のネームカードを、1人ずつ作る（初級）
+
+名簿の名前とふりがな・出席番号を、名札の雛形に差し込んで保存します。
+
+- **こんな時に:** 年度はじめや席替えで、名札やネームカードを作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/248_teacher-name-tags.csv`（列: `出席番号`・`氏名`・`ふりがな`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《出席番号》・《氏名》・《ふりがな》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\名札.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\名札 を作っておく
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\名札.dotx を用意してね（差し込む所に 《出席番号》・《氏名》・《ふりがな》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\名札.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《出席番号》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《出席番号》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{出席番号}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《ふりがな》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《ふりがな》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{ふりがな}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 48 | `KEY` キー送信 | `{F12}` |  |
+| 49 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 50 | `TEXT` 文字列貼付 | `C:\RPA作業\名札\{{出席番号}}_{{氏名}}.docx` |  |
+| 51 | `KEY` キー送信 | `{ENTER}` |  |
+| 52 | `WAIT` 待機 | `2000` |  |
+| 53 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 54 | `KEY` キー送信 | `^w` |  |
+| 55 | `WAIT` 待機 | `1500` |  |
+| 56 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 出席番号 | 氏名 | ふりがな |
+| --- | --- | --- |
+| 1 | 見本 太郎 | みほん たろう |
+| 2 | 試験 花子 | しけん はなこ |
+
+<a id="teacher-interview-schedule"></a>
+
+### 個人面談の日時を、保護者ごとにメールで知らせる（初級）
+
+面談の日時と場所を保護者ごとに差し込んで、お知らせのメールを下書きします。
+
+- **こんな時に:** 個人面談・家庭訪問の日程が決まったあと、保護者へ連絡するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/249_teacher-interview-schedule.csv`（列: `保護者名`・`児童名`・`メール`・`日時`・`場所`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【個人面談】{{児童名}}さんの面談の日…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | 児童名 | メール | 日時 | 場所 |
+| --- | --- | --- | --- | --- |
+| 見本 一郎 | みほん たろう | hogo1@example.jp | 2026/12/02 15:00 | 3年1組の教室 |
+| 試験 花子 | しけん はなこ | hogo2@example.jp | 2026/12/02 15:20 | 3年1組の教室 |
+
+<a id="teacher-absence-log"></a>
+
+### 欠席・遅刻の連絡を、出欠の記録表に書く（初級）
+
+朝に受けた欠席・遅刻の連絡（日付・児童・理由）を、出欠の記録表に書き込みます。
+
+- **こんな時に:** 欠席の連絡を受けたメモを、あとで出席簿にまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/250_teacher-absence-log.csv`（列: `日付`・`出席番号`・`氏名`・`区分`・`理由`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\出欠記録.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出欠記録.xlsx の A{{ROW+1}} に {{日付}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出欠記録.xlsx の B{{ROW+1}} に {{出席番号}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出欠記録.xlsx の C{{ROW+1}} に {{氏名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出欠記録.xlsx の D{{ROW+1}} に {{区分}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 出欠記録.xlsx の E{{ROW+1}} に {{理由}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 日付 | 出席番号 | 氏名 | 区分 | 理由 |
+| --- | --- | --- | --- | --- |
+| 2026/10/15 | 3 | れんしゅう いちろう | 欠席 | 発熱 |
+| 2026/10/15 | 5 | みほん じろう | 遅刻 | 通院 |
+
+<a id="teacher-fitness-sum"></a>
+
+### 各クラスの体力テストの記録（Excel）を、学年の一覧に集める（中級）
+
+クラスごとの記録ブックを開き、種目の平均のセルを読み取って、学年の一覧にします。
+
+- **こんな時に:** 体力テストの結果を、学年でまとめるとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/251_teacher-fitness-sum.csv`（列: `クラス`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $50m走` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $ソフトボール投げ` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $反復横とび` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「50m走」に {{$50m走}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「ソフトボール投げ」に {{$ソフトボール投げ}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「反復横とび」に {{$反復横とび}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| クラス | ブック | シート |
+| --- | --- | --- |
+| 3年1組 | C:\RPA作業\体力テスト\3-1.xlsx | 平均 |
+| 3年2組 | C:\RPA作業\体力テスト\3-2.xlsx | 平均 |
+
+<a id="teacher-homework-check"></a>
+
+### 宿題・提出物を出していない児童を、一覧から見つける（初級）
+
+提出の一覧で「提出」の列が空の児童だけを「未提出」と記録します。実行結果CSVを開けば、声をかける児童がすぐ分かります。
+
+- **こんな時に:** 音読カード・プリント・お便りの返事など、提出物の確認をしているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/252_homework.csv`（列: `出席番号`・`氏名`・`提出物`・`提出`）
+
+**準備**
+
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+- CSVの「提出」の列に、出した児童は「○」を書いておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{提出}}」が空っぽ なら` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 未提出` |  |
+| 3 | `ELSE` そうでなければ |  |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 提出済み` |  |
+| 5 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 「出した」の書き方が違うとき（例: 済）は、「もし〜なら」の条件を変えます
+
+**応用・発見のヒント**
+
+- 未提出の家庭へのお知らせは「提出物の締切が近い人に、お知らせメールを下書き」が使えます
+
+**見本CSV（先頭3行）**
+
+| 出席番号 | 氏名 | 提出物 | 提出 |
+| --- | --- | --- | --- |
+| 1 | みほん たろう | 音読カード | ○ |
+| 2 | しけん はなこ | 音読カード |  |
+| 3 | れんしゅう いちろう | 音読カード | ○ |
+
+<a id="teacher-work-folders"></a>
+
+### 児童の作品（写真・データ）を入れるフォルダを、1人ずつ作る（初級）
+
+出席番号と名前で、作品の写真やデータを入れるフォルダを一度に作ります。
+
+- **こんな時に:** 図工の作品の写真や、タブレットで作った作品を、児童ごとに残したいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/253_teacher-work-folders.csv`（列: `年度`・`学年組`・`出席番号`・`氏名`）
+
+**準備**
+
+- CSVの値を自分の職場のものに書き換える（見本はすべて架空です）
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `フォルダは C:\RPA作業\作品\{{年度}}\{{学年組}}\{{出席番号}}_{{氏名}} の形で作るよ。途中のフォルダもまとめて作るよ` |  |
+| 2 | `RUN` アプリ起動 | `cmd /c if not exist "C:\RPA作業\作品\{{年度}}\{{学年組}}\{{出席番号}}_{{氏名}}" mkdir "C:\RPA作業\作品\{{年度}}\{{学年組}}\{{出席番号}}_{{氏名}}"` |  |
+| 3 | `WAIT` 待機 | `500` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 作った（あれば何もしない）` |  |
+
+**カスタマイズのポイント**
+
+- フォルダの場所と形は RUN の C:\RPA作業\作品\{{年度}}\{{学年組}}\{{出席番号}}_{{氏名}} の部分で変えます
+
+**応用・発見のヒント**
+
+- 卒業や進級のときに、フォルダごと渡したり残したりしやすくなります
+
+**見本CSV（先頭3行）**
+
+| 年度 | 学年組 | 出席番号 | 氏名 |
+| --- | --- | --- | --- |
+| 令和8年度 | 3年1組 | 01 | みほん たろう |
+| 令和8年度 | 3年1組 | 02 | しけん はなこ |
+
+<a id="teacher-grade-letter"></a>
+
+### 学年だより（PDF）を、保護者へメールで配る（初級）
+
+学年だよりの PDF を添付して、保護者ごとにメールの下書きを作ります。
+
+- **こんな時に:** 学年だより・学校だよりを、メールでも配りたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/254_teacher-grade-letter.csv`（列: `保護者名`・`メール`・`たより`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{たより}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【3年】学年だより 11月号」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | メール | たより |
+| --- | --- | --- |
+| 見本 一郎 | hogo1@example.jp | C:\RPA作業\たより\3年_11月.pdf |
+| 試験 花子 | hogo2@example.jp | C:\RPA作業\たより\3年_11月.pdf |
+
+<a id="teacher-health-check"></a>
+
+### 朝の健康観察の結果を、記録表に書く（初級）
+
+健康観察で気になった児童の様子（体温・症状・対応）を、日付つきで記録表に書き込みます。
+
+- **こんな時に:** 朝の健康観察の結果を、保健室へ報告する前にまとめるとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/255_teacher-health-check.csv`（列: `出席番号`・`氏名`・`体温`・`様子`・`対応`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\健康観察記録.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の B{{ROW+1}} に {{出席番号}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の C{{ROW+1}} に {{氏名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の D{{ROW+1}} に {{体温}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の E{{ROW+1}} に {{様子}} を書く` |  |
+| 6 | `EXCEL_WRITE` Excelのセルに書く | `🖊 健康観察記録.xlsx の F{{ROW+1}} に {{対応}} を書く` |  |
+| 7 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 出席番号 | 氏名 | 体温 | 様子 | 対応 |
+| --- | --- | --- | --- | --- |
+| 4 | みほん さくら | 37.4 | せき | 保健室で様子をみる |
+| 7 | しけん じろう | 36.8 | 腹痛 | 保護者へ連絡 |
+
+<a id="teacher-field-trip-list"></a>
+
+### 校外学習のしおりの表紙・班の名簿を、班ごとに作る（初級）
+
+班の名前・班長・班員・集合時刻を、しおりの雛形に差し込んで保存します。
+
+- **こんな時に:** 遠足・社会科見学・宿泊学習のしおりを、班ごとに作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/256_teacher-field-trip-list.csv`（列: `班`・`班長`・`班員`・`集合時刻`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《班》・《班長》・《班員》・《集合時刻》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\校外学習しおり.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\しおり を作っておく
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\校外学習しおり.dotx を用意してね（差し込む所に 《班》・《班長》・《班員》・《集合時刻》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\校外学習しおり.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《班》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《班》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{班}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《班長》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《班長》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{班長}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《班員》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《班員》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{班員}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《集合時刻》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《集合時刻》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{集合時刻}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\しおり\しおり_{{班}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 班 | 班長 | 班員 | 集合時刻 |
+| --- | --- | --- | --- |
+| 1班 | みほん たろう | しけん はなこ・れんしゅう いちろう | 8:10 |
+| 2班 | みほん さくら | しけん じろう・れんしゅう はるか | 8:10 |
+
+<a id="teacher-staff-notice"></a>
+
+### 職員会議の資料と連絡を、先生方にメールで回す（初級）
+
+会議の日時と資料（PDF）を添付して、先生ごとにメールの下書きを作ります。
+
+- **こんな時に:** 学年会・職員会議の資料を、事前に配りたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/257_teacher-staff-notice.csv`（列: `氏名`・`メール`・`会議`・`日時`・`資料`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{資料}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【資料】{{会議}}（{{日時}}）」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 会議 | 日時 | 資料 |
+| --- | --- | --- | --- | --- |
+| 見本 先生 | sensei1@example.jp | 職員会議 | 2026/11/04 15:45 | C:\RPA作業\会議\職員会議_1104.pdf |
+| 試験 先生 | sensei2@example.jp | 職員会議 | 2026/11/04 15:45 | C:\RPA作業\会議\職員会議_1104.pdf |
+
+<a id="teacher-reply-remind"></a>
+
+### お便りの返事（出欠票など）がまだの家庭へ、お知らせを下書き（初級）
+
+お便りの返事の一覧から、締切が3日以内でまだ「済」になっていない家庭へ、お知らせのメールを下書きします。
+
+- **こんな時に:** 参観・懇談会の出欠票などの返事を集めているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/258_teacher-reply-remind.csv`（列: `保護者名`・`メール`・`お便り`・`締切`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+- 児童の情報を扱うので、見本CSV（架空）で動きを確かめてから、学校で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{締切}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お願い】{{お便り}}の提出（{{締切…」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（3）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | メール | お便り | 締切 | 状況 |
+| --- | --- | --- | --- | --- |
+| 見本 一郎 | hogo1@example.jp | 授業参観の出欠票 | 2026/11/13 |  |
+| 試験 花子 | hogo2@example.jp | 授業参観の出欠票 | 2026/11/13 | 済 |
+
+<a id="teacher-reading-count"></a>
+
+### 読書カードの冊数（Excel）を、クラスごとに集める（初級）
+
+クラスごとの読書記録のブックを開き、読んだ冊数の合計と平均のセルを読み取って一覧にします。
+
+- **こんな時に:** 読書週間の結果を、学年や図書委員会でまとめるとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/259_teacher-reading-count.csv`（列: `クラス`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $合計冊数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $1人平均` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「合計冊数」に {{$合計冊数}}` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「1人平均」に {{$1人平均}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| クラス | ブック | シート |
+| --- | --- | --- |
+| 3年1組 | C:\RPA作業\読書\3-1.xlsx | 集計 |
+| 3年2組 | C:\RPA作業\読書\3-2.xlsx | 集計 |
+
+## 学校・教育委員会
+
+<a id="school-aid-entry"></a>
+
+### 就学援助の申請を、システムに受付入力（中級）
+
+申請日・世帯主・児童生徒の氏名・学校・学年を入力して登録し、受付番号を読み取ります。
+
+- **こんな時に:** 新年度の就学援助の申請を、まとめて受付入力するとき。
+- **対象ウィンドウ:** `学務システム`
+- **見本CSV:** `samples/220_school-aid-entry.csv`（列: `申請日`・`世帯主`・`児童生徒名`・`学校`・`学年`）
+
+**準備**
+
+- 対象ウィンドウ「学務システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 児童・生徒・保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `就学援助受付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「申請日」に「{{申請日}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「世帯主」に「{{世帯主}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「児童生徒名」に「{{児童生徒名}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「学校」に「{{学校}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「学年」に「{{学年}}」を入れる` |  |
+| 8 | `CONFIRM` 確認ポイント（人が確認） | `{{児童生徒名}}（{{学校}} {{学年}}年）・世帯主 {{世帯主}} で合っているか、申請書と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 9 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 10 | `WAIT` 待機 | `2000` |  |
+| 11 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 12 | `WAIT` 待機 | `1000` |  |
+| 13 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「受付番号」の値を読む → $受付番号` |  |
+| 14 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「就学援助の申請を_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 申請日 | 世帯主 | 児童生徒名 | 学校 | 学年 |
+| --- | --- | --- | --- | --- |
+| 2026/04/10 | 見本 一郎 | みほん たろう | 見本小学校 | 3 |
+| 2026/04/10 | 試験 花子 | しけん じろう | 見本中学校 | 1 |
+
+<a id="school-survey-sum"></a>
+
+### 各学校から届いた調査の回答（Excel）を、1つの一覧に集める（初級）
+
+学校ごとの回答ブックを開き、決まったセルの回答を読み取って、学校ごとに1行の一覧にします。
+
+- **こんな時に:** 教育委員会から学校へ出した調査の回答を、取りまとめるとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/221_school-survey-sum.csv`（列: `学校`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $児童生徒数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $回答` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C6 を読む → $担当者` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「児童生徒数」に {{$児童生徒数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「回答」に {{$回答}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「担当者」に {{$担当者}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 学校 | ブック | シート |
+| --- | --- | --- |
+| 見本小学校 | C:\RPA作業\調査回答\見本小.xlsx | 回答 |
+| 見本中学校 | C:\RPA作業\調査回答\見本中.xlsx | 回答 |
+
+<a id="school-teacher-training"></a>
+
+### 教職員研修の案内を、学校ごとにメールで下書き（初級）
+
+研修名・日時・会場・対象を差し込んで、学校ごとに案内メールを下書きします。
+
+- **こんな時に:** 教育センターの研修の案内を、各学校へ送っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/222_school-teacher-training.csv`（列: `学校`・`宛先`・`研修名`・`日時`・`会場`・`対象`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{宛先}} へ「【研修のご案内】{{研修名}}」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 学校 | 宛先 | 研修名 | 日時 | 会場 | 対象 |
+| --- | --- | --- | --- | --- | --- |
+| 見本小学校 | mihon-es@example.jp | ICT活用研修 | 2026/11/11 15:30 | 教育センター | 各校1名 |
+| 見本中学校 | mihon-jh@example.jp | ICT活用研修 | 2026/11/11 15:30 | 教育センター | 各校1名 |
+
+<a id="school-transfer-notice"></a>
+
+### 転入学の通知書を、1件ずつ作る（初級）
+
+児童生徒の氏名・転入の日・学校・学年を、通知書の雛形に差し込んで保存します。
+
+- **こんな時に:** 転入の手続きをした家庭と学校へ、通知書を出すとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/223_school-transfer-notice.csv`（列: `保護者名`・`児童生徒名`・`転入日`・`学校`・`学年`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《保護者名》・《児童生徒名》・《転入日》・《学校》・《学年》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\転入学通知書.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\通知書 を作っておく
+- 児童・生徒・保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\転入学通知書.dotx を用意してね（差し込む所に 《保護者名》・《児童生徒名》・《転入日》・《学校》・《学年》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\転入学通知書.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《保護者名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《保護者名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{保護者名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《児童生徒名》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《児童生徒名》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{児童生徒名}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《転入日》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《転入日》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{転入日}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《学校》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《学校》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{学校}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《学年》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《学年》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{学年}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\通知書\転入_{{児童生徒名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | 児童生徒名 | 転入日 | 学校 | 学年 |
+| --- | --- | --- | --- | --- |
+| 見本 一郎 | みほん たろう | 2026/10/20 | 見本小学校 | 2 |
+| 試験 花子 | しけん じろう | 2026/10/21 | 見本中学校 | 1 |
+
+<a id="school-facility-repair"></a>
+
+### 学校施設の修繕の依頼を、修繕台帳に書く（初級）
+
+学校から届いた修繕の依頼（場所・内容・急ぎかどうか）を、修繕台帳のブックに書き込みます。
+
+- **こんな時に:** 各学校の修繕依頼を受けて、業者の手配の順番を決めているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/224_school-facility-repair.csv`（列: `学校`・`場所`・`内容`・`急ぎ`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\学校修繕台帳.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 学校修繕台帳.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 学校修繕台帳.xlsx の B{{ROW+1}} に {{学校}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 学校修繕台帳.xlsx の C{{ROW+1}} に {{場所}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 学校修繕台帳.xlsx の D{{ROW+1}} に {{内容}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 学校修繕台帳.xlsx の E{{ROW+1}} に {{急ぎ}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 学校 | 場所 | 内容 | 急ぎ |
+| --- | --- | --- | --- |
+| 見本小学校 | 体育館 | 照明の不点灯 | はい |
+| 見本中学校 | 2階トイレ | 水漏れ | はい |
+| 見本小学校 | 校庭 | フェンスの破れ | いいえ |
+
+<a id="school-lunch-allergy"></a>
+
+### 給食の献立表（PDF）を、学校ごとに配る（初級）
+
+翌月の献立表と、アレルギー対応の詳細献立表（PDF）を添付して、学校ごとにメールの下書きを作ります。
+
+- **こんな時に:** 給食センターから各学校へ、献立表を配っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/225_school-lunch-allergy.csv`（列: `学校`・`宛先`・`献立表`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{献立表}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{宛先}} へ「【給食】11月の献立表」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 学校 | 宛先 | 献立表 |
+| --- | --- | --- |
+| 見本小学校 | mihon-es@example.jp | C:\RPA作業\給食\11月_献立表.pdf |
+| 見本中学校 | mihon-jh@example.jp | C:\RPA作業\給食\11月_献立表.pdf |
+
+<a id="school-student-lookup"></a>
+
+### 学齢簿を照会して、就学する学校を確かめる（初級）
+
+宛名番号で学務システムを照会し、指定された学校と学年を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 入学通知を出す前や、問い合わせに答える前に、まとめて確かめたいとき。
+- **対象ウィンドウ:** `学務システム`
+- **見本CSV:** `samples/226_school-student-lookup.csv`（列: `宛名番号`・`児童名`）
+
+**準備**
+
+- 対象ウィンドウ「学務システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 児童・生徒・保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `学齢簿照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「宛名番号」に「{{宛名番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「指定校」の値を読む → $指定校` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「学年」の値を読む → $学年` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「学齢簿を照会して_{{宛名番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 宛名番号 | 児童名 |
+| --- | --- |
+| 1000011 | みほん たろう |
+| 1000012 | しけん じろう |
+
+<a id="school-fee-remind"></a>
+
+### 学校徴収金の未納がある家庭に、お知らせを下書き（初級）
+
+徴収金の一覧から、納期限が5日以内でまだ「済」になっていない家庭に、お知らせのメールを下書きします。
+
+- **こんな時に:** 教材費・給食費などの集金の取りまとめをしているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/227_school-fee-remind.csv`（列: `保護者名`・`メール`・`費目`・`金額`・`納期限`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+- 児童・生徒・保護者の情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{納期限}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お知らせ】{{費目}}の納期限（{{納…」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（5）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | メール | 費目 | 金額 | 納期限 | 状況 |
+| --- | --- | --- | --- | --- | --- |
+| 見本 一郎 | hogo1@example.jp | 教材費 | 3,500円 | 2026/10/31 |  |
+| 試験 花子 | hogo2@example.jp | 教材費 | 3,500円 | 2026/10/31 | 済 |
+
+<a id="school-class-folders"></a>
+
+### 学年・クラスごとの共有フォルダを、年度はじめにまとめて作る（初級）
+
+年度・学年・クラスの組み合わせで、資料を入れる共有フォルダを一度に作ります。
+
+- **こんな時に:** 新年度の準備で、学年・クラスのフォルダを毎年作っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/228_school-class-folders.csv`（列: `年度`・`学年`・`クラス`）
+
+**準備**
+
+- CSVの値を自分の職場のものに書き換える（見本はすべて架空です）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `フォルダは C:\RPA作業\学校共有\{{年度}}\{{学年}}\{{クラス}} の形で作るよ。途中のフォルダもまとめて作るよ` |  |
+| 2 | `RUN` アプリ起動 | `cmd /c if not exist "C:\RPA作業\学校共有\{{年度}}\{{学年}}\{{クラス}}" mkdir "C:\RPA作業\学校共有\{{年度}}\{{学年}}\{{クラス}}"` |  |
+| 3 | `WAIT` 待機 | `500` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 作った（あれば何もしない）` |  |
+
+**カスタマイズのポイント**
+
+- フォルダの場所と形は RUN の C:\RPA作業\学校共有\{{年度}}\{{学年}}\{{クラス}} の部分で変えます
+
+**応用・発見のヒント**
+
+- 年度はじめに1回動かすだけで、1年分のフォルダがそろいます
+
+**見本CSV（先頭3行）**
+
+| 年度 | 学年 | クラス |
+| --- | --- | --- |
+| 令和8年度 | 1年 | 1組 |
+| 令和8年度 | 1年 | 2組 |
+| 令和8年度 | 2年 | 1組 |
+
+<a id="school-ict-loan"></a>
+
+### 児童生徒の端末（タブレット）の貸出・修理の記録をつける（初級）
+
+端末の番号・使う児童生徒・貸出か修理か・日付を、端末の管理台帳に書き込みます。
+
+- **こんな時に:** 1人1台端末の故障・交換・貸出を管理しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/229_school-ict-loan.csv`（列: `端末番号`・`学校`・`学年組`・`区分`・`メモ`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\端末管理台帳.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の B{{ROW+1}} に {{端末番号}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の C{{ROW+1}} に {{学校}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の D{{ROW+1}} に {{学年組}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の E{{ROW+1}} に {{区分}} を書く` |  |
+| 6 | `EXCEL_WRITE` Excelのセルに書く | `🖊 端末管理台帳.xlsx の F{{ROW+1}} に {{メモ}} を書く` |  |
+| 7 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 端末番号 | 学校 | 学年組 | 区分 | メモ |
+| --- | --- | --- | --- | --- |
+| T-0101 | 見本小学校 | 3年1組 | 修理 | 画面割れ |
+| T-0102 | 見本小学校 | 3年1組 | 代替機の貸出 | T-0101 の修理中 |
+
+## 市民病院（事務）
+
+<a id="hosp-appointment-check"></a>
+
+### 予約の一覧を照会して、来院予定の日時と診療科を確かめる（初級）
+
+患者番号で予約システムを照会し、次回の予約日・時刻・診療科を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 予約の変更や確認の電話の前に、まとめて予約状況を確かめたいとき。
+- **対象ウィンドウ:** `予約システム`
+- **見本CSV:** `samples/198_hosp-appointment-check.csv`（列: `患者番号`）
+
+**準備**
+
+- 対象ウィンドウ「予約システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 診療録（カルテ）・処方・検査の指示など、医療行為にかかわる入力には使わないでください（事務作業向けのテンプレートです）
+- 患者さんの情報を扱うので、見本CSV（架空）で動きを確かめてから、病院で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `予約照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「患者番号」に「{{患者番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「予約日」の値を読む → $予約日` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「予約時刻」の値を読む → $予約時刻` |  |
+| 11 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「診療科」の値を読む → $診療科` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「予約の一覧を照会_{{患者番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 患者番号 |
+| --- |
+| P0000001 |
+| P0000002 |
+
+<a id="hosp-referral-reply"></a>
+
+### 紹介状の返書（お返事）が遅れている医療機関の一覧から、催促を下書き（初級）
+
+紹介状を受けた日と返書の期限から、期限が近いのにまだ「済」になっていないものだけ、担当医の秘書あてにお知らせを下書きします。
+
+- **こんな時に:** 地域医療連携室で、紹介状の返書の管理をしているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/199_hosp-referral-reply.csv`（列: `紹介元`・`担当医`・`連絡先メール`・`返書期限`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+- 診療録（カルテ）・処方・検査の指示など、医療行為にかかわる入力には使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{返書期限}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{連絡先メール}} へ「【返書のお願い】{{紹介元}} 様への返…」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（3）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 紹介元 | 担当医 | 連絡先メール | 返書期限 | 状況 |
+| --- | --- | --- | --- | --- |
+| 見本クリニック | 見本医師 | hisho1@example.jp | 2026/10/25 |  |
+| 試験医院 | 試験医師 | hisho2@example.jp | 2026/10/25 | 済 |
+
+<a id="hosp-ward-stats"></a>
+
+### 各病棟の日報（Excel）から、在院患者数・入退院数を集める（中級）
+
+病棟ごとの日報のブックを開き、在院患者数・入院数・退院数のセルを読み取って、1つの一覧にします。
+
+- **こんな時に:** 経営会議や月報のために、病棟の数字を集めているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/200_hosp-ward-stats.csv`（列: `病棟`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+- 診療録（カルテ）・処方・検査の指示など、医療行為にかかわる入力には使わないでください（事務作業向けのテンプレートです）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $在院患者数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $入院数` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $退院数` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「在院患者数」に {{$在院患者数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「入院数」に {{$入院数}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「退院数」に {{$退院数}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 病棟 | ブック | シート |
+| --- | --- | --- |
+| 3階東 | C:\RPA作業\日報\3東_1015.xlsx | 1 |
+| 4階西 | C:\RPA作業\日報\4西_1015.xlsx | 1 |
+
+<a id="hosp-supply-request"></a>
+
+### 物品（消耗品）の請求を、請求台帳にまとめて書く（初級）
+
+各部署から届いた物品の請求（品名・数量・部署・希望日）を、請求台帳のブックに書き込みます。
+
+- **こんな時に:** 用度・物品管理の係で、紙の請求伝票を台帳に転記しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/201_hosp-supply-request.csv`（列: `部署`・`品名`・`数量`・`希望日`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\物品請求台帳.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 医薬品の発注には使わないでください（決められた手順・システムで行ってください）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 物品請求台帳.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 物品請求台帳.xlsx の B{{ROW+1}} に {{部署}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 物品請求台帳.xlsx の C{{ROW+1}} に {{品名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 物品請求台帳.xlsx の D{{ROW+1}} に {{数量}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 物品請求台帳.xlsx の E{{ROW+1}} に {{希望日}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 部署 | 品名 | 数量 | 希望日 |
+| --- | --- | --- | --- |
+| 3階東 | 手袋（M） | 10箱 | 2026/10/20 |
+| 外来 | コピー用紙 A4 | 5箱 | 2026/10/21 |
+
+<a id="hosp-training-notice"></a>
+
+### 院内研修（感染対策・医療安全など）の案内を、部署ごとに下書き（初級）
+
+研修名・日時・会場・対象を、部署ごとに差し込んで案内メールを下書きします。
+
+- **こんな時に:** 全職員が受ける院内研修の案内を、部署ごとに送っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/202_hosp-training-notice.csv`（列: `部署`・`宛先`・`研修名`・`日時`・`会場`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{宛先}} へ「【院内研修】{{研修名}}（{{日時}}…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 部署 | 宛先 | 研修名 | 日時 | 会場 |
+| --- | --- | --- | --- | --- |
+| 3階東 | ward3e@example.jp | 感染対策研修 | 2026/11/12 17:30 | 講堂 |
+| 外来 | opd@example.jp | 感染対策研修 | 2026/11/12 17:30 | 講堂 |
+
+<a id="hosp-training-attend"></a>
+
+### 院内研修の出席者を、受講記録の台帳に書く（初級）
+
+研修の受講者（職員番号・氏名・部署）を、受講記録のブックに研修名・日付つきで書き込みます。
+
+- **こんな時に:** 研修の出席簿を、職員ごとの受講記録に反映するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/203_hosp-training-attend.csv`（列: `職員番号`・`氏名`・`部署`・`研修名`・`受講日`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\研修受講記録.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 研修受講記録.xlsx の A{{ROW+1}} に {{受講日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 研修受講記録.xlsx の B{{ROW+1}} に {{研修名}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 研修受講記録.xlsx の C{{ROW+1}} に {{職員番号}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 研修受講記録.xlsx の D{{ROW+1}} に {{氏名}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 研修受講記録.xlsx の E{{ROW+1}} に {{部署}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 職員番号 | 氏名 | 部署 | 研修名 | 受講日 |
+| --- | --- | --- | --- | --- |
+| N0001 | 見本 花子 | 3階東 | 感染対策研修 | 2026/11/12 |
+| N0002 | 試験 太郎 | 外来 | 感染対策研修 | 2026/11/12 |
+
+<a id="hosp-survey-sum"></a>
+
+### 患者満足度アンケートの集計表（Excel）から、項目の点数を集める（初級）
+
+部署ごとのアンケート集計表のブックを開き、満足度の平均点や回答数のセルを読み取って、1つの一覧にします。
+
+- **こんな時に:** 年に一度の患者満足度調査の結果を、部署ごとに比べたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/204_hosp-survey-sum.csv`（列: `部署`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $回答数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $総合満足度` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $待ち時間の満足度` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「回答数」に {{$回答数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「総合満足度」に {{$総合満足度}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「待ち時間の満足度」に {{$待ち時間の満足度}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 部署 | ブック | シート |
+| --- | --- | --- |
+| 外来 | C:\RPA作業\アンケート\外来.xlsx | 集計 |
+| 3階東 | C:\RPA作業\アンケート\3東.xlsx | 集計 |
+
+<a id="hosp-reception-entry"></a>
+
+### 健診（人間ドック）の予約申込を、予約システムに入力（中級）
+
+申込書の内容（氏名・生年月日・希望日・コース）を予約システムに入力して登録し、予約番号を読み取ります。
+
+- **こんな時に:** 企業や個人からの健診の申込を、まとめて予約に入れるとき。
+- **対象ウィンドウ:** `予約システム`
+- **見本CSV:** `samples/205_hosp-reception-entry.csv`（列: `氏名`・`生年月日`・`希望日`・`コース`）
+
+**準備**
+
+- 対象ウィンドウ「予約システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 診療録（カルテ）・処方・検査の指示など、医療行為にかかわる入力には使わないでください（事務作業向けのテンプレートです）
+- 患者さんの情報を扱うので、見本CSV（架空）で動きを確かめてから、病院で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `健診予約` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「氏名」に「{{氏名}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「生年月日」に「{{生年月日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「希望日」に「{{希望日}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「コース」に「{{コース}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{氏名}}（{{生年月日}}）・{{希望日}}・{{コース}} で合っているか、申込書と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `WAIT` 待機 | `1000` |  |
+| 12 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「予約番号」の値を読む → $予約番号` |  |
+| 13 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「健診（人間ドック_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 生年月日 | 希望日 | コース |
+| --- | --- | --- | --- |
+| 見本 太郎 | 1975/04/01 | 2026/11/20 | 日帰りドック |
+| 試験 花子 | 1980/06/15 | 2026/11/21 | 基本健診 |
+
+<a id="hosp-checkup-guide"></a>
+
+### 健診の受診案内（予約日・持ち物）を、1人ずつ作る（初級）
+
+予約した人の氏名・予約日・受付時刻・コース・持ち物を、案内文の雛形に差し込んで保存します。
+
+- **こんな時に:** 健診の予約が決まった人に、受診の案内を郵送するとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/206_hosp-checkup-guide.csv`（列: `氏名`・`予約日`・`受付時刻`・`コース`・`持ち物`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《氏名》・《予約日》・《受付時刻》・《コース》・《持ち物》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\健診案内.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\健診案内 を作っておく
+- 患者さんの情報を扱うので、見本CSV（架空）で動きを確かめてから、病院で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\健診案内.dotx を用意してね（差し込む所に 《氏名》・《予約日》・《受付時刻》・《コース》・《持ち物》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\健診案内.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《氏名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《氏名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{氏名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《予約日》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《予約日》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{予約日}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《受付時刻》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《受付時刻》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{受付時刻}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《コース》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《コース》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{コース}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《持ち物》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《持ち物》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{持ち物}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\健診案内\{{ROW}}_{{氏名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 氏名 | 予約日 | 受付時刻 | コース | 持ち物 |
+| --- | --- | --- | --- | --- |
+| 見本 太郎 | 2026/11/20 | 8:30 | 日帰りドック | 保険証・問診票・検便 |
+| 試験 花子 | 2026/11/21 | 9:00 | 基本健診 | 保険証・問診票 |
+
+<a id="hosp-bill-check"></a>
+
+### 会計（医事）システムで、未収金の残高を照会する（初級）
+
+患者番号で医事会計システムを照会し、未収金の残高と最後の入金日を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 未収金の督促の前に、残高をまとめて確かめたいとき。
+- **対象ウィンドウ:** `医事会計`
+- **見本CSV:** `samples/207_hosp-bill-check.csv`（列: `患者番号`）
+
+**準備**
+
+- 対象ウィンドウ「医事会計」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 診療録（カルテ）・処方・検査の指示など、医療行為にかかわる入力には使わないでください（事務作業向けのテンプレートです）
+- 患者さんの情報を扱うので、見本CSV（架空）で動きを確かめてから、病院で決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `未収金照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「患者番号」に「{{患者番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「未収金残高」の値を読む → $未収金残高` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「最終入金日」の値を読む → $最終入金日` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「会計（医事）シス_{{患者番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 患者番号 |
+| --- |
+| P0000001 |
+| P0000003 |
+
+<a id="hosp-night-duty"></a>
+
+### 当直・日直の担当表を、月の台帳に書く（初級）
+
+日付ごとの当直医・日直の担当者を、担当表のブックに書き込みます。
+
+- **こんな時に:** 医局や事務当直の担当表を、毎月作っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/208_hosp-night-duty.csv`（列: `日付`・`曜日`・`当直`・`日直`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\当直表_11月.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 当直表_11月.xlsx の A{{ROW+1}} に {{日付}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 当直表_11月.xlsx の B{{ROW+1}} に {{曜日}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 当直表_11月.xlsx の C{{ROW+1}} に {{当直}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 当直表_11月.xlsx の D{{ROW+1}} に {{日直}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 日付 | 曜日 | 当直 | 日直 |
+| --- | --- | --- | --- |
+| 2026/11/01 | 日 | 見本医師 | 試験医師 |
+| 2026/11/02 | 月 | 練習医師 |  |
+
+<a id="hosp-committee-notice"></a>
+
+### 委員会の開催通知と資料を、委員それぞれにメールで送る（初級）
+
+委員会の名前・日時・会場と、資料（PDF）を添付して、委員ごとにメールの下書きを作ります。
+
+- **こんな時に:** 医療安全・感染対策・薬事などの委員会を毎月開いているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/209_hosp-committee-notice.csv`（列: `委員名`・`メール`・`委員会`・`日時`・`会場`・`資料`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `IF_START` もし〜なら | `❓ もし 「{{資料}}」というファイルがある なら` |  |
+| 2 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【開催通知】{{委員会}}（{{日時}}…」（Outlookの下書きに保存）` |  |
+| 3 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+| 4 | `ELSE` そうでなければ |  |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 添付ファイルがない` |  |
+| 6 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 委員名 | メール | 委員会 | 日時 | 会場 | 資料 |
+| --- | --- | --- | --- | --- | --- |
+| 見本 委員 | iin1@example.jp | 医療安全委員会 | 2026/11/09 16:00 | 第2会議室 | C:\RPA作業\委員会\医療安全_11月.pdf |
+| 試験 委員 | iin2@example.jp | 医療安全委員会 | 2026/11/09 16:00 | 第2会議室 | C:\RPA作業\委員会\医療安全_11月.pdf |
+
+## 保健センター・健康づくり
+
+<a id="health-vaccine-entry"></a>
+
+### 予防接種の実施報告（医療機関から届いた分）を、健康管理システムに入力（中級）
+
+接種日・ワクチンの種類・回数・医療機関・ロット番号を、対象者ごとに入力して登録します。
+
+- **こんな時に:** 医療機関から届いた予診票の控えを、まとめてシステムに入力するとき。
+- **対象ウィンドウ:** `健康管理`
+- **見本CSV:** `samples/210_health-vaccine-entry.csv`（列: `宛名番号`・`接種日`・`ワクチン`・`回数`・`医療機関`・`ロット番号`）
+
+**準備**
+
+- 対象ウィンドウ「健康管理」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `予防接種実施入力` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「宛名番号」に「{{宛名番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「接種日」に「{{接種日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「ワクチン」に「{{ワクチン}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「回数」に「{{回数}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「医療機関」に「{{医療機関}}」を入れる` |  |
+| 8 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「ロット番号」に「{{ロット番号}}」を入れる` |  |
+| 9 | `CONFIRM` 確認ポイント（人が確認） | `{{宛名番号}}：{{ワクチン}} {{回数}}（{{接種日}}・{{医療機関}}）で合っているか、予診票と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 10 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 11 | `WAIT` 待機 | `2000` |  |
+| 12 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 13 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「予防接種の実施報_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 宛名番号 | 接種日 | ワクチン | 回数 | 医療機関 | ロット番号 |
+| --- | --- | --- | --- | --- | --- |
+| 1000001 | 2026/10/10 | 四種混合 | 1回目 | 見本小児科 | AB123 |
+| 1000002 | 2026/10/11 | MR | 2期 | 試験医院 | CD456 |
+
+<a id="health-checkup-notice"></a>
+
+### 乳幼児健診の個別のご案内を、1人ずつ作る（初級）
+
+お子さんの名前・健診の種類・日時・会場を、案内の雛形に差し込んで保存します。
+
+- **こんな時に:** 1歳6か月児健診・3歳児健診などの案内を、対象の家庭ごとに作るとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/211_health-checkup-notice.csv`（列: `保護者名`・`児童名`・`健診`・`日時`・`会場`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《保護者名》・《児童名》・《健診》・《日時》・《会場》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\健診のご案内.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\健診案内 を作っておく
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\健診のご案内.dotx を用意してね（差し込む所に 《保護者名》・《児童名》・《健診》・《日時》・《会場》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\健診のご案内.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《保護者名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《保護者名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{保護者名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《児童名》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《児童名》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{児童名}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《健診》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《健診》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{健診}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《日時》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《日時》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{日時}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《会場》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《会場》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{会場}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\健診案内\{{健診}}_{{児童名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 保護者名 | 児童名 | 健診 | 日時 | 会場 |
+| --- | --- | --- | --- | --- |
+| 見本 花子 | みほん たろう | 1歳6か月児健診 | 2026/11/18 13:00 | 保健センター |
+| 試験 一郎 | しけん さくら | 3歳児健診 | 2026/11/25 13:00 | 保健センター |
+
+<a id="health-vaccine-history"></a>
+
+### 予防接種の履歴を照会して、まだの接種を確かめる（初級）
+
+宛名番号で健康管理システムを照会し、接種済みの回数と最後の接種日を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 接種の勧奨（お知らせ）を出す前に、対象者の接種状況をまとめて確かめたいとき。
+- **対象ウィンドウ:** `健康管理`
+- **見本CSV:** `samples/212_health-vaccine-history.csv`（列: `宛名番号`・`児童名`）
+
+**準備**
+
+- 対象ウィンドウ「健康管理」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `予防接種履歴` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「宛名番号」に「{{宛名番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「接種済み回数」の値を読む → $接種済み回数` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「最終接種日」の値を読む → $最終接種日` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「予防接種の履歴を_{{宛名番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 宛名番号 | 児童名 |
+| --- | --- |
+| 1000001 | みほん たろう |
+| 1000002 | しけん さくら |
+
+<a id="health-cancer-booking"></a>
+
+### がん検診の申込を、検診の予約枠に入力（中級）
+
+申込者の氏名・宛名番号・検診の種類・希望日を入力して予約し、受付番号を読み取ります。
+
+- **こんな時に:** 電話やはがきで受けたがん検診の申込を、まとめて予約に入れるとき。
+- **対象ウィンドウ:** `健康管理`
+- **見本CSV:** `samples/213_health-cancer-booking.csv`（列: `宛名番号`・`氏名`・`検診`・`希望日`）
+
+**準備**
+
+- 対象ウィンドウ「健康管理」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `検診予約` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「宛名番号」に「{{宛名番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「氏名」に「{{氏名}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「検診」に「{{検診}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「希望日」に「{{希望日}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{氏名}}：{{検診}}（{{希望日}}）で合っているか確認してね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `WAIT` 待機 | `1000` |  |
+| 12 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「受付番号」の値を読む → $受付番号` |  |
+| 13 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「がん検診の申込を_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 宛名番号 | 氏名 | 検診 | 希望日 |
+| --- | --- | --- | --- |
+| 1000003 | 練習 一郎 | 胃がん検診 | 2026/11/06 |
+| 1000004 | 見本 花子 | 乳がん検診 | 2026/11/13 |
+
+<a id="health-consult-log"></a>
+
+### 健康相談・電話相談の記録を、相談記録簿に書く（初級）
+
+相談日・相談の方法・内容の分類・対応した保健師・次の対応を、相談記録簿のブックに書き込みます。
+
+- **こんな時に:** 電話相談のメモを、あとで記録簿にまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/214_health-consult-log.csv`（列: `相談日`・`方法`・`分類`・`対応者`・`次の対応`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\相談記録簿.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 相談記録簿.xlsx の A{{ROW+1}} に {{相談日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 相談記録簿.xlsx の B{{ROW+1}} に {{方法}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 相談記録簿.xlsx の C{{ROW+1}} に {{分類}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 相談記録簿.xlsx の D{{ROW+1}} に {{対応者}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 相談記録簿.xlsx の E{{ROW+1}} に {{次の対応}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 相談者の名前は書かずに分類だけ残すなど、記録簿に書く項目は職場のルールに合わせてね
+
+**見本CSV（先頭3行）**
+
+| 相談日 | 方法 | 分類 | 対応者 | 次の対応 |
+| --- | --- | --- | --- | --- |
+| 2026/10/14 | 電話 | 育児 | 見本保健師 | 訪問を予定 |
+| 2026/10/14 | 来所 | 栄養 | 試験栄養士 | なし |
+
+<a id="health-class-notice"></a>
+
+### 健康教室・講座の参加者へ、前日のお知らせメールを下書き（初級）
+
+講座の名前・日時・会場・持ち物を差し込んで、申込者ごとにお知らせのメールを下書きします。
+
+- **こんな時に:** 料理教室・運動教室・パパママ教室などの参加者へ、前日に連絡しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/215_health-class-notice.csv`（列: `氏名`・`メール`・`講座`・`日時`・`会場`・`持ち物`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【明日です】{{講座}}のご案内」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 講座 | 日時 | 会場 | 持ち物 |
+| --- | --- | --- | --- | --- | --- |
+| 見本 花子 | sanka1@example.jp | 運動教室 | 2026/11/02 10:00 | 保健センター 多目的室 | 運動しやすい服・タオル・飲み物 |
+| 試験 一郎 | sanka2@example.jp | 運動教室 | 2026/11/02 10:00 | 保健センター 多目的室 | 運動しやすい服・タオル・飲み物 |
+
+<a id="health-checkup-rate"></a>
+
+### 地区ごとの健診受診者数（Excel）を集めて、受診率の一覧にする（中級）
+
+地区ごとの集計表のブックを開き、対象者数・受診者数・受診率のセルを読み取って、1つの一覧にします。
+
+- **こんな時に:** 特定健診・がん検診の受診率を、地区ごとに比べたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/216_health-checkup-rate.csv`（列: `地区`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $対象者数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $受診者数` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $受診率` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「対象者数」に {{$対象者数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「受診者数」に {{$受診者数}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「受診率」に {{$受診率}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 地区 | ブック | シート |
+| --- | --- | --- |
+| 中央地区 | C:\RPA作業\受診率\中央.xlsx | 1 |
+| 東地区 | C:\RPA作業\受診率\東.xlsx | 1 |
+
+<a id="health-maternal-entry"></a>
+
+### 母子健康手帳の交付記録を、システムに入力（中級）
+
+交付日・妊婦さんの宛名番号・出産予定日・面談した保健師を入力して登録します。
+
+- **こんな時に:** 妊娠届の受付が続いた日に、交付の記録をまとめて入力するとき。
+- **対象ウィンドウ:** `健康管理`
+- **見本CSV:** `samples/217_health-maternal-entry.csv`（列: `宛名番号`・`交付日`・`出産予定日`・`面談者`）
+
+**準備**
+
+- 対象ウィンドウ「健康管理」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `母子手帳交付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「宛名番号」に「{{宛名番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「交付日」に「{{交付日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「出産予定日」に「{{出産予定日}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「面談者」に「{{面談者}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{宛名番号}}：交付日 {{交付日}}・出産予定日 {{出産予定日}} で合っているか、妊娠届と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「母子健康手帳の交_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 宛名番号 | 交付日 | 出産予定日 | 面談者 |
+| --- | --- | --- | --- |
+| 1000005 | 2026/10/14 | 2027/05/20 | 見本保健師 |
+| 1000006 | 2026/10/14 | 2027/06/02 | 試験保健師 |
+
+<a id="health-recall"></a>
+
+### 健診の結果、要精密検査の人で受診の報告がまだの人に、お知らせを下書き（初級）
+
+要精密検査の一覧から、報告の期限が10日以内でまだ「済」になっていない人に、受診をおすすめするメールを下書きします。
+
+- **こんな時に:** 精密検査の受診状況を追いかけて、受診をおすすめしているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/218_health-recall.csv`（列: `氏名`・`メール`・`検診`・`報告期限`・`状況`）
+
+**準備**
+
+- Outlook が使える PC で使う
+- 日付は 2026/10/20 の形で書く
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{TODAY}} を日付に A 日を足す（マイナスで引く・2026/10/15 形式になる）` |  |
+| 2 | `STR_OP` 文字を加工する | `✂ $締め日 ← {{$締め日}} を置換` |  |
+| 3 | `STR_OP` 文字を加工する | `✂ $日付の数 ← {{報告期限}} を置換` |  |
+| 4 | `IF_START` もし〜なら | `❓ もし 「{{状況}}」が「済」と等しい なら` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 済み` |  |
+| 6 | `ELSE` そうでなければ |  |  |
+| 7 | `IF_START` もし〜なら | `❓ もし 「{{$日付の数}}」が「{{$締め日}}」以下 なら` |  |
+| 8 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【保健センター】精密検査の受診のおすすめ」（Outlookの下書きに保存）` |  |
+| 9 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 案内を下書き` |  |
+| 10 | `ELSE` そうでなければ |  |  |
+| 11 | `RECORD` 結果に記録する | `🧾 結果の「結果」に まだ先` |  |
+| 12 | `IF_END` もし〜ならここまで |  |  |
+| 13 | `IF_END` もし〜ならここまで |  |  |
+
+**カスタマイズのポイント**
+
+- 何日前から案内するかは、最初の「文字を加工する」の日数（10）で変えます
+- 文面は「メールを作る・送る」の件名・本文で変えます
+
+**応用・発見のヒント**
+
+- ⏰ 予定 で毎朝動かすと、案内の出し忘れがなくなります
+
+**見本CSV（先頭3行）**
+
+| 氏名 | メール | 検診 | 報告期限 | 状況 |
+| --- | --- | --- | --- | --- |
+| 見本 太郎 | jumin1@example.jp | 大腸がん検診 | 2026/11/30 |  |
+| 試験 花子 | jumin2@example.jp | 胃がん検診 | 2026/11/30 | 済 |
+
+<a id="health-visit-folders"></a>
+
+### 訪問記録・相談記録を入れるフォルダを、年度・月・地区ごとに作る（初級）
+
+年度・月・地区の組み合わせで、記録を入れるフォルダを一度に作ります。
+
+- **こんな時に:** 家庭訪問や相談の記録ファイルを、地区ごとに整理したいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/219_health-visit-folders.csv`（列: `年度`・`月`・`地区`）
+
+**準備**
+
+- CSVの値を自分の職場のものに書き換える（見本はすべて架空です）
+- 住民の健康情報を扱うので、見本CSV（架空）で動きを確かめてから、決められた端末とフォルダで使ってね
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `フォルダは C:\RPA作業\訪問記録\{{年度}}\{{月}}\{{地区}} の形で作るよ。途中のフォルダもまとめて作るよ` |  |
+| 2 | `RUN` アプリ起動 | `cmd /c if not exist "C:\RPA作業\訪問記録\{{年度}}\{{月}}\{{地区}}" mkdir "C:\RPA作業\訪問記録\{{年度}}\{{月}}\{{地区}}"` |  |
+| 3 | `WAIT` 待機 | `500` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 作った（あれば何もしない）` |  |
+
+**カスタマイズのポイント**
+
+- フォルダの場所と形は RUN の C:\RPA作業\訪問記録\{{年度}}\{{月}}\{{地区}} の部分で変えます
+
+**応用・発見のヒント**
+
+- 年度はじめに1回動かすだけで、1年分のフォルダがそろいます
+
+**見本CSV（先頭3行）**
+
+| 年度 | 月 | 地区 |
+| --- | --- | --- |
+| 令和8年度 | 10月 | 中央地区 |
+| 令和8年度 | 10月 | 東地区 |
+| 令和8年度 | 11月 | 中央地区 |
+
+## 上下水道
+
+<a id="water-open-entry"></a>
+
+### 水道の使用開始（開栓）の申込を、料金システムに入力（中級）
+
+申込日・お客さま番号・使用者の氏名・開始日・連絡先を入力して登録します。
+
+- **こんな時に:** 引っ越しの時期に、開栓の申込が電話やWebでたくさん届いたとき。
+- **対象ウィンドウ:** `料金システム`
+- **見本CSV:** `samples/230_water-open-entry.csv`（列: `お客さま番号`・`申込日`・`使用者`・`開始日`・`連絡先`）
+
+**準備**
+
+- 対象ウィンドウ「料金システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `使用開始受付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「お客さま番号」に「{{お客さま番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「申込日」に「{{申込日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「使用者」に「{{使用者}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「開始日」に「{{開始日}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「連絡先」に「{{連絡先}}」を入れる` |  |
+| 8 | `CONFIRM` 確認ポイント（人が確認） | `{{お客さま番号}}：{{使用者}} さん・開始日 {{開始日}} で合っているか確認してね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 9 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 10 | `WAIT` 待機 | `2000` |  |
+| 11 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「水道の使用開始（_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| お客さま番号 | 申込日 | 使用者 | 開始日 | 連絡先 |
+| --- | --- | --- | --- | --- |
+| W00010001 | 2026/03/20 | 見本 太郎 | 2026/03/28 | 000-0000-0001 |
+| W00010002 | 2026/03/20 | 試験 花子 | 2026/04/01 | 000-0000-0002 |
+
+<a id="water-close-entry"></a>
+
+### 水道の使用中止（閉栓）の申込を、料金システムに入力（中級）
+
+お客さま番号・中止日・精算の方法・転居先を入力して登録します。
+
+- **こんな時に:** 引っ越しの時期に、閉栓の申込をまとめて入力するとき。
+- **対象ウィンドウ:** `料金システム`
+- **見本CSV:** `samples/231_water-close-entry.csv`（列: `お客さま番号`・`中止日`・`精算方法`・`転居先`）
+
+**準備**
+
+- 対象ウィンドウ「料金システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `使用中止受付` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「お客さま番号」に「{{お客さま番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「中止日」に「{{中止日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「精算方法」に「{{精算方法}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「転居先」に「{{転居先}}」を入れる` |  |
+| 7 | `CONFIRM` 確認ポイント（人が確認） | `{{お客さま番号}}：中止日 {{中止日}}・精算 {{精算方法}} で合っているか確認してね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 8 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 9 | `WAIT` 待機 | `2000` |  |
+| 10 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「水道の使用中止（_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| お客さま番号 | 中止日 | 精算方法 | 転居先 |
+| --- | --- | --- | --- |
+| W00010003 | 2026/03/31 | 口座 | 見本市西町1-1 |
+| W00010004 | 2026/03/31 | 現地精算 | 試験県試験市 |
+
+<a id="water-bill-lookup"></a>
+
+### 水道料金・使用水量を照会して、問い合わせに備える（初級）
+
+お客さま番号で料金システムを照会し、前回の使用水量・請求額・納付状況を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 「今月の料金が高い」という問い合わせの前に、使用水量の動きをまとめて確かめたいとき。
+- **対象ウィンドウ:** `料金システム`
+- **見本CSV:** `samples/232_water-bill-lookup.csv`（列: `お客さま番号`）
+
+**準備**
+
+- 対象ウィンドウ「料金システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `料金照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「お客さま番号」に「{{お客さま番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「使用水量」の値を読む → $使用水量` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「請求額」の値を読む → $請求額` |  |
+| 11 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「納付状況」の値を読む → $納付状況` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「水道料金・使用水_{{お客さま番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 使用水量が前回より大きく増えている家庭は、漏水の可能性があるのでお知らせできます
+
+**見本CSV（先頭3行）**
+
+| お客さま番号 |
+| --- |
+| W00010001 |
+| W00010002 |
+
+<a id="water-meter-entry"></a>
+
+### 検針の結果（指針）を、手入力が必要な分だけ入力（中級）
+
+検針で読んだ指針（メーターの数字）と検針日を、お客さまごとに入力して登録します。
+
+- **こんな時に:** 検針の端末から取り込めなかった分を、手で入力するとき。
+- **対象ウィンドウ:** `料金システム`
+- **見本CSV:** `samples/233_water-meter-entry.csv`（列: `お客さま番号`・`検針日`・`指針`）
+
+**準備**
+
+- 対象ウィンドウ「料金システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `指針入力` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「お客さま番号」に「{{お客さま番号}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「検針日」に「{{検針日}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「指針」に「{{指針}}」を入れる` |  |
+| 6 | `CONFIRM` 確認ポイント（人が確認） | `{{お客さま番号}}：指針 {{指針}}（{{検針日}}）で合っているか、検針票と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 7 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 8 | `WAIT` 待機 | `2000` |  |
+| 9 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 10 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「検針の結果（指針_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| お客さま番号 | 検針日 | 指針 |
+| --- | --- | --- |
+| W00010005 | 2026/10/10 | 1234 |
+| W00010006 | 2026/10/10 | 0567 |
+
+<a id="water-leak-log"></a>
+
+### 漏水の通報・修繕の記録を、修繕台帳に書く（初級）
+
+通報日・場所・状況・対応した業者・修繕日を、漏水修繕の台帳に書き込みます。
+
+- **こんな時に:** 道路や宅地内の漏水の通報と修繕を、台帳で管理しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/234_water-leak-log.csv`（列: `通報日`・`場所`・`状況`・`業者`・`修繕日`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\漏水修繕台帳.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 漏水修繕台帳.xlsx の A{{ROW+1}} に {{通報日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 漏水修繕台帳.xlsx の B{{ROW+1}} に {{場所}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 漏水修繕台帳.xlsx の C{{ROW+1}} に {{状況}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 漏水修繕台帳.xlsx の D{{ROW+1}} に {{業者}} を書く` |  |
+| 5 | `EXCEL_WRITE` Excelのセルに書く | `🖊 漏水修繕台帳.xlsx の E{{ROW+1}} に {{修繕日}} を書く` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 通報日 | 場所 | 状況 | 業者 | 修繕日 |
+| --- | --- | --- | --- | --- |
+| 2026/10/12 | 見本市中央2丁目 交差点付近 | 道路の水たまり | 見本設備 | 2026/10/12 |
+| 2026/10/13 | 見本市東町5丁目 | メーター付近の漏水 | 試験工業 | 2026/10/14 |
+
+<a id="water-work-lookup"></a>
+
+### 給水装置工事の申請状況を照会する（初級）
+
+申請番号で工事の受付システムを照会し、審査の状況と竣工検査の予定日を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 指定工事店からの問い合わせに、まとめて答えたいとき。
+- **対象ウィンドウ:** `工事受付`
+- **見本CSV:** `samples/235_water-work-lookup.csv`（列: `申請番号`・`工事店`）
+
+**準備**
+
+- 対象ウィンドウ「工事受付」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `工事申請照会` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「申請番号」に「{{申請番号}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「審査状況」の値を読む → $審査状況` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「竣工検査予定日」の値を読む → $竣工検査予定日` |  |
+| 11 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「給水装置工事の申_{{申請番号}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| 申請番号 | 工事店 |
+| --- | --- |
+| K-2026-0101 | 見本設備 |
+| K-2026-0102 | 試験工業 |
+
+<a id="water-leak-notice"></a>
+
+### 漏水の可能性のお知らせを、使用水量が増えた家庭ごとに作る（初級）
+
+お客さまの名前・住所・前回と今回の使用水量を、お知らせの雛形に差し込んで保存します。
+
+- **こんな時に:** 使用水量が急に増えた家庭へ、漏水の点検をおすすめするとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/236_water-leak-notice.csv`（列: `使用者`・`住所`・`前回水量`・`今回水量`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《使用者》・《住所》・《前回水量》・《今回水量》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\漏水のお知らせ.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\お知らせ を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\漏水のお知らせ.dotx を用意してね（差し込む所に 《使用者》・《住所》・《前回水量》・《今回水量》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\漏水のお知らせ.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《使用者》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《使用者》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{使用者}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《住所》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《住所》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{住所}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《前回水量》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《前回水量》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{前回水量}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《今回水量》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《今回水量》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{今回水量}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 62 | `KEY` キー送信 | `{F12}` |  |
+| 63 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 64 | `TEXT` 文字列貼付 | `C:\RPA作業\お知らせ\漏水_{{使用者}}.docx` |  |
+| 65 | `KEY` キー送信 | `{ENTER}` |  |
+| 66 | `WAIT` 待機 | `2000` |  |
+| 67 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 68 | `KEY` キー送信 | `^w` |  |
+| 69 | `WAIT` 待機 | `1500` |  |
+| 70 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 使用者 | 住所 | 前回水量 | 今回水量 |
+| --- | --- | --- | --- |
+| 見本 太郎 | 見本市中央1-2-3 | 18 | 45 |
+| 試験 花子 | 見本市東町4-5-6 | 20 | 52 |
+
+<a id="water-suspension-notice"></a>
+
+### 断水・工事のお知らせを、地区の自治会長にメールで下書き（初級）
+
+工事の場所・日時・断水の時間を差し込んで、地区ごとの自治会長あてにお知らせのメールを下書きします。
+
+- **こんな時に:** 配水管の工事で断水するときに、地区へ連絡しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/237_water-suspension-notice.csv`（列: `地区`・`自治会長`・`メール`・`工事日`・`断水時間`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【お知らせ】{{地区}}の断水（{{工事…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 地区 | 自治会長 | メール | 工事日 | 断水時間 |
+| --- | --- | --- | --- | --- |
+| 中央2丁目 | 見本 一郎 | jichikai1@example.jp | 2026/11/10 | 9:00〜15:00 |
+| 東町5丁目 | 試験 次郎 | jichikai2@example.jp | 2026/11/11 | 9:00〜12:00 |
+
+## 図書館・公民館・施設
+
+<a id="facility-booking-entry"></a>
+
+### 公共施設の利用申込を、施設予約システムに入力（中級）
+
+施設・部屋・利用日・時間・団体名・人数を入力して予約し、予約番号を読み取ります。
+
+- **こんな時に:** 窓口や電話で受けた施設の利用申込を、まとめて予約に入れるとき。
+- **対象ウィンドウ:** `施設予約`
+- **見本CSV:** `samples/238_facility-booking-entry.csv`（列: `施設`・`部屋`・`利用日`・`時間`・`団体名`・`人数`）
+
+**準備**
+
+- 対象ウィンドウ「施設予約」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `CLICK_NAME` 名前でクリック | `利用申込` |  |
+| 2 | `WAIT` 待機 | `2500` |  |
+| 3 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「施設」に「{{施設}}」を入れる` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「部屋」に「{{部屋}}」を入れる` |  |
+| 5 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「利用日」に「{{利用日}}」を入れる` |  |
+| 6 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「時間」に「{{時間}}」を入れる` |  |
+| 7 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「団体名」に「{{団体名}}」を入れる` |  |
+| 8 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「人数」に「{{人数}}」を入れる` |  |
+| 9 | `CONFIRM` 確認ポイント（人が確認） | `{{施設}} {{部屋}}：{{利用日}} {{時間}}（{{団体名}}）で合っているか、申込書と見比べてね⏎OKなら［▶ 続行］で「登録」を押すよ` |  |
+| 10 | `CLICK_NAME` 名前でクリック | `登録` |  |
+| 11 | `WAIT` 待機 | `2000` |  |
+| 12 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 13 | `WAIT` 待機 | `1000` |  |
+| 14 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「予約番号」の値を読む → $予約番号` |  |
+| 15 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「公共施設の利用申_{{ROW}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 確認ポイント（✋）は、何件か試して問題がなければ ⊘ 無効化 すると、連続で入力できます。取り消しにくい登録の前は、外さない運用もおすすめです
+- 入力する欄を増やすときは「欄に入力（名前で）」を複製して、欄の名前とCSVの列名を変えます
+
+**応用・発見のヒント**
+
+- エラーで飛ばした行は［↓ エラー行をCSV保存］で見直して、直したら再実行できます
+
+**見本CSV（先頭3行）**
+
+| 施設 | 部屋 | 利用日 | 時間 | 団体名 | 人数 |
+| --- | --- | --- | --- | --- | --- |
+| 中央公民館 | 講座室1 | 2026/11/08 | 13:00-16:00 | 見本サークル | 15 |
+| 市民センター | 和室 | 2026/11/09 | 9:00-12:00 | 試験の会 | 8 |
+
+<a id="library-overdue-mail"></a>
+
+### 返却期限を過ぎた本の利用者へ、お知らせメールを下書き（初級）
+
+延滞の一覧から、利用者ごとに本のタイトルと返却期限を差し込んで、お知らせのメールを下書きします。
+
+- **こんな時に:** 図書館で、延滞している利用者へ連絡しているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/239_library-overdue-mail.csv`（列: `利用者名`・`メール`・`書名`・`返却期限`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【図書館】返却のお願い」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 利用者名 | メール | 書名 | 返却期限 |
+| --- | --- | --- | --- |
+| 見本 太郎 | riyo1@example.jp | みほんのほん | 2026/10/10 |
+| 試験 花子 | riyo2@example.jp | しけんの図鑑 | 2026/10/12 |
+
+<a id="library-book-lookup"></a>
+
+### リクエストされた本の所蔵と貸出状況を照会する（初級）
+
+ISBN（または書名）で図書館システムを照会し、所蔵の有無と貸出の状況・予約の人数を読み取ります。見るだけのロボットです。
+
+- **こんな時に:** 購入の希望（リクエスト）を受けたとき、所蔵があるかまとめて確かめたいとき。
+- **対象ウィンドウ:** `図書館システム`
+- **見本CSV:** `samples/240_library-book-lookup.csv`（列: `ISBN`・`書名`）
+
+**準備**
+
+- 対象ウィンドウ「図書館システム」を、🔍一覧で実際の画面タイトルに合わせる
+- メニュー名・欄の名前・ボタン名は架空の例です。各ステップの編集画面で［🎯 部品を指す］を押し、自分の画面の欄やボタンを指して合わせる（［🔍 見つかるか試す］で赤い枠が正しい所を囲むか確かめられます）
+- 最初は開始行・終了行を「1」にして1件だけ、［⏯ 1ステップずつ］（F10）で動きを確かめる
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `見るだけ（照会）のロボットだよ。登録や変更はしないから安心して試してね` |  |
+| 2 | `CLICK_NAME` 名前でクリック | `資料検索` |  |
+| 3 | `WAIT` 待機 | `2500` |  |
+| 4 | `FIELD_SET` 欄に入力（名前で） | `🧩 欄「ISBN」に「{{ISBN}}」を入れる` |  |
+| 5 | `KEY` キー送信 | `{ENTER}` |  |
+| 6 | `WAIT` 待機 | `2000` |  |
+| 7 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「該当なし」が出たらEnterキー→行スキップ` |  |
+| 8 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「エラー」が出たらEnterキー→行スキップ` |  |
+| 9 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「所蔵」の値を読む → $所蔵` |  |
+| 10 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「貸出状況」の値を読む → $貸出状況` |  |
+| 11 | `FIELD_GET` 欄の値を読む（名前で） | `🔎 欄「予約人数」の値を読む → $予約人数` |  |
+| 12 | `SCREENSHOT` 画面を撮影して保存 | `画面を撮影「リクエストされた_{{ISBN}}」（ウィンドウ）` |  |
+
+**カスタマイズのポイント**
+
+- 読む欄を増やすときは「欄の値を読む（名前で）」を複製して、欄の名前と変数名を変えます。読んだ値は［↓ 実行結果CSV］の列になります
+- 照会ボタンが Enter で押せないときは、KEY {ENTER} を「名前でクリック」（照会・検索）に変えます
+
+**応用・発見のヒント**
+
+- 結果CSVを Excel で開けば、そのまま確認用の一覧表になります
+
+**見本CSV（先頭3行）**
+
+| ISBN | 書名 |
+| --- | --- |
+| 9780000000001 | みほんのほん |
+| 9780000000002 | しけんの図鑑 |
+
+<a id="community-course-entry"></a>
+
+### 公民館講座の申込を、受講者名簿に書く（初級）
+
+申込者の氏名・講座名・連絡先・申込日を、講座ごとの受講者名簿に書き込みます。
+
+- **こんな時に:** 講座の申込を電話や窓口で受けて、名簿にまとめているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/241_community-course-entry.csv`（列: `講座`・`氏名`・`連絡先`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\講座受講者名簿.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 講座受講者名簿.xlsx の A{{ROW+1}} に {{TODAY}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 講座受講者名簿.xlsx の B{{ROW+1}} に {{講座}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 講座受講者名簿.xlsx の C{{ROW+1}} に {{氏名}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 講座受講者名簿.xlsx の D{{ROW+1}} に {{連絡先}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 定員を超えたら、「もし〜なら」で行数を数えて「キャンセル待ち」と記録することもできます
+
+**見本CSV（先頭3行）**
+
+| 講座 | 氏名 | 連絡先 |
+| --- | --- | --- |
+| はじめての書道 | 見本 太郎 | 000-0000-0001 |
+| はじめての書道 | 試験 花子 | 000-0000-0002 |
+| スマホ教室 | 練習 一郎 | 000-0000-0003 |
+
+<a id="facility-usage-sum"></a>
+
+### 各施設の月の利用実績（Excel）を集めて、一覧にする（初級）
+
+施設ごとの利用実績のブックを開き、利用件数・利用人数・稼働率のセルを読み取って、1つの一覧にします。
+
+- **こんな時に:** 指定管理者から届いた月報の数字を、まとめて比べたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/242_facility-usage-sum.csv`（列: `施設`・`ブック`・`シート`）
+
+**準備**
+
+- CSVの「ブック」に、集める Excel ファイルのパスを並べる（見本のパスは架空です）
+- 「シート」には、読むシートの名前か番号（1＝1枚目）を書く
+- Excel が入っている PC で使う
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C3 を読む → $利用件数` |  |
+| 2 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C4 を読む → $利用人数` |  |
+| 3 | `EXCEL_READ` Excelのセルを読む | `📗 {{ブック}} の C5 を読む → $稼働率` |  |
+| 4 | `RECORD` 結果に記録する | `🧾 結果の「利用件数」に {{$利用件数}}` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「利用人数」に {{$利用人数}}` |  |
+| 6 | `RECORD` 結果に記録する | `🧾 結果の「稼働率」に {{$稼働率}}` |  |
+
+**カスタマイズのポイント**
+
+- 読むセルは「Excelのセルを読む」のセル番地で変えます。増やすときは複製します
+
+**応用・発見のヒント**
+
+- ［↓ 実行結果CSV］に、ブックごとの値が1行ずつ並ぶので、そのまま集計表になります
+
+**見本CSV（先頭3行）**
+
+| 施設 | ブック | シート |
+| --- | --- | --- |
+| 中央公民館 | C:\RPA作業\月報\中央公民館_10月.xlsx | 1 |
+| 市民センター | C:\RPA作業\月報\市民センター_10月.xlsx | 1 |
+
+<a id="facility-booking-confirm"></a>
+
+### 施設の利用が近い団体へ、前日の確認メールを下書き（初級）
+
+予約の一覧から、団体ごとに部屋・日時・鍵の受け取り方を差し込んで、確認のメールを下書きします。
+
+- **こんな時に:** 利用の前日に、予約した団体へ確認の連絡をしているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/243_facility-booking-confirm.csv`（列: `団体名`・`メール`・`施設`・`部屋`・`利用日`・`時間`）
+
+**準備**
+
+- Outlook が使える PC で使う（下書きに入るので、送る前に確かめられます）
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `MAIL` メールを作る・送る | `✉ {{メール}} へ「【ご利用の確認】{{施設}} {{部屋}…」（Outlookの下書きに保存）` |  |
+| 2 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 下書きした` |  |
+
+**カスタマイズのポイント**
+
+- 件名・本文は「メールを作る・送る」の設定で変えます。{{列名}} で CSV の値を差し込めます
+- 確かめてから送りたいときは下書きのまま、慣れたら送り方を「作成画面を表示」に変えます
+
+**応用・発見のヒント**
+
+- まず自分あてのアドレスで試して、届くメールの見た目を確かめましょう
+
+**見本CSV（先頭3行）**
+
+| 団体名 | メール | 施設 | 部屋 | 利用日 | 時間 |
+| --- | --- | --- | --- | --- | --- |
+| 見本サークル | dantai1@example.jp | 中央公民館 | 講座室1 | 2026/11/08 | 13:00-16:00 |
+| 試験の会 | dantai2@example.jp | 市民センター | 和室 | 2026/11/09 | 9:00-12:00 |
+
+<a id="facility-lost-found"></a>
+
+### 施設の忘れ物・落とし物を、記録簿に書く（初級）
+
+見つけた日・場所・品物・保管場所を、忘れ物の記録簿に書き込みます。
+
+- **こんな時に:** 公民館・図書館・体育館などで、忘れ物の問い合わせに答えられるようにしたいとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/244_facility-lost-found.csv`（列: `見つけた日`・`場所`・`品物`・`保管場所`）
+
+**準備**
+
+- 台帳ブック C:\RPA作業\忘れ物記録簿.xlsx を用意し、1行目に見出しを書いておく（2行目からCSVの1行目のデータが入ります）
+- 書き込むあいだは、台帳ブックを閉じておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `EXCEL_WRITE` Excelのセルに書く | `🖊 忘れ物記録簿.xlsx の A{{ROW+1}} に {{見つけた日}} を書く` |  |
+| 2 | `EXCEL_WRITE` Excelのセルに書く | `🖊 忘れ物記録簿.xlsx の B{{ROW+1}} に {{場所}} を書く` |  |
+| 3 | `EXCEL_WRITE` Excelのセルに書く | `🖊 忘れ物記録簿.xlsx の C{{ROW+1}} に {{品物}} を書く` |  |
+| 4 | `EXCEL_WRITE` Excelのセルに書く | `🖊 忘れ物記録簿.xlsx の D{{ROW+1}} に {{保管場所}} を書く` |  |
+| 5 | `RECORD` 結果に記録する | `🧾 結果の「結果」に 台帳に書いた` |  |
+
+**カスタマイズのポイント**
+
+- 書き込む列は EXCEL_WRITE のセル番地（A{{ROW+1}} など）の英字で変えます
+- 書き込むたびに保存されるので、途中で止めても続きから再開できます
+
+**応用・発見のヒント**
+
+- 台帳を共有フォルダに置くと、係のみんなで同じ記録を見られます
+
+**見本CSV（先頭3行）**
+
+| 見つけた日 | 場所 | 品物 | 保管場所 |
+| --- | --- | --- | --- |
+| 2026/10/14 | 講座室1 | 黒い傘 | 受付の棚 |
+| 2026/10/14 | 和室 | ハンカチ（青） | 受付の引き出し |
+
+<a id="facility-permit"></a>
+
+### 施設の使用許可書を、申込ごとに作る（初級）
+
+団体名・施設・部屋・利用日時・使用料を、使用許可書の雛形に差し込んで保存します。
+
+- **こんな時に:** 施設の使用許可書を、申込ごとに1枚ずつ作っているとき。
+- **対象ウィンドウ:** なし（マクロの中で RUN・SWITCH して切り替えます）
+- **見本CSV:** `samples/245_facility-permit.csv`（列: `団体名`・`施設`・`部屋`・`利用日時`・`使用料`）
+
+**準備**
+
+- Wordで雛形を作り、差し込む場所に 《団体名》・《施設》・《部屋》・《利用日時》・《使用料》 と書いておく
+- 雛形を「Wordテンプレート（*.dotx）」形式で C:\RPA作業\雛形\使用許可書.dotx に保存する（開くたびに新しい文書になるので、雛形が汚れません）
+- 保存先フォルダ C:\RPA作業\許可書 を作っておく
+
+**ステップ**
+
+| # | コマンド | 設定 | 補足 |
+| --- | --- | --- | --- |
+| 1 | `COMMENT` コメント | `雛形 C:\RPA作業\雛形\使用許可書.dotx を用意してね（差し込む所に 《団体名》・《施設》・《部屋》・《利用日時》・《使用料》 と書いておく）` |  |
+| 2 | `RUN` アプリ起動 | `"C:\RPA作業\雛形\使用許可書.dotx"` |  |
+| 3 | `WAIT` 待機 | `5000` |  |
+| 4 | `SWITCH` ウィンドウ切替 | `Word` |  |
+| 5 | `GROUP_START` グループ | `《団体名》を置換` |  |
+| 6 | `KEY` キー送信 | `^h` |  |
+| 7 | `WAIT` 待機 | `1000` |  |
+| 8 | `KEY` キー送信 | `^a` |  |
+| 9 | `TEXT` 文字列貼付 | `《団体名》` |  |
+| 10 | `KEY` キー送信 | `%i` |  |
+| 11 | `KEY` キー送信 | `^a` |  |
+| 12 | `TEXT` 文字列貼付 | `{{団体名}}` |  |
+| 13 | `KEY` キー送信 | `%a` |  |
+| 14 | `WAIT` 待機 | `1000` |  |
+| 15 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 16 | `KEY` キー送信 | `{ESC}` |  |
+| 17 | `WAIT` 待機 | `500` |  |
+| 18 | `GROUP_END` グループ終了 |  |  |
+| 19 | `GROUP_START` グループ | `《施設》を置換` |  |
+| 20 | `KEY` キー送信 | `^h` |  |
+| 21 | `WAIT` 待機 | `1000` |  |
+| 22 | `KEY` キー送信 | `^a` |  |
+| 23 | `TEXT` 文字列貼付 | `《施設》` |  |
+| 24 | `KEY` キー送信 | `%i` |  |
+| 25 | `KEY` キー送信 | `^a` |  |
+| 26 | `TEXT` 文字列貼付 | `{{施設}}` |  |
+| 27 | `KEY` キー送信 | `%a` |  |
+| 28 | `WAIT` 待機 | `1000` |  |
+| 29 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 30 | `KEY` キー送信 | `{ESC}` |  |
+| 31 | `WAIT` 待機 | `500` |  |
+| 32 | `GROUP_END` グループ終了 |  |  |
+| 33 | `GROUP_START` グループ | `《部屋》を置換` |  |
+| 34 | `KEY` キー送信 | `^h` |  |
+| 35 | `WAIT` 待機 | `1000` |  |
+| 36 | `KEY` キー送信 | `^a` |  |
+| 37 | `TEXT` 文字列貼付 | `《部屋》` |  |
+| 38 | `KEY` キー送信 | `%i` |  |
+| 39 | `KEY` キー送信 | `^a` |  |
+| 40 | `TEXT` 文字列貼付 | `{{部屋}}` |  |
+| 41 | `KEY` キー送信 | `%a` |  |
+| 42 | `WAIT` 待機 | `1000` |  |
+| 43 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 44 | `KEY` キー送信 | `{ESC}` |  |
+| 45 | `WAIT` 待機 | `500` |  |
+| 46 | `GROUP_END` グループ終了 |  |  |
+| 47 | `GROUP_START` グループ | `《利用日時》を置換` |  |
+| 48 | `KEY` キー送信 | `^h` |  |
+| 49 | `WAIT` 待機 | `1000` |  |
+| 50 | `KEY` キー送信 | `^a` |  |
+| 51 | `TEXT` 文字列貼付 | `《利用日時》` |  |
+| 52 | `KEY` キー送信 | `%i` |  |
+| 53 | `KEY` キー送信 | `^a` |  |
+| 54 | `TEXT` 文字列貼付 | `{{利用日時}}` |  |
+| 55 | `KEY` キー送信 | `%a` |  |
+| 56 | `WAIT` 待機 | `1000` |  |
+| 57 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 58 | `KEY` キー送信 | `{ESC}` |  |
+| 59 | `WAIT` 待機 | `500` |  |
+| 60 | `GROUP_END` グループ終了 |  |  |
+| 61 | `GROUP_START` グループ | `《使用料》を置換` |  |
+| 62 | `KEY` キー送信 | `^h` |  |
+| 63 | `WAIT` 待機 | `1000` |  |
+| 64 | `KEY` キー送信 | `^a` |  |
+| 65 | `TEXT` 文字列貼付 | `《使用料》` |  |
+| 66 | `KEY` キー送信 | `%i` |  |
+| 67 | `KEY` キー送信 | `^a` |  |
+| 68 | `TEXT` 文字列貼付 | `{{使用料}}` |  |
+| 69 | `KEY` キー送信 | `%a` |  |
+| 70 | `WAIT` 待機 | `1000` |  |
+| 71 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「Microsoft Word」が出たらEnterキー→そのまま続行` |  |
+| 72 | `KEY` キー送信 | `{ESC}` |  |
+| 73 | `WAIT` 待機 | `500` |  |
+| 74 | `GROUP_END` グループ終了 |  |  |
+| 75 | `GROUP_START` グループ | `保存して閉じる` |  |
+| 76 | `KEY` キー送信 | `{F12}` |  |
+| 77 | `WAIT_FOR` ウィンドウ出現待ち | `「名前を付けて保存」を最大15秒待つ` |  |
+| 78 | `TEXT` 文字列貼付 | `C:\RPA作業\許可書\{{ROW}}_{{団体名}}.docx` |  |
+| 79 | `KEY` キー送信 | `{ENTER}` |  |
+| 80 | `WAIT` 待機 | `2000` |  |
+| 81 | `WINDOW_CHECK` ウィンドウ検知（異常時） | `もし「名前を付けて保存の確認」が出たらはい (Alt+Y)→そのまま続行` |  |
+| 82 | `KEY` キー送信 | `^w` |  |
+| 83 | `WAIT` 待機 | `1500` |  |
+| 84 | `GROUP_END` グループ終了 |  |  |
+
+**カスタマイズのポイント**
+
+- 差し込む所を増やすときは「《…》を置換」のグループを複製して、《…》とCSVの列名を変えます
+- 保存先とファイル名は「保存して閉じる」の TEXT で変えます
+
+**応用・発見のヒント**
+
+- 「Word の文書をまとめて PDF にする」と組み合わせると、PDF でそろえられます
+
+**見本CSV（先頭3行）**
+
+| 団体名 | 施設 | 部屋 | 利用日時 | 使用料 |
+| --- | --- | --- | --- | --- |
+| 見本サークル | 中央公民館 | 講座室1 | 2026/11/08 13:00-16:00 | 1,200円 |
+| 試験の会 | 市民センター | 和室 | 2026/11/09 9:00-12:00 | 900円 |
 
 ## 文書起案システム
 

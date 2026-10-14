@@ -939,6 +939,57 @@ function Test-FujiBreakableStep {
     return -not ($c -eq 'COMMENT' -or (Test-FujiBlockEnd $c) -or (Test-FujiBlockMiddle $c))
 }
 
+# ===== src/Docs.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  The manuals (docs\*.html) opened from the window
+#  The pages come with the docs-and-samples zip (dist/fujikyun_docs_samples.zip): extracted into
+#  this folder they are in docs\ or fujikyun_docs_samples\docs\. A place in a page (#anchor) is
+#  reached through a small local page that forwards to it: a file opened by Windows loses #anchor.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')
+# Read on GitHub when the pages are not on this PC (no #anchor there: GitHub names its headings itself)
+$script:FujiDocsOnline = 'https://github.com/uchidakoichi/RPA/blob/master/docs/src/'
+
+# The page's file, or '' when it is not here. FileExists: { param($Path) ... } (the runner's Io style)
+function Find-FujiDocFile {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][string]$Page, [Parameter(Mandatory)][scriptblock]$FileExists)
+    if ($script:FujiDocPages -notcontains $Page) { return '' }
+    foreach ($folder in @('docs', (Join-Path 'fujikyun_docs_samples' 'docs'))) {
+        $p = Join-Path (Join-Path $Directory $folder) ($Page + '.html')
+        if (& $FileExists $p) { return $p }
+    }
+    return ''
+}
+
+# file:///C:/.../manual.html#anchor (the anchor percent-encoded; browsers match it to the heading id)
+function ConvertTo-FujiDocUrl {
+    param([Parameter(Mandatory)][string]$Path, [AllowEmptyString()][string]$Anchor = '')
+    $url = (New-Object -TypeName System.Uri -ArgumentList $Path, ([System.UriKind]::Absolute)).AbsoluteUri
+    if ($Anchor) { $url += '#' + [uri]::EscapeDataString($Anchor) }
+    return $url
+}
+
+# A page that goes straight on to Url (the address is HTML-escaped, so it stays one attribute)
+function New-FujiDocForwardHtml {
+    param([Parameter(Mandatory)][string]$Url)
+    $u = [System.Net.WebUtility]::HtmlEncode($Url)
+    return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=' + $u + '"></head><body><a href="' + $u + '">' + $u + '</a></body></html>'
+}
+
+function Get-FujiDocOnlineUrl {
+    param([Parameter(Mandatory)][string]$Page)
+    return $script:FujiDocsOnline + $Page + '.md'
+}
+
+# Where a command is explained in the manual (fujikyun_commands.json "doc"); the command list otherwise
+function Get-FujiCommandDocAnchor {
+    param([string]$Cmd)
+    $def = Get-FujiCommandDef -Cmd $Cmd
+    if ($null -ne $def -and $def.Contains('doc') -and $def['doc']) { return [string]$def['doc'] }
+    return [string](Get-FujiText 'gui.docCommandAnchor')
+}
+
 # ===== src/Editor.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Editor: state and operations behind the window (no Windows Forms here, so it is testable)
@@ -3891,7 +3942,7 @@ $script:FujiScheduleKinds = @('TIME', 'HOTKEY', 'FILE', 'WINDOW')
 
 function Read-FujiSetting {
     param([Parameter(Mandatory)][string]$Directory)
-    $settings = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+    $settings = [ordered]@{ schedules = (New-Object -TypeName 'System.Collections.Generic.List[object]'); ui = [ordered]@{} }
     $path = Join-Path $Directory $script:FujiSettingsFile
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $settings }
     try {
@@ -3899,6 +3950,10 @@ function Read-FujiSetting {
     } catch {
         # a broken settings file only means no schedules
         return $settings
+    }
+    # the window's look on this PC: text size, window place and size, where the panes are split
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('ui') -and $s['ui'] -is [System.Collections.IDictionary]) {
+        foreach ($k in $s['ui'].Keys) { $settings.ui[[string]$k] = $s['ui'][$k] }
     }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
@@ -4124,6 +4179,66 @@ function Get-FujiScheduleWhenText {
     $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $Schedule 'repeat'))
     if (Get-FujiScheduleValue $Schedule 'date') { $repeat += ' ' + $Schedule.date }
     return ([string](Get-FujiScheduleValue $Schedule 'time') + ' ' + $repeat)
+}
+
+# ----------------------------------------------------------------- the window's look on this PC
+# Text size: how much larger than standard everything is drawn (text and the room around it)
+$script:FujiZoomLevels = @(0.9, 1.0, 1.15, 1.3, 1.5, 1.75, 2.0)
+
+function Get-FujiZoom {
+    param([System.Collections.IDictionary]$Settings)
+    $text = ''
+    if ($null -ne $Settings -and $Settings.Contains('ui') -and $Settings['ui'].Contains('zoom')) { $text = [string]$Settings['ui']['zoom'] }
+    $z = 0.0
+    if (-not [double]::TryParse($text, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$z)) { return 1.0 }
+    # the nearest of the offered sizes (a hand-edited file cannot make the window unusable)
+    $best = 1.0
+    foreach ($l in $script:FujiZoomLevels) { if ([Math]::Abs($l - $z) -lt [Math]::Abs($best - $z)) { $best = $l } }
+    return $best
+}
+
+function Set-FujiUiSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [Parameter(Mandatory)][string]$Key, $Value)
+    if (-not $Settings.Contains('ui') -or $Settings['ui'] -isnot [System.Collections.IDictionary]) { $Settings['ui'] = [ordered]@{} }
+    $Settings['ui'][$Key] = $Value
+}
+
+# The saved place of the main window: @{ X; Y; Width; Height; Maximized; Split } or $null.
+# Split: the left pane's share of the window width (0.15 - 0.85).
+function Get-FujiWindowPlacement {
+    param([System.Collections.IDictionary]$Settings)
+    if ($null -eq $Settings -or -not $Settings.Contains('ui') -or -not $Settings['ui'].Contains('window')) { return $null }
+    $w = [string]$Settings['ui']['window']
+    $m = [regex]::Match($w, '^(-?[0-9]+),(-?[0-9]+),([0-9]+),([0-9]+)(,max)?$')
+    if (-not $m.Success) { return $null }
+    $p = @{ X = [int]$m.Groups[1].Value; Y = [int]$m.Groups[2].Value; Width = [int]$m.Groups[3].Value; Height = [int]$m.Groups[4].Value; Maximized = $m.Groups[5].Success; Split = 0.0 }
+    if ($p.Width -lt 200 -or $p.Height -lt 150) { return $null }
+    $split = 0.0
+    if ($Settings['ui'].Contains('split') -and [double]::TryParse([string]$Settings['ui']['split'], [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$split)) {
+        if ($split -ge 0.15 -and $split -le 0.85) { $p.Split = $split }
+    }
+    return $p
+}
+
+function ConvertTo-FujiWindowPlacementText {
+    param([int]$X, [int]$Y, [int]$Width, [int]$Height, [bool]$Maximized)
+    $t = '{0},{1},{2},{3}' -f $X, $Y, $Width, $Height
+    if ($Maximized) { $t += ',max' }
+    return $t
+}
+
+# The window comes back where it was only if its top edge (where it is dragged) is on a screen
+# that is still there: at least 120 x 40 pixels of it inside a screen's working area.
+# Screens: @(@{ X; Y; Width; Height }, ...)
+function Test-FujiWindowPlacementVisible {
+    param([Parameter(Mandatory)][hashtable]$Placement, [AllowEmptyCollection()][object[]]$Screens)
+    $top = @{ X = $Placement.X; Y = $Placement.Y; Width = $Placement.Width; Height = [Math]::Min(40, $Placement.Height) }
+    foreach ($s in $Screens) {
+        $w = [Math]::Min($top.X + $top.Width, $s.X + $s.Width) - [Math]::Max($top.X, $s.X)
+        $h = [Math]::Min($top.Y + $top.Height, $s.Y + $s.Height) - [Math]::Max($top.Y, $s.Y)
+        if ($w -ge [Math]::Min(120, $top.Width) -and $h -ge [Math]::Min(40, $top.Height)) { return $true }
+    }
+    return $false
 }
 
 # ===== src/Text.ps1 =====
@@ -4718,13 +4833,17 @@ function Get-FujiColor {
     return $script:ColorCache[$Hex]
 }
 
-# Pixels at 96 dpi -> pixels on this screen (the process is DPI aware)
+# Pixels at 96 dpi -> pixels on this screen (the process is DPI aware), times the chosen text size
 function Get-FujiScaled {
     param([double]$Pixels)
     return [int][Math]::Round($Pixels * $script:Ui.Scale)
 }
 
+# Zoom: the text size chosen on this PC (1.0 = standard). Text and the room around it (buttons,
+# boxes, rows) grow together, so nothing is cut off.
 function Initialize-FujiUi {
+    param([double]$Zoom = 1.0)
+    $script:Ui.Zoom = $Zoom
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     # RichTextBox (the log) uses the old RichEdit 3.0 in apps that target .NET Framework before 4.7.1,
@@ -4737,14 +4856,14 @@ function Initialize-FujiUi {
     [System.Windows.Forms.Application]::EnableVisualStyles()
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
-    try { $script:Ui.Scale = $g.DpiX / 96.0 } finally { $g.Dispose() }
+    try { $script:Ui.Scale = $g.DpiX / 96.0 * $Zoom } finally { $g.Dispose() }
     $family = Select-FujiFontFamily -Names @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic') -Default 'Segoe UI'
-    $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 10
+    $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, (10 * $Zoom)
     $script:Ui.BoldFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Bold)
     $script:Ui.StrikeFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Strikeout)
-    $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 9
+    $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, (9 * $Zoom)
     $mono = Select-FujiFontFamily -Names @('BIZ UDGothic', 'MS Gothic') -Default 'Consolas'
-    $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, 9.5
+    $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, (9.5 * $Zoom)
     $script:Ui.ToolTip = New-Object -TypeName System.Windows.Forms.ToolTip
     $script:Ui.ToolTip.AutoPopDelay = 20000
 }
@@ -4891,7 +5010,9 @@ function New-FujiDialogForm {
     $f.ShowInTaskbar = $false
     $f.MinimizeBox = $false
     $f.MaximizeBox = $false
-    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList $Width, $Height
+    # with large text a dialog may be wider or taller than the screen: it is kept inside it
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min($Width, [int]($area.Width * 0.95))), ([Math]::Min($Height, [int]($area.Height * 0.9)))
     $f.KeyPreview = $true
     return $f
 }
@@ -5076,6 +5197,7 @@ function Show-FujiCredentialDialog {
     # RightToLeft bar: the last added is leftmost
     [void]$bar.Controls.Add($cancel)
     [void]$bar.Controls.Add($save)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.secret')))
     if ($null -ne $existing) {
         $remove = New-FujiButton -Text (Get-FujiText 'cred.remove')
         $remove.Add_Click({ Invoke-FujiUi { Remove-FujiCredentialFromDialog } })
@@ -5291,12 +5413,77 @@ function Show-FujiDiagnostic {
     $close = New-FujiButton -Text (Get-FujiText 'gui.close')
     $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($close)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'setup' -Anchor (Get-FujiText 'gui.docAnchors.trouble') -TextKey 'gui.docTrouble'))
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.diagnostics')))
     $f.CancelButton = $close
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($hint)
     [void]$f.Controls.Add($bar)
     [void](Show-FujiDialog -Form $f)
     $f.Dispose()
+}
+
+# ===== gui/Docs.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Opening the manuals from the window: the "Manuals" menu, F1, and the help buttons of dialogs
+#  (src/Docs.ps1 finds the page). A place in a page goes through a small forwarding page in the
+#  temp folder, because a file opened by Windows drops the #anchor of its address.
+# ---------------------------------------------------------------------------------------------
+
+function Open-FujiDoc {
+    param([Parameter(Mandatory)][string]$Page, [string]$Anchor = '')
+    $path = Find-FujiDocFile -Directory $script:Ed.Directory -Page $Page -FileExists { param($p) return (Test-Path -LiteralPath $p -PathType Leaf) }
+    if (-not $path) {
+        $answer = Show-FujiChoice -Title (Get-FujiText 'gui.docTitle') -Message (Get-FujiText 'gui.docMissing' $script:Ed.Directory) -Buttons @((Get-FujiText 'gui.docOnline'), (Get-FujiText 'gui.close'))
+        if ($answer -eq 0) { Start-Process -FilePath (Get-FujiDocOnlineUrl -Page $Page) }
+        return
+    }
+    try {
+        if ($Anchor) {
+            $forward = Join-Path ([System.IO.Path]::GetTempPath()) 'fujikyun_doc_open.html'
+            [System.IO.File]::WriteAllText($forward, (New-FujiDocForwardHtml -Url (ConvertTo-FujiDocUrl -Path $path -Anchor $Anchor)), (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
+            Start-Process -FilePath $forward
+        } else {
+            Start-Process -FilePath $path
+        }
+        Write-FujiUiLog -Message (Get-FujiText 'gui.docOpened' (Split-Path -Path $path -Leaf))
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'gui.docFailed' $_.Exception.Message) -Level 'error'
+    }
+}
+
+# The "Manuals" button: a menu of the pages
+function New-FujiDocMenuButton {
+    $b = New-FujiButton -Text (Get-FujiText 'gui.docs') -Tip (Get-FujiText 'gui.docsTip')
+    $menu = New-Object -TypeName System.Windows.Forms.ContextMenuStrip
+    $menu.Font = $script:Ui.Font
+    foreach ($p in @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')) {
+        $item = New-Object -TypeName System.Windows.Forms.ToolStripMenuItem -ArgumentList (Get-FujiText ('gui.docPages.' + $p))
+        $item.Tag = $p
+        $item.Add_Click({ $page = [string]$this.Tag; Invoke-FujiUi { Open-FujiDoc -Page $page } })
+        [void]$menu.Items.Add($item)
+    }
+    $b.Tag = $menu
+    $b.Add_Click({ $this.Tag.Show($this, (New-Object -TypeName System.Drawing.Point -ArgumentList 0, $this.Height)) })
+    return $b
+}
+
+# A "read about it" button for a dialog's button bar
+function New-FujiDocButton {
+    param([Parameter(Mandatory)][string]$Page, [string]$Anchor = '', [string]$TextKey = 'gui.docHelp')
+    $b = New-FujiButton -Text (Get-FujiText $TextKey) -Tip (Get-FujiText 'gui.docHelpTip') -Tag @($Page, $Anchor)
+    $b.Add_Click({ $where = $this.Tag; Invoke-FujiUi { Open-FujiDoc -Page $where[0] -Anchor $where[1] } })
+    return $b
+}
+
+# F1 in the main window: the selected step's command, or the manual
+function Open-FujiContextDoc {
+    $steps = Get-FujiCurrentStepList $script:Ed
+    if ($script:Ed.Selected -ge 0 -and $script:Ed.Selected -lt $steps.Count) {
+        Open-FujiDoc -Page 'manual' -Anchor (Get-FujiCommandDocAnchor -Cmd ([string]$steps[$script:Ed.Selected].cmd))
+    } else {
+        Open-FujiDoc -Page 'manual'
+    }
 }
 
 # ===== gui/MainForm.ps1 =====
@@ -5322,8 +5509,10 @@ function Show-FujiMainForm {
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
     $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
     $form.Size = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min((Get-FujiScaled 1280), $area.Width)), ([Math]::Min((Get-FujiScaled 900), $area.Height))
-    $form.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 640), (Get-FujiScaled 480)
+    # large text on a small screen: the smallest size still fits the screen
+    $form.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min((Get-FujiScaled 640), $area.Width)), ([Math]::Min((Get-FujiScaled 480), $area.Height))
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    Restore-FujiWindowPlacement -Form $form
     $form.KeyPreview = $true
     $form.BackColor = Get-FujiColor '#fdf7fb'
     $script:Ui.Form = $form
@@ -5342,6 +5531,7 @@ function Show-FujiMainForm {
     $split.Dock = [System.Windows.Forms.DockStyle]::Fill
     $split.FixedPanel = [System.Windows.Forms.FixedPanel]::Panel1
     $split.SplitterDistance = [int]($form.ClientSize.Width * 0.5)
+    $script:Ui.Split = $split
     $split.Panel1MinSize = Get-FujiScaled 280
     $split.Panel2MinSize = Get-FujiScaled 280
     # the splitter shows the container's colour: a visible bar to drag, the panels keep the window's
@@ -5364,9 +5554,16 @@ function Show-FujiMainForm {
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
 
     $form.Add_KeyDown({ $e = $_; Invoke-FujiUi { Invoke-FujiShortcut -KeyEvent $e } })
-    $form.Add_FormClosing({ $e = $_; Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e } })
+    $form.Add_FormClosing({
+            $e = $_
+            Invoke-FujiUi { Confirm-FujiClose -CloseEvent $e }
+            # a restart for the new text size waits for the next close if this one was called off
+            if ($e.Cancel) { $script:RestartAfterClose = $false }
+        })
+    $form.Add_FormClosed({ Invoke-FujiUi { Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
+                Restore-FujiSplitPlacement
                 foreach ($entry in $script:LogBuffer) { Add-FujiLogLine -Box $script:Ui.Log -Line $entry[0] -Level $entry[1] }
                 $script:LogBuffer.Clear()
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
@@ -5380,6 +5577,93 @@ function Show-FujiMainForm {
     Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
+}
+
+# ----------------------------------------------------------------- the window's place, size and text size (this PC)
+$script:RestartAfterClose = $false
+
+function Restore-FujiWindowPlacement {
+    param([Parameter(Mandatory)][System.Windows.Forms.Form]$Form)
+    $p = Get-FujiWindowPlacement -Settings $script:Settings
+    if ($null -eq $p) { return }
+    $screens = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($sc in [System.Windows.Forms.Screen]::AllScreens) {
+        $w = $sc.WorkingArea
+        $screens.Add(@{ X = $w.X; Y = $w.Y; Width = $w.Width; Height = $w.Height })
+    }
+    # a monitor taken away since: the window opens in the middle of the screen as usual
+    if (-not (Test-FujiWindowPlacementVisible -Placement $p -Screens $screens.ToArray())) { return }
+    $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $Form.Location = New-Object -TypeName System.Drawing.Point -ArgumentList $p.X, $p.Y
+    $Form.Size = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Max($Form.MinimumSize.Width, $p.Width)), ([Math]::Max($Form.MinimumSize.Height, $p.Height))
+    if ($p.Maximized) { $Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized }
+}
+
+# The pane split is kept as a share of the width: it fits again after a size or text-size change
+function Restore-FujiSplitPlacement {
+    $p = Get-FujiWindowPlacement -Settings $script:Settings
+    $split = $script:Ui.Split
+    if ($null -eq $p -or $p.Split -le 0 -or $null -eq $split) { return }
+    $max = $split.Width - $split.Panel2MinSize - $split.SplitterWidth
+    $d = [int]($split.Width * $p.Split)
+    if ($max -gt $split.Panel1MinSize) { $split.SplitterDistance = [Math]::Max($split.Panel1MinSize, [Math]::Min($max, $d)) }
+}
+
+function Save-FujiWindowPlacement {
+    $f = $script:Ui.Form
+    if ($null -eq $f -or $null -eq $script:Settings) { return }
+    # a maximized or minimized window: the place it goes back to
+    $b = $f.Bounds
+    if ($f.WindowState -ne [System.Windows.Forms.FormWindowState]::Normal) { $b = $f.RestoreBounds }
+    $max = $f.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized
+    Set-FujiUiSetting -Settings $script:Settings -Key 'window' -Value (ConvertTo-FujiWindowPlacementText -X $b.X -Y $b.Y -Width $b.Width -Height $b.Height -Maximized $max)
+    $split = $script:Ui.Split
+    if ($null -ne $split -and $split.Width -gt 0) {
+        Set-FujiUiSetting -Settings $script:Settings -Key 'split' -Value (([double]$split.SplitterDistance / $split.Width).ToString('0.000', [System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    try { Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings } catch { $null = $_ }
+}
+
+function New-FujiZoomCombo {
+    $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($z in $script:FujiZoomLevels) {
+        $key = 'gui.zoomLevel'
+        if ($z -eq 1.0) { $key = 'gui.zoomStandard' }
+        $labels.Add((Get-FujiText $key ([int][Math]::Round($z * 100))))
+        $values.Add($z.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    $c = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 170)
+    $c.SelectedIndex = [Array]::IndexOf([object[]]$c.Tag, [object]$script:Ui.Zoom.ToString([System.Globalization.CultureInfo]::InvariantCulture))
+    $script:Ui.ToolTip.SetToolTip($c, (Get-FujiText 'gui.zoomTip'))
+    $c.Add_SelectedIndexChanged({ Invoke-FujiUi { Set-FujiZoomUi } })
+    $script:Ui.ZoomCombo = $c
+    return $c
+}
+
+# A new text size is kept for this PC and used from the next start (the window is built at that size)
+function Set-FujiZoomUi {
+    $c = $script:Ui.ZoomCombo
+    if ($c.SelectedIndex -lt 0) { return }
+    $value = [string]([object[]]$c.Tag)[$c.SelectedIndex]
+    $current = $script:Ui.Zoom.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    Set-FujiUiSetting -Settings $script:Settings -Key 'zoom' -Value $value
+    try { Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings } catch { Write-FujiUiLog -Message (Get-FujiText 'editor.saveFailed' $_.Exception.Message) -Level 'error'; return }
+    if ($value -eq $current) { return }
+    Write-FujiUiLog -Message (Get-FujiText 'gui.zoomSaved' ([int][Math]::Round([double]::Parse($value, [System.Globalization.CultureInfo]::InvariantCulture) * 100))) -Level 'ok'
+    if ($script:RunCtl.Running -or $null -ne $script:Rec) { return }
+    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.zoomTitle') -Message (Get-FujiText 'gui.zoomRestart') -Buttons @((Get-FujiText 'gui.zoomRestartNow'), (Get-FujiText 'gui.zoomLater'))
+    if ($answer -ne 0) { return }
+    $script:RestartAfterClose = $true
+    # the usual close: unsaved changes are asked about first
+    $script:Ui.Form.Close()
+}
+
+# The same start as fujikyun.bat
+function Start-FujiAppAgain {
+    $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $arguments = '-NoLogo -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $script:AppScriptPath
+    Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $script:Ed.Directory
 }
 
 # How long the start took: from the PowerShell process start (includes reading this script),
@@ -5422,7 +5706,8 @@ function New-FujiTopPanel {
     $script:Ui.ScheduleState = $next
     $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
     $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
-    foreach ($c in @($save, $state, $sched, $diag, $next)) { [void]$row.Controls.Add($c) }
+    $zoomLabel = New-FujiLabel -Text (Get-FujiText 'gui.zoom')
+    foreach ($c in @($save, $state, $sched, $diag, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -6152,7 +6437,7 @@ function Show-FujiTemplateGallery {
         $values.Add([string]$c)
     }
     $combo = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 300)
-    $combo.MaxDropDownItems = 25
+    $combo.MaxDropDownItems = 40
     [void]$topRow.Controls.Add($combo)
     $hits = New-FujiLabel -Text ''
     $hits.ForeColor = Get-FujiColor '#6b5aa6'
@@ -6181,6 +6466,10 @@ function Show-FujiTemplateGallery {
     $create.DialogResult = [System.Windows.Forms.DialogResult]::OK
     [void]$bar.Controls.Add($close)
     [void]$bar.Controls.Add($create)
+    # the chosen template's page in the templates manual (each template has its id as an anchor)
+    $read = New-FujiButton -Text (Get-FujiText 'gui.docTemplate') -Tip (Get-FujiText 'gui.docTemplateTip')
+    $read.Add_Click({ Invoke-FujiUi { Open-FujiTemplateDoc } })
+    [void]$bar.Controls.Add($read)
     $f.AcceptButton = $create
     $f.CancelButton = $close
     [void]$f.Controls.Add($split)
@@ -6211,6 +6500,15 @@ function Show-FujiTemplateGallery {
     $f.Dispose()
     $script:Ui.Gallery = $null
     return $chosen
+}
+
+function Open-FujiTemplateDoc {
+    $g = $script:Ui.Gallery
+    if ($null -eq $g -or $g.List.SelectedIndex -lt 0 -or $g.List.SelectedIndex -ge $g.Shown.Count) {
+        Open-FujiDoc -Page 'templates'
+        return
+    }
+    Open-FujiDoc -Page 'templates' -Anchor ([string]$g.Shown[$g.List.SelectedIndex]['id'])
 }
 
 function Update-FujiTemplateList {
@@ -6429,7 +6727,8 @@ function Invoke-FujiShortcut {
     }
     # function keys work even while a text box has the focus (they type nothing)
     $fkey = $true
-    if ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
+    if ($k -eq $keys::F1) { Open-FujiContextDoc }
+    elseif ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
     elseif ($k -eq $keys::F6) { [void](Start-FujiRunUi -Partial 'from') }
     elseif ($k -eq $keys::F9) { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } }
     elseif ($k -eq $keys::F10) { [void](Start-FujiRunUi -Stepping) }
@@ -7462,7 +7761,7 @@ $script:AutoRunId = ''
 $script:AutoClose = @{ Timer = $null; Elapsed = 0; Enabled = $false }
 
 function Initialize-FujiSchedule {
-    $script:Settings = Read-FujiSetting -Directory $script:Ed.Directory
+    if ($null -eq $script:Settings) { $script:Settings = Read-FujiSetting -Directory $script:Ed.Directory }
     $t = New-Object -TypeName System.Windows.Forms.Timer
     $t.Interval = 20000
     $t.Add_Tick({ Invoke-FujiUi { Invoke-FujiScheduleCheck } })
@@ -7842,6 +8141,7 @@ function Show-FujiScheduleDialog {
     $closeButton = New-FujiButton -Text (Get-FujiText 'gui.close')
     $closeButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($closeButton)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.schedule')))
     $f.CancelButton = $closeButton
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($help)
@@ -8005,6 +8305,9 @@ function Show-FujiStepDialog {
     $ok.Add_Click({ Invoke-FujiUi { Complete-FujiStepDialog } })
     [void]$bar.Controls.Add($cancel)
     [void]$bar.Controls.Add($ok)
+    # where this command is explained in the manual (also F1)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiCommandDocAnchor -Cmd $Cmd) -TextKey 'gui.docCommand'))
+    $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::F1) { $_.Handled = $true; $c = $script:StepDlg.Cmd; Invoke-FujiUi { Open-FujiDoc -Page 'manual' -Anchor (Get-FujiCommandDocAnchor -Cmd $c) } } })
     $form.AcceptButton = $ok
     $form.CancelButton = $cancel
     [void]$form.Controls.Add($panel)
@@ -9155,7 +9458,9 @@ function Invoke-FujiNameClick {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
-    Initialize-FujiUi
+    # this PC's settings first: the text size is needed before any window is made
+    $script:Settings = Read-FujiSetting -Directory $here
+    Initialize-FujiUi -Zoom (Get-FujiZoom -Settings $script:Settings)
     $script:AutoRunId = $AutoRun
     $script:AppScriptPath = $PSCommandPath
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)

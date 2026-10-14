@@ -21,13 +21,17 @@ function Get-FujiColor {
     return $script:ColorCache[$Hex]
 }
 
-# Pixels at 96 dpi -> pixels on this screen (the process is DPI aware)
+# Pixels at 96 dpi -> pixels on this screen (the process is DPI aware), times the chosen text size
 function Get-FujiScaled {
     param([double]$Pixels)
     return [int][Math]::Round($Pixels * $script:Ui.Scale)
 }
 
+# Zoom: the text size chosen on this PC (1.0 = standard). Text and the room around it (buttons,
+# boxes, rows) grow together, so nothing is cut off.
 function Initialize-FujiUi {
+    param([double]$Zoom = 1.0)
+    $script:Ui.Zoom = $Zoom
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     # RichTextBox (the log) uses the old RichEdit 3.0 in apps that target .NET Framework before 4.7.1,
@@ -40,14 +44,14 @@ function Initialize-FujiUi {
     [System.Windows.Forms.Application]::EnableVisualStyles()
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
-    try { $script:Ui.Scale = $g.DpiX / 96.0 } finally { $g.Dispose() }
+    try { $script:Ui.Scale = $g.DpiX / 96.0 * $Zoom } finally { $g.Dispose() }
     $family = Select-FujiFontFamily -Names @('Yu Gothic UI', 'Meiryo UI', 'MS UI Gothic') -Default 'Segoe UI'
-    $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 10
+    $script:Ui.Font = New-Object -TypeName System.Drawing.Font -ArgumentList $family, (10 * $Zoom)
     $script:Ui.BoldFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Bold)
     $script:Ui.StrikeFont = New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font, ([System.Drawing.FontStyle]::Strikeout)
-    $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, 9
+    $script:Ui.SmallFont = New-Object -TypeName System.Drawing.Font -ArgumentList $family, (9 * $Zoom)
     $mono = Select-FujiFontFamily -Names @('BIZ UDGothic', 'MS Gothic') -Default 'Consolas'
-    $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, 9.5
+    $script:Ui.LogFont = New-Object -TypeName System.Drawing.Font -ArgumentList $mono, (9.5 * $Zoom)
     $script:Ui.ToolTip = New-Object -TypeName System.Windows.Forms.ToolTip
     $script:Ui.ToolTip.AutoPopDelay = 20000
 }
@@ -194,7 +198,9 @@ function New-FujiDialogForm {
     $f.ShowInTaskbar = $false
     $f.MinimizeBox = $false
     $f.MaximizeBox = $false
-    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList $Width, $Height
+    # with large text a dialog may be wider or taller than the screen: it is kept inside it
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min($Width, [int]($area.Width * 0.95))), ([Math]::Min($Height, [int]($area.Height * 0.9)))
     $f.KeyPreview = $true
     return $f
 }

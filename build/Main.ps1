@@ -31,7 +31,9 @@ try {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
-    Initialize-FujiUi
+    # this PC's settings first: the text size is needed before any window is made
+    $script:Settings = Read-FujiSetting -Directory $here
+    Initialize-FujiUi -Zoom (Get-FujiZoom -Settings $script:Settings)
     $script:AutoRunId = $AutoRun
     $script:AppScriptPath = $PSCommandPath
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
