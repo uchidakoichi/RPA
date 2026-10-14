@@ -141,12 +141,26 @@ function Get-FujiOcrAreaText {
 
 function Get-FujiFileName { param([AllowEmptyString()][string]$Path) return ($Path -replace '^.*[\\/]', '') }
 
+# " (2nd)" after a field's label when the step uses a later field of the same name
+function Get-FujiNthText {
+    param([AllowEmptyString()][string]$Nth)
+    $n = Get-FujiInt -Text $Nth -Default 1
+    if ($n -le 1) { return '' }
+    return (Get-FujiLabelText 'nth' @{ nth = $n })
+}
+
 # ----------------------------------------------------------------- value <-> settings
+# A field that is only a button in the step dialog (pick a point, an area, a part; register a password)
+function Test-FujiButtonField {
+    param([System.Collections.IDictionary]$Field)
+    return ([string]$Field['type'] -in @('capture', 'rectcapture', 'uiapick', 'credential'))
+}
+
 function Get-FujiValueFieldId {
     param([System.Collections.IDictionary]$Def)
     $ids = @()
     foreach ($f in $Def['fields']) {
-        if (-not $f.Contains('prop') -and $f['type'] -ne 'capture' -and $f['type'] -ne 'rectcapture') { $ids += [string]$f['id'] }
+        if (-not $f.Contains('prop') -and -not (Test-FujiButtonField $f)) { $ids += [string]$f['id'] }
     }
     return , $ids
 }
@@ -172,6 +186,8 @@ function ConvertFrom-FujiStepValue {
         'WINDOW_CHECK' { $settings['mode'] = Get-FujiCheckMode $settings['mode'] }
         'CLICK_POS' { if ($settings['kind'] -ne 'DOUBLE' -and $settings['kind'] -ne 'RIGHT') { $settings['kind'] = 'LEFT' } }
         'SCREENSHOT' { if ($settings['scope'] -ne 'FULL') { $settings['scope'] = 'WINDOW' } }
+        'FIELD_SET' { if ($settings['how'] -ne 'PASTE') { $settings['how'] = 'AUTO' } }
+        'SECRET' { if ($settings['part'] -ne 'USER') { $settings['part'] = 'PASSWORD' } }
     }
     return $settings
 }
@@ -210,6 +226,13 @@ function ConvertTo-FujiStepValue {
         'CLICK_IMG' { $v['threshold'] = (Get-FujiThreshold $v['threshold']).ToString('R', [System.Globalization.CultureInfo]::InvariantCulture) }
         'SCREENSHOT' { if ($v['scope'] -ne 'FULL') { $v['scope'] = 'WINDOW' } }
         'CALL_MACRO' { $v['name'] = $MacroName }
+        { $_ -in @('FIELD_SET', 'FIELD_GET') } { $v['nth'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['nth'] -Default 1)) }
+        'FIELD_SET' { if ($v['how'] -ne 'PASTE') { $v['how'] = 'AUTO' } }
+        'SECRET' { if ($v['part'] -ne 'USER') { $v['part'] = 'PASSWORD' } }
+        'RETRY_START' {
+            $v['times'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['times'] -Default 3))
+            $v['wait'] = [string][Math]::Max(0, (Get-FujiInt -Text $v['wait'] -Default 2000))
+        }
     }
     if ($def['format'] -eq 'text') {
         $ids = Get-FujiValueFieldId -Def $def
@@ -315,6 +338,22 @@ function Test-FujiStepSetting {
             if (([string]$s['path']).Trim() -eq '') { return (Get-FujiText 'validate.bookPath') }
             if (([string]$s['cell']).Trim() -eq '') { return (Get-FujiText 'validate.cell') }
         }
+        { $_ -in @('FIELD_SET', 'FIELD_GET') } {
+            if ($s['name'] -eq '') { return (Get-FujiText 'validate.fieldName') }
+            if ($s['nth'] -ne '' -and -not (Test-FujiPositiveInt $s['nth'] 1)) { return (Get-FujiText 'validate.nth') }
+            if ($Cmd -eq 'FIELD_GET') { return (Get-FujiVarNameError $s['var']) }
+        }
+        'TABLE_READ' {
+            $path = ([string]$s['path']).Trim().Trim('"')
+            if ($path -eq '') { return (Get-FujiText 'validate.tablePath') }
+            if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiText 'validate.tablePathCsv') }
+            if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
+        }
+        'SECRET' { if ($s['target'] -eq '') { return (Get-FujiText 'validate.secretTarget') } }
+        'RETRY_START' {
+            if (-not (Test-FujiPositiveInt $s['times'] 1)) { return (Get-FujiText 'validate.retryTimes') }
+            if (-not (Test-FujiPositiveInt $s['wait'] 0)) { return (Get-FujiText 'validate.waitMs') }
+        }
         'GROUP_START' { if ($s['name'] -eq '') { return (Get-FujiText 'validate.groupName') } }
         'COMMENT' { if ($s['memo'] -eq '') { return (Get-FujiText 'validate.memo') } }
     }
@@ -410,6 +449,26 @@ function Get-FujiStepLabel {
         'RECORD' { return (Get-FujiLabelText 'record' @{ name = $p['name']; value = (Format-FujiShort $p['value'] 30) }) }
         'EXCEL_READ' { return (Get-FujiLabelText 'excelRead' @{ file = (Get-FujiFileName $p['path']); cell = $p['cell']; name = $p['name'] }) }
         'EXCEL_WRITE' { return (Get-FujiLabelText 'excelWrite' @{ file = (Get-FujiFileName $p['path']); cell = $p['cell']; value = (Format-FujiShort $p['value'] 20) }) }
+        'FIELD_SET' {
+            if ($p['text'] -eq '') { $text = Get-FujiLabelText 'fieldClear' @{ name = (Format-FujiShort $p['name'] 20) } }
+            else { $text = Get-FujiLabelText 'fieldSet' @{ name = (Format-FujiShort $p['name'] 20); text = (Format-FujiShort $p['text'] 24) } }
+            return $text + (Get-FujiNthText $p['nth'])
+        }
+        'FIELD_GET' { return (Get-FujiLabelText 'fieldGet' @{ name = (Format-FujiShort $p['name'] 20); var = $p['var'] }) + (Get-FujiNthText $p['nth']) }
+        'TABLE_READ' {
+            $name = Get-FujiText 'label.tableLargest'
+            if ($p['name']) { $name = Get-FujiLabelText 'tableNamed' @{ name = (Format-FujiShort $p['name'] 20) } }
+            return (Get-FujiLabelText 'tableRead' @{ name = $name; file = (Get-FujiFileName $p['path']) })
+        }
+        'SECRET' {
+            $part = Get-FujiText 'label.secretPassword'
+            if ($p['part'] -eq 'USER') { $part = Get-FujiText 'label.secretUser' }
+            return (Get-FujiLabelText 'secret' @{ target = $p['target']; part = $part })
+        }
+        'RETRY_START' {
+            $sec = ([decimal](Get-FujiInt -Text $p['wait'] -Default 2000) / 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+            return (Get-FujiLabelText 'retry' @{ times = $p['times']; sec = $sec })
+        }
         'GROUP_START' { return $val }
         'COMMENT' { return (Format-FujiShort $val 40) }
     }
@@ -418,6 +477,147 @@ function Get-FujiStepLabel {
 
 # Set by the editor: { param($Column) ... } giving the loaded CSV's header name for a column number
 $script:FujiCsvHeaderNameOf = $null
+
+# ===== src/Credential.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Passwords in the Windows Credential Manager (generic credentials of the signed-in user)
+#  The SECRET step reads them while a run types them; the step dialog (gui/Credential.ps1)
+#  registers, changes and removes them. A password is never shown, logged or kept in a macro, a
+#  CSV or a variable. The functions are declared at run time like Native.ps1 (no C# compiler):
+#  CredReadW, CredWriteW, CredDeleteW and CredFree, with the CREDENTIALW structure read and
+#  written by offsets.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiCredNative = $null
+# Generic credentials are named after the service using them (CREDENTIALW TargetName)
+$script:FujiCredPrefix = 'FujikyunRPA:'
+$script:FujiCredLimits = @{ Type = 1; Persist = 2; MaxBlobBytes = 2560 }   # CRED_TYPE_GENERIC, CRED_PERSIST_LOCAL_MACHINE, 5*512
+
+function Get-FujiCredNativeType {
+    if ($null -ne $script:FujiCredNative) { return $script:FujiCredNative }
+    $name = New-Object -TypeName System.Reflection.AssemblyName -ArgumentList 'FujiCred'
+    $asm = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($name, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
+    $module = $asm.DefineDynamicModule('FujiCred')
+    $tb = $module.DefineType('FujiCred.Win32', [System.Reflection.TypeAttributes]'Public, Class, Abstract, Sealed')
+    $wide = [System.Runtime.InteropServices.CharSet]::Unicode
+    $a = 'advapi32.dll'
+    # CredReadW's last parameter receives a pointer: a one-item IntPtr array is pinned and filled in
+    $declarations = @(
+        @($a, 'CredReadW', [bool], [type[]]@([string], [uint32], [uint32], [IntPtr[]])),
+        @($a, 'CredWriteW', [bool], [type[]]@([IntPtr], [uint32])),
+        @($a, 'CredDeleteW', [bool], [type[]]@([string], [uint32], [uint32])),
+        @($a, 'CredFree', [void], [type[]]@([IntPtr]))
+    )
+    foreach ($d in $declarations) {
+        $m = $tb.DefinePInvokeMethod($d[1], $d[0],
+            [System.Reflection.MethodAttributes]'Public, Static, PinvokeImpl, HideBySig',
+            [System.Reflection.CallingConventions]::Standard, $d[2], $d[3],
+            [System.Runtime.InteropServices.CallingConvention]::Winapi, $wide)
+        $m.SetImplementationFlags([System.Reflection.MethodImplAttributes]::PreserveSig)
+    }
+    $script:FujiCredNative = $tb.CreateType()
+    return $script:FujiCredNative
+}
+
+# Byte offsets of the CREDENTIALW members used here, for this process (32 or 64 bit)
+function Get-FujiCredLayout {
+    $p = [IntPtr]::Size
+    $blobSize = 16 + 2 * $p
+    $blob = $blobSize + 4
+    if ($p -eq 8) { $blob = $blobSize + 8 }
+    $persist = $blob + $p
+    $userName = $persist + 8 + 2 * $p
+    return @{ Type = 4; TargetName = 8; Comment = 8 + $p; BlobSize = $blobSize; Blob = $blob; Persist = $persist; UserName = $userName; Size = $userName + $p }
+}
+
+# Where a password may be typed: kept in the credential's comment as "program|title part"
+function ConvertTo-FujiSecretPlace {
+    param([AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    return (([string]$Program).Trim().Replace('|', '') + '|' + ([string]$Window).Trim())
+}
+
+function ConvertFrom-FujiSecretPlace {
+    param([AllowNull()][AllowEmptyString()][string]$Text)
+    $t = [string]$Text
+    $i = $t.IndexOf('|')
+    if ($i -lt 0) { return @{ Program = ''; Window = '' } }
+    return @{ Program = $t.Substring(0, $i); Window = $t.Substring($i + 1) }
+}
+
+# A password goes only into the window it was registered for: the window in front must have the
+# registered text in its title AND belong to the registered program, compared by the full path of
+# its .exe (a title is easy to imitate, a program name too: a copy of notepad.exe renamed app.exe)
+function Test-FujiSecretPlace {
+    param([hashtable]$Foreground, [AllowEmptyString()][string]$Program, [AllowEmptyString()][string]$Window)
+    if (-not $Window -or -not $Program -or $null -eq $Foreground) { return $false }
+    $ic = [System.StringComparison]::OrdinalIgnoreCase
+    if (([string]$Foreground.Title).IndexOf($Window, $ic) -lt 0) { return $false }
+    return [string]::Equals([string]$Foreground.Program, $Program, $ic)
+}
+
+# @{ User; Password; Program; Window } or $null when nothing is registered under Target
+function Read-FujiCredential {
+    param([Parameter(Mandatory)][string]$Target)
+    $t = Get-FujiCredNativeType
+    $out = New-Object -TypeName 'IntPtr[]' -ArgumentList 1
+    if (-not $t::CredReadW($script:FujiCredPrefix + $Target, [uint32]$script:FujiCredLimits.Type, [uint32]0, $out)) { return $null }
+    $ptr = $out[0]
+    try {
+        $l = Get-FujiCredLayout
+        $user = [System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, $l.UserName))
+        $size = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, $l.BlobSize)
+        $password = ''
+        if ($size -gt 0) {
+            $bytes = New-Object -TypeName 'byte[]' -ArgumentList $size
+            [System.Runtime.InteropServices.Marshal]::Copy([System.Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, $l.Blob), $bytes, 0, $size)
+            $password = [System.Text.Encoding]::Unicode.GetString($bytes)
+            [Array]::Clear($bytes, 0, $bytes.Length)
+        }
+        $place = ConvertFrom-FujiSecretPlace ([System.Runtime.InteropServices.Marshal]::PtrToStringUni([System.Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, $l.Comment)))
+        return @{ User = [string]$user; Password = $password; Program = $place.Program; Window = $place.Window }
+    } finally {
+        $t::CredFree($ptr)
+    }
+}
+
+# Account: the user name (may be empty). Secret: the password; its characters go from the
+# SecureString's own unmanaged copy straight to Windows and that copy is wiped afterwards.
+# Program / Window: the only window it may be typed into (Test-FujiSecretPlace).
+function Write-FujiCredential {
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$Account, [Parameter(Mandatory)][System.Security.SecureString]$Secret,
+        [AllowEmptyString()][string]$Program = '', [Parameter(Mandatory)][string]$Window)
+    $bytes = $Secret.Length * 2
+    if ($bytes -gt $script:FujiCredLimits.MaxBlobBytes) { throw (Get-FujiText 'cred.tooLong') }
+    $l = Get-FujiCredLayout
+    $m = [System.Runtime.InteropServices.Marshal]
+    $cred = $m::AllocHGlobal($l.Size)
+    $name = $m::StringToHGlobalUni($script:FujiCredPrefix + $Target)
+    $userPtr = $m::StringToHGlobalUni($Account)
+    $comment = $m::StringToHGlobalUni((ConvertTo-FujiSecretPlace -Program $Program -Window $Window))
+    $blob = $m::SecureStringToGlobalAllocUnicode($Secret)
+    try {
+        for ($i = 0; $i -lt $l.Size; $i++) { $m::WriteByte($cred, $i, 0) }
+        $m::WriteInt32($cred, $l.Type, $script:FujiCredLimits.Type)
+        $m::WriteIntPtr($cred, $l.TargetName, $name)
+        $m::WriteIntPtr($cred, $l.Comment, $comment)
+        $m::WriteInt32($cred, $l.BlobSize, $bytes)
+        $m::WriteIntPtr($cred, $l.Blob, $blob)
+        $m::WriteInt32($cred, $l.Persist, $script:FujiCredLimits.Persist)
+        $m::WriteIntPtr($cred, $l.UserName, $userPtr)
+        if (-not (Get-FujiCredNativeType)::CredWriteW($cred, [uint32]0)) { throw (Get-FujiText 'cred.writeFailed') }
+    } finally {
+        $m::ZeroFreeGlobalAllocUnicode($blob)
+        $m::FreeHGlobal($comment)
+        $m::FreeHGlobal($userPtr)
+        $m::FreeHGlobal($name)
+        $m::FreeHGlobal($cred)
+    }
+}
+
+function Remove-FujiCredential {
+    param([Parameter(Mandatory)][string]$Target)
+    return [bool](Get-FujiCredNativeType)::CredDeleteW($script:FujiCredPrefix + $Target, [uint32]$script:FujiCredLimits.Type, [uint32]0)
+}
 
 # ===== src/Csv.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -509,7 +709,7 @@ function ConvertTo-FujiSafeCsvValue {
 # ---------------------------------------------------------------------------------------------
 #  Data model: macros file, steps and block structure
 #  A macro: [ordered]@{ id; name; targetWindow; steps = List[object] }
-#  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] }
+#  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] [; breakpoint = $true] }
 #  The file format is the HTA's fujikyun_macros.json (data version 27).
 # ---------------------------------------------------------------------------------------------
 
@@ -563,6 +763,7 @@ function ConvertTo-FujiMacroData {
             $step = [ordered]@{ cmd = $cmd; val = $val; label = $label }
             if ($cmd -eq 'GROUP_START' -and $s.Contains('when') -and ($s['when'] -eq 'first' -or $s['when'] -eq 'last')) { $step['when'] = [string]$s['when'] }
             if ($s.Contains('disabled') -and $s['disabled'] -eq $true) { $step['disabled'] = $true }
+            if ($s.Contains('breakpoint') -and $s['breakpoint'] -eq $true -and (Test-FujiBreakableStep -Step $step)) { $step['breakpoint'] = $true }
             if (-not $step.label) { $step.label = Get-FujiStepLabel -Cmd $cmd -Value $val }
             $steps.Add($step)
         }
@@ -728,6 +929,14 @@ function Test-FujiExecutableStep {
     if ($Step.Contains('disabled') -and $Step['disabled']) { return $false }
     $c = $Step.cmd
     return -not ($c -eq 'COMMENT' -or (Test-FujiBlockStart $c) -or (Test-FujiBlockEnd $c) -or (Test-FujiBlockMiddle $c))
+}
+
+# A step a run can stop before (a breakpoint, stepping): not a comment, a block end or ELSE / CATCH
+function Test-FujiBreakableStep {
+    param([System.Collections.IDictionary]$Step)
+    if ($Step.Contains('disabled') -and $Step['disabled']) { return $false }
+    $c = [string]$Step.cmd
+    return -not ($c -eq 'COMMENT' -or (Test-FujiBlockEnd $c) -or (Test-FujiBlockMiddle $c))
 }
 
 # ===== src/Editor.ps1 =====
@@ -1529,6 +1738,44 @@ function Switch-FujiEditorStepDisabled {
     return $true
 }
 
+# Breakpoint on the selected step: a run stops before it (the step is kept as it is)
+function Switch-FujiEditorBreakpoint {
+    param([Parameter(Mandatory)][hashtable]$Editor)
+    $steps = Get-FujiCurrentStepList $Editor
+    $sel = $Editor.Selected
+    if ($sel -lt 0 -or $sel -ge $steps.Count) {
+        Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.breakSelect') -Level 'warn'
+        return $false
+    }
+    $step = $steps[$sel]
+    if ($step.Contains('breakpoint')) {
+        $step.Remove('breakpoint')
+        $key = 'editor.history.breakOff'
+    } else {
+        if (-not (Test-FujiBreakableStep -Step $step)) {
+            Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.noBreak' ((Get-FujiCommandDef $step.cmd)['title'])) -Level 'warn'
+            return $false
+        }
+        $step['breakpoint'] = $true
+        $key = 'editor.history.breakOn'
+    }
+    Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText $key (Get-FujiStepCaption $step))
+    return $true
+}
+
+# Where a partial run starts and ends. Mode 'from': the selected step to the end of the macro;
+# 'only': the selected step (a block start: the whole block). @{ StartAt; EndAt } or @{ Error }.
+function Get-FujiPartialRun {
+    param([Parameter(Mandatory)][hashtable]$Editor, [ValidateSet('from', 'only')][string]$Mode)
+    $steps = Get-FujiCurrentStepList $Editor
+    $sel = $Editor.Selected
+    if ($sel -lt 0 -or $sel -ge $steps.Count) { return @{ Error = (Get-FujiText 'editor.partialSelect') } }
+    $cmd = [string]$steps[$sel].cmd
+    if ((Test-FujiBlockEnd $cmd) -or (Test-FujiBlockMiddle $cmd)) { return @{ Error = (Get-FujiText 'editor.partialMarker' ((Get-FujiCommandDef $cmd)['title'])) } }
+    if ($Mode -eq 'from') { return @{ StartAt = $sel; EndAt = -1 } }
+    return @{ StartAt = $sel; EndAt = (Get-FujiBlockRange -Steps $steps -Index $sel).To }
+}
+
 # ----------------------------------------------------------------- the step editor dialog
 # @{ Values = ordered settings by field id (prop fields too); CustomLabel = label typed by the user }
 function Get-FujiStepEditState {
@@ -1554,7 +1801,7 @@ function Complete-FujiStepEdit {
     $def = Get-FujiCommandDef $Cmd
     $v = [ordered]@{}
     foreach ($f in $def['fields']) {
-        if ($f['type'] -eq 'capture' -or $f['type'] -eq 'rectcapture') { continue }
+        if (Test-FujiButtonField $f) { continue }
         $id = [string]$f['id']
         $text = ''
         if ($Raw.Contains($id) -and $null -ne $Raw[$id]) { $text = [string]$Raw[$id] }
@@ -1607,6 +1854,14 @@ function Get-FujiCsvHeaderName {
     return ''
 }
 
+# Set by the window: { param($Path) ... } giving an Excel book's first sheet as CSV text
+$script:FujiWorkbookReader = $null
+
+function Test-FujiWorkbookPath {
+    param([AllowEmptyString()][string]$Path)
+    return ([string]$Path -match '\.(xlsx|xlsm|xls)$')
+}
+
 # Reads a CSV into the editor. Returns @{ Ok; HeaderForced } (HeaderForced: a results / error CSV
 # turns "first line is the header" on)
 function Import-FujiEditorCsv {
@@ -1621,7 +1876,13 @@ function Import-FujiEditorCsv {
         return @{ Ok = $false; HeaderForced = $false }
     }
     try {
-        $res = Read-FujiCsvText -Path $p -Encoding $Encoding
+        if (Test-FujiWorkbookPath -Path $p) {
+            # An Excel book: its first sheet, as Excel shows it (dates and numbers as displayed)
+            if ($null -eq $script:FujiWorkbookReader) { throw (Get-FujiText 'editor.csv.bookUnsupported') }
+            $res = @{ Text = [string](& $script:FujiWorkbookReader $p); Encoding = 'xlsx' }
+        } else {
+            $res = Read-FujiCsvText -Path $p -Encoding $Encoding
+        }
         $parsed = ConvertFrom-FujiCsv -Text $res.Text
     } catch {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.failed' $_.Exception.Message) -Level 'error'
@@ -1981,6 +2242,8 @@ $script:FujiCommandUnsafe = New-Object -TypeName System.Text.RegularExpressions.
 # A RUN that starts PowerShell also refuses PowerShell's own quote, variable, statement and block characters
 # (PowerShell reads the curly quotes U+2018-U+201E as quotes too), so a value cannot leave its '...' or end the statement
 $script:FujiPowerShellUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('["&|<>^%\r\n\x27`$;(){}\u2018-\u201E]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
+# A value inserted into a file path a step writes: no "..", no drive or stream ":", no root at the start
+$script:FujiPathUnsafe = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\.\.|[:\r\n]|^[\\/]', [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
 $script:FujiPowerShellCommand = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @('\b(powershell|pwsh)\b', ([System.Text.RegularExpressions.RegexOptions]::CultureInvariant -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
 
 # The characters RUN refuses in inserted values: Command is the RUN text before insertion
@@ -2082,18 +2345,28 @@ function Expand-FujiPlaceholder {
 # ---------------------------------------------------------------------------------------------
 #  Recording: the recorder's event lines -> steps (the HTA's rules)
 #  Lines (tab separated): S title = window came to the front, W ms = pause, C x y kind = click at,
-#  N name x y = click on a named button, K keys = key with Ctrl / Alt / named key, T text = typed
-#  text, J = typing through the Japanese input method (not recordable as keys)
+#  N name x y = click on a named button, F name x y = click into a named text box, K keys = key
+#  with Ctrl / Alt / named key, T text = typed text, J = typing through the Japanese input method
+#  (not recordable as keys). A click into a named text box followed by typing becomes FIELD_SET.
 # ---------------------------------------------------------------------------------------------
 
 function ConvertFrom-FujiRecording {
     param([AllowEmptyString()][string]$Payload)
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $lastSwitch = ''
+    # a click into a named text box waits for what is typed next (pauses in between are kept)
+    $field = $null
     foreach ($line in ([string]$Payload).Split("`n")) {
         $f = $line.TrimEnd("`r").Split("`t")
         $step = $null
+        if ($null -ne $field -and $f[0] -ne 'T' -and $f[0] -ne 'W') {
+            $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' }))))
+            $field = $null
+        }
         switch ($f[0]) {
+            'F' {
+                if ($f.Count -ge 4) { $field = @{ Name = $f[1]; X = $f[2]; Y = $f[3] } }
+            }
             'S' {
                 if ($f.Count -lt 2) { break }
                 $title = $f[1].Trim()
@@ -2134,7 +2407,12 @@ function ConvertFrom-FujiRecording {
             'T' {
                 $v = ''
                 if ($f.Count -ge 2) { $v = $f[1] }
-                $step = @{ cmd = 'TEXT'; val = $v }
+                if ($null -ne $field) {
+                    $step = @{ cmd = 'FIELD_SET'; val = (ConvertTo-FujiStepValue -Cmd 'FIELD_SET' -Settings ([ordered]@{ name = $field.Name; text = $v; nth = '1'; how = 'AUTO' })) }
+                    $field = $null
+                } else {
+                    $step = @{ cmd = 'TEXT'; val = $v }
+                }
             }
             'J' { $step = @{ cmd = 'COMMENT'; val = (Get-FujiText 'rec.imeNote') } }
         }
@@ -2142,6 +2420,7 @@ function ConvertFrom-FujiRecording {
             $steps.Add([ordered]@{ cmd = $step.cmd; val = $step.val; label = (Get-FujiStepLabel -Cmd $step.cmd -Value $step.val) })
         }
     }
+    if ($null -ne $field) { $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' })))) }
     while ($steps.Count -gt 0 -and $steps[$steps.Count - 1].cmd -eq 'WAIT') { $steps.RemoveAt($steps.Count - 1) }
     return , $steps
 }
@@ -2195,6 +2474,12 @@ function Add-FujiRecordedStep {
 #    Confirm {Caption, Message} -> 'continue'|'skip'|'stop'
 #    Ask {Caption, Message, Default} -> @{ Choice = 'continue'|'skip'|'stop'; Value }
 #    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {}   Notify {}   EndRun {}
+#    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
+#    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
+#    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
+#    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
+#    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
+#    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -2270,16 +2555,25 @@ function New-FujiRun {
         [int]$Interval = 300,
         [bool]$SafeMode = $false,
         [string]$Directory = '',
-        [scriptblock]$ResolvePath = $null
+        [scriptblock]$ResolvePath = $null,
+        [int]$StartAt = -1,
+        [int]$EndAt = -1,
+        [bool]$Breaks = $true,
+        [bool]$Stepping = $false,
+        [System.Collections.IDictionary]$Vars = $null
     )
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($s in $Macro.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
+    # Values handed over by what started the run (the file or window of a trigger)
+    $startVars = [ordered]@{}
+    if ($null -ne $Vars) { foreach ($k in $Vars.Keys) { $startVars[[string]$k] = [string]$Vars[$k] } }
     return @{
         Io = $Io; Directory = $Directory; ResolvePath = $ResolvePath; Macro = $Macro; Macros = $Macros; Header = $Header; Rows = $Rows
         Steps = $steps; RootSteps = $steps; CallStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         TargetWindow = [string]$Macro.targetWindow; ActiveTitle = [string]$Macro.targetWindow
         RowPos = 0; StepIndex = 0; Interval = [Math]::Max(0, $Interval); SafeMode = $SafeMode
-        DoneRows = 0; SkippedRows = 0; Vars = [ordered]@{}
+        StartAt = $StartAt; EndAt = $EndAt; Breaks = $Breaks; Stepping = $Stepping
+        DoneRows = 0; SkippedRows = 0; Vars = $startVars
         LoopStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         TryStack = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         FinalOnly = $false; FinalGroupEnd = -1
@@ -2369,6 +2663,12 @@ function ConvertTo-FujiSendKey {
             if ($m.Groups[1].Success) { $n = [int]$m.Groups[1].Value }
             return (' ' * $n)
         }, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
+# Text typed as it is with SendKeys: its special characters + ^ % ~ ( ) { } [ ] each in braces
+function ConvertTo-FujiSendKeyLiteral {
+    param([AllowEmptyString()][string]$Text)
+    return [regex]::Replace([string]$Text, '[+^%~(){}\[\]]', { param($m) '{' + $m.Value + '}' })
 }
 
 # A one-setting command whose field takes placeholders has its whole value expanded
@@ -2631,6 +2931,21 @@ function Resolve-FujiRunError {
             continue
         }
         $f = $Run.TryStack[$Run.TryStack.Count - 1]
+        if ($f.ContainsKey('Kind') -and $f.Kind -eq 'RETRY') {
+            $text = $Message -replace ('^' + [char]::ConvertFromUtf32(0x1F6A8) + '\s*'), ''
+            if ($f.Attempt -lt $f.Times) {
+                $f.Attempt++
+                $Run.Vars[(Get-FujiText 'data.retryVar')] = [string]$f.Attempt
+                Write-FujiRunLog $Run (Get-FujiText 'run.retrying' $text $f.Attempt $f.Times $f.Wait) 'warn'
+                & $Run.Io.Watch
+                Wait-FujiRun -Run $Run -Ms $f.Wait
+                $Run.StepIndex = $f.Start + 1
+                return $true
+            }
+            Write-FujiRunLog $Run (Get-FujiText 'run.retryGaveUp' $f.Times) 'warn'
+            $Run.TryStack.RemoveAt($Run.TryStack.Count - 1)
+            continue
+        }
         if ($f.CatchIndex -ge 0 -and $Run.StepIndex -gt $f.CatchIndex) {
             # the error happened inside the CATCH section itself: pass it outward
             $Run.TryStack.RemoveAt($Run.TryStack.Count - 1)
@@ -2718,6 +3033,7 @@ function Complete-FujiRun {
 function Stop-FujiRunWithError {
     param([hashtable]$Run, [hashtable]$Result)
     Write-FujiRunLog $Run $Result.Message 'error'
+    Save-FujiErrorShot -Run $Run
     if ($Result.RecordRow) { Add-FujiErrorRow -Run $Run -Reason $Result.Message }
     if ($Run.FinalOnly -and $null -ne $Run.CurrentResult) {
         # The skipped last row already has its status: keep the error visible in its note
@@ -2729,6 +3045,49 @@ function Stop-FujiRunWithError {
     Complete-FujiRun -Run $Run -Status 'error'
     & $Run.Io.Alarm
     & $Run.Io.FocusSelf
+}
+
+# The whole screen at the moment a run stops with an error, kept with the other evidence
+function Save-FujiErrorShot {
+    param([hashtable]$Run)
+    try {
+        $now = & $Run.Io.Now
+        $row = Get-FujiRunCurrentRow $Run
+        $name = Get-FujiSafeFileName (Get-FujiText 'run.errorShotName' $row.No)
+        $folder = Join-Path (Join-Path $Run.Directory $script:FujiEvidenceFolder) $now.ToString('yyyyMMdd')
+        $path = Join-Path $folder ($name + '_' + $now.ToString('HHmmss') + '.png')
+        [void](& $Run.Io.Screenshot $path $true)
+        Write-FujiRunLog $Run (Get-FujiText 'run.errorShot' $path) 'warn'
+        Add-FujiResultValue -Run $Run -Name (Get-FujiText 'run.errorShotColumn') -Value $path
+    } catch {
+        # the run is stopping anyway: a failed picture only gets a line in the log
+        Write-FujiRunLog $Run (Get-FujiText 'run.errorShotFailed' $_.Exception.Message) 'warn'
+    }
+}
+
+# Debugging: stop before a step with a breakpoint, or before every step while stepping
+function Test-FujiRunBreakAt {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    if (-not $Run.Breaks) { return $false }
+    if (-not (Test-FujiBreakableStep -Step $Step)) { return $false }
+    return ($Run.Stepping -or ($Step.Contains('breakpoint') -and $Step['breakpoint']))
+}
+
+function Invoke-FujiRunBreak {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    $no = $Run.StepIndex + 1
+    $where = Get-FujiText 'run.breakWhere' $no
+    if ($Run.CallStack.Count -gt 0) { $where = Get-FujiText 'run.breakWhereCalled' $Run.CallStack[$Run.CallStack.Count - 1].Name $no }
+    $label = [string]$Step.label
+    if (-not $label) { $label = Get-FujiStepLabel -Cmd $Step.cmd -Value $Step.val }
+    $key = 'run.breakPoint'
+    if ($Run.Stepping) { $key = 'run.breakStep' }
+    $message = Get-FujiText $key $where (Format-FujiShort $label 40)
+    Write-FujiRunLog $Run $message 'warn'
+    & $Run.Io.Watch
+    $choice = & $Run.Io.Break $message
+    $Run.Stepping = ($choice -eq 'step')
+    Resume-FujiRunTarget -Run $Run
 }
 
 # One CSV row. $false when the run ended (error) during it.
@@ -2745,6 +3104,11 @@ function Invoke-FujiRunRow {
     $Run.CurrentResult = Start-FujiResultRow -Run $Run -Row $row
     Update-FujiRunProgress -Run $Run
     Write-FujiRunLog $Run (Get-FujiText 'run.rowStart' (Get-FujiRunRowCaption $row) ($Run.RowPos + 1) $Run.Rows.Count) 'run'
+    if ($Run.RowPos -eq 0 -and $Run.StartAt -gt 0 -and $Run.StartAt -lt $Run.Steps.Count) {
+        # "run from here": the first row starts at the chosen step, the rows after it from the top
+        $Run.StepIndex = $Run.StartAt
+        Write-FujiRunLog $Run (Get-FujiText 'run.startAt' ($Run.StartAt + 1))
+    }
     if ($Run.ActiveTitle) {
         if (-not (Invoke-FujiActivate -Run $Run -Title $Run.ActiveTitle)) {
             Stop-FujiRunWithError -Run $Run -Result (Get-FujiRunError (Get-FujiText 'run.targetNotFound' $Run.ActiveTitle $script:FujiRunLimits.WindowRetryMax))
@@ -2753,6 +3117,10 @@ function Invoke-FujiRunRow {
         Wait-FujiRun -Run $Run -Ms 150
     }
     while ($true) {
+        if ($Run.EndAt -ge 0 -and $Run.CallStack.Count -eq 0 -and -not $Run.FinalOnly -and $Run.StepIndex -gt $Run.EndAt -and $Run.StepIndex -lt $Run.Steps.Count) {
+            # "run only this": the chosen step (block) is done
+            $Run.StepIndex = $Run.Steps.Count
+        }
         if ($Run.FinalOnly -and $Run.StepIndex -gt $Run.FinalGroupEnd) {
             # Only "last row only" groups run for a skipped last row
             $g = Find-FujiFinalGroup -Steps $Run.Steps -From $Run.StepIndex -SkipFirstOnly ($Run.RowPos -ne 0)
@@ -2779,7 +3147,9 @@ function Invoke-FujiRunRow {
         & $Run.Io.Highlight $highlight
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
-        $res = Invoke-FujiRunStep -Run $Run -Step $Run.Steps[$Run.StepIndex]
+        $current = $Run.Steps[$Run.StepIndex]
+        if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+        $res = Invoke-FujiRunStep -Run $Run -Step $current
         switch ($res.Action) {
             'skipRow' {
                 if ($Run.FinalOnly) {
@@ -3025,6 +3395,31 @@ function Invoke-FujiRunCommand {
             $Run.TryStack = $keep
             return (Get-FujiRunNext 0)
         }
+        'RETRY_START' {
+            $keep = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($f in $Run.TryStack) { if ($f.Start -ne $Run.StepIndex) { $keep.Add($f) } }
+            $keep.Add(@{ Kind = 'RETRY'; Start = $Run.StepIndex; End = (Find-FujiBlockEnd -Steps $Run.Steps -StartIndex $Run.StepIndex); CatchIndex = -1
+                    Attempt = 0; Times = [Math]::Max(1, (Get-FujiInt -Text $p['times'] -Default 3)); Wait = [Math]::Max(0, (Get-FujiInt -Text $p['wait'] -Default 2000)) })
+            $Run.TryStack = $keep
+            $Run.Vars[(Get-FujiText 'data.retryVar')] = '0'
+            return (Get-FujiRunNext 0)
+        }
+        'RETRY_END' {
+            $keep = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($f in $Run.TryStack) {
+                if ($f.End -eq $Run.StepIndex) {
+                    if ($f.ContainsKey('Attempt') -and $f.Attempt -gt 0) { Write-FujiRunLog $Run (Get-FujiText 'run.retryDone' $f.Attempt) 'ok' }
+                } else {
+                    $keep.Add($f)
+                }
+            }
+            $Run.TryStack = $keep
+            return (Get-FujiRunNext 0)
+        }
+        'FIELD_SET' { return (Invoke-FujiFieldSet -Run $Run -Settings $p) }
+        'FIELD_GET' { return (Invoke-FujiFieldGet -Run $Run -Settings $p) }
+        'TABLE_READ' { return (Invoke-FujiTableRead -Run $Run -Settings $p) }
+        'SECRET' { return (Invoke-FujiSecret -Run $Run -Settings $p) }
         'SET_VAR' {
             $value = Expand-FujiRunText -Run $Run -Text $p['value']
             if ($p['mode'] -eq 'CALC') {
@@ -3377,17 +3772,122 @@ function Invoke-FujiExcel {
     return (Get-FujiRunNext 0)
 }
 
+# ----------------------------------------------------------------- fields, tables and passwords by UI Automation
+function Get-FujiFieldRequest {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    return @{ Name = ([string]$Settings['name']).Trim(); Nth = [Math]::Max(1, (Get-FujiInt -Text $Settings['nth'] -Default 1)); Window = $Run.ActiveTitle }
+}
+
+function Invoke-FujiFieldSet {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $err = Confirm-FujiInputTarget -Run $Run
+    if ($err) { return $err }
+    $request = Get-FujiFieldRequest -Run $Run -Settings $Settings
+    $request.Text = Expand-FujiRunText -Run $Run -Text $Settings['text']
+    $request.Mode = [string]$Settings['how']
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldSearch' $request.Name)
+    try { $how = [string](& $Run.Io.SetField $request) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.fieldFailed' $request.Name $_.Exception.Message)) }
+    if ($how -eq 'FOCUSED') {
+        # the field has the focus: replace what it holds
+        & $Run.Io.SendKeys '^a'
+        if ($request.Text -eq '') {
+            & $Run.Io.SendKeys '{DEL}'
+            Write-FujiRunLog $Run (Get-FujiText 'run.fieldCleared' $request.Name)
+            return (Get-FujiRunNext)
+        }
+        return (Invoke-FujiPaste -Run $Run -Text $request.Text -What (Get-FujiText 'run.whatField' $request.Name))
+    }
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldSet' $request.Name (Format-FujiShort $request.Text 30))
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiFieldGet {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $request = Get-FujiFieldRequest -Run $Run -Settings $Settings
+    $name = ([string]$Settings['var']).Trim()
+    try { $text = [string](& $Run.Io.GetField $request) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.fieldFailed' $request.Name $_.Exception.Message)) }
+    $text = $text -replace '(\r\n|\n|\r)+$', ''
+    $Run.Vars[$name] = $text
+    Add-FujiResultValue -Run $Run -Name $name -Value $text
+    Write-FujiRunLog $Run (Get-FujiText 'run.fieldGot' $request.Name $name (Format-FujiShort $text 40))
+    & $Run.Io.Watch
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiTableRead {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    # Inserted values (CSV, screen) only name a file: they cannot climb out of the folder ("..") or
+    # point to another drive or root, and the file is always a .csv (never fujikyun.ps1 and the like)
+    $unsafe = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $path = (Expand-FujiPlaceholder -Text $Settings['path'] -Context (Get-FujiRunContext $Run) -Unsafe $unsafe -UnsafePattern $script:FujiPathUnsafe).Trim().Trim('"')
+    if ($unsafe.Count -gt 0) { return (Get-FujiRunError (Get-FujiText 'run.tablePathUnsafe' ($unsafe -join ([string][char]0x3001)))) }
+    if (-not $path.EndsWith('.csv', [System.StringComparison]::OrdinalIgnoreCase)) { return (Get-FujiRunError (Get-FujiText 'run.tablePathCsv' $path)) }
+    if (-not [System.IO.Path]::IsPathRooted($path)) { $path = Join-Path $Run.Directory $path }
+    $request = @{ Name = ([string]$Settings['name']).Trim(); Window = $Run.ActiveTitle }
+    Write-FujiRunLog $Run (Get-FujiText 'run.tableSearch')
+    try { $table = & $Run.Io.ReadTable $request } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.tableFailed' $_.Exception.Message)) }
+    $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    # Screen text that looks like a formula is kept as text when the CSV is opened in Excel
+    $header = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($h in $table.Header) { $header.Add((ConvertTo-FujiSafeCsvValue ([string]$h))) }
+    if ($header.Count -gt 0) { $rows.Add($header.ToArray()) }
+    $count = 0
+    foreach ($r in $table.Rows) {
+        $cells = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        foreach ($c in $r) { $cells.Add((ConvertTo-FujiSafeCsvValue ([string]$c))) }
+        $rows.Add($cells.ToArray())
+        $count++
+    }
+    try { & $Run.Io.SaveText $path (ConvertTo-FujiCsvText -Rows $rows.ToArray()) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.tableSaveFailed' $path $_.Exception.Message)) }
+    $var = ([string]$Settings['var']).Trim()
+    if ($var) { $Run.Vars[$var] = [string]$count; & $Run.Io.Watch }
+    Write-FujiRunLog $Run (Get-FujiText 'run.tableSaved' $count $path) 'ok'
+    return (Get-FujiRunNext)
+}
+
+function Invoke-FujiSecret {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $target = ([string]$Settings['target']).Trim()
+    $part = Get-FujiText 'label.secretPassword'
+    if ($Settings['part'] -eq 'USER') { $part = Get-FujiText 'label.secretUser' }
+    try { $cred = & $Run.Io.GetSecret $target } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.secretFailed' $target $_.Exception.Message)) }
+    if ($null -eq $cred) { return (Get-FujiRunError (Get-FujiText 'run.secretMissing' $target)) }
+    $value = [string]$cred.Password
+    if ($Settings['part'] -eq 'USER') { $value = [string]$cred.User }
+    if ($value -eq '') { return (Get-FujiRunError (Get-FujiText 'run.secretEmpty' $target $part)) }
+    $err = Confirm-FujiInputTarget -Run $Run
+    if ($err) { return $err }
+    # Only into the window it was registered for: a macro (an imported one too) cannot type it into
+    # Notepad and copy it out. "On error" does not catch this stop.
+    if (-not $cred.Window -or -not $cred.Program) { return (Get-FujiRunError -Message (Get-FujiText 'run.secretNoPlace' $target) -Uncatchable $true) }
+    $front = & $Run.Io.ForegroundWindow
+    if (-not (Test-FujiSecretPlace -Foreground $front -Program $cred.Program -Window $cred.Window)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretWrongPlace' $target ([string]$front.Title) $cred.Window) -Uncatchable $true)
+    }
+    # The password itself only into a password field (it shows dots and cannot be read back or copied):
+    # typed into an ordinary field of the right window, a later step could read it out
+    if ($Settings['part'] -ne 'USER' -and -not [bool](& $Run.Io.FocusIsPassword)) {
+        return (Get-FujiRunError -Message (Get-FujiText 'run.secretNotPasswordField' $target) -Uncatchable $true)
+    }
+    & $Run.Io.TypeSecret $value
+    Write-FujiRunLog $Run (Get-FujiText 'run.secretTyped' $target $part)
+    return (Get-FujiRunNext)
+}
+
 # ===== src/Schedule.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Schedules (the HTA's rules) and the per-PC settings file
 #  A schedule: [ordered]@{ id; macroId; macroName; csvPath; header; time 'HH:mm';
-#  repeat 'DAILY'|'WEEKDAYS'|'ONCE'; date 'yyyy/MM/dd' (ONCE); enabled; closeAfter; lastRun; taskName }
+#  repeat 'DAILY'|'WEEKDAYS'|'ONCE'; date 'yyyy/MM/dd' (ONCE); enabled; closeAfter; lastRun; taskName;
+#  kind 'TIME'|'HOTKEY'|'FILE'|'WINDOW'; hotkey 'Ctrl+Shift+1'; folder; pattern '*.csv'; window; useFile }
 #  This window runs a due schedule while it is open; a Windows scheduled task can also start the
-#  app with -AutoRun <id> at the time.
+#  app with -AutoRun <id> at the time. The other kinds (triggers) work while the app is open:
+#  a key pressed anywhere, a new file in a folder, a window that appears.
 # ---------------------------------------------------------------------------------------------
 
 $script:FujiSettingsFile = 'fujikyun_settings.json'
 $script:FujiScheduleRepeats = @('DAILY', 'WEEKDAYS', 'ONCE')
+$script:FujiScheduleKinds = @('TIME', 'HOTKEY', 'FILE', 'WINDOW')
 
 function Read-FujiSetting {
     param([Parameter(Mandatory)][string]$Directory)
@@ -3402,7 +3902,9 @@ function Read-FujiSetting {
     }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
-            if ($x -is [System.Collections.IDictionary] -and $x.Contains('id') -and $x['id'] -and $x.Contains('time') -and $x['time']) { $settings.schedules.Add($x) }
+            if ($x -isnot [System.Collections.IDictionary] -or -not $x.Contains('id') -or -not $x['id']) { continue }
+            $kind = Get-FujiScheduleKind $x
+            if (($kind -eq 'TIME' -and $x.Contains('time') -and $x['time']) -or $kind -ne 'TIME') { $settings.schedules.Add($x) }
         }
     }
     return $settings
@@ -3419,9 +3921,17 @@ function Get-FujiScheduleValue {
     return $Default
 }
 
-# Minutes after midnight, -1 when the time is not HH:mm
+function Get-FujiScheduleKind {
+    param([System.Collections.IDictionary]$Schedule)
+    $k = ([string](Get-FujiScheduleValue $Schedule 'kind' 'TIME')).ToUpperInvariant()
+    if ($script:FujiScheduleKinds -notcontains $k) { return 'TIME' }
+    return $k
+}
+
+# Minutes after midnight, -1 when the time is not HH:mm (or the schedule is a trigger)
 function Get-FujiScheduleMinute {
     param([System.Collections.IDictionary]$Schedule)
+    if ((Get-FujiScheduleKind $Schedule) -ne 'TIME') { return -1 }
     $m = [regex]::Match((ConvertTo-FujiHalfWidthDigit -Text ([string](Get-FujiScheduleValue $Schedule 'time'))).Trim(), '^([0-9]{1,2}):([0-9]{2})$')
     if (-not $m.Success) { return -1 }
     return [int]$m.Groups[1].Value * 60 + [int]$m.Groups[2].Value
@@ -3467,7 +3977,11 @@ function Get-FujiNextSchedule {
 function New-FujiSchedule {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates an in-memory value only')]
     param([string]$MacroId, [string]$MacroName, [AllowEmptyString()][string]$CsvPath, [bool]$Header, [AllowEmptyString()][string]$Time,
-        [string]$Repeat, [AllowEmptyString()][string]$DateText, [bool]$CloseAfter)
+        [string]$Repeat, [AllowEmptyString()][string]$DateText, [bool]$CloseAfter,
+        [string]$Kind = 'TIME', [AllowEmptyString()][string]$Hotkey = '', [AllowEmptyString()][string]$Folder = '',
+        [AllowEmptyString()][string]$Pattern = '', [AllowEmptyString()][string]$Window = '', [bool]$UseFile = $false)
+    if ($script:FujiScheduleKinds -notcontains $Kind) { $Kind = 'TIME' }
+    if ($Kind -ne 'TIME') { return (New-FujiTrigger -MacroId $MacroId -MacroName $MacroName -CsvPath $CsvPath -Header $Header -Kind $Kind -Hotkey $Hotkey -Folder $Folder -Pattern $Pattern -Window $Window -UseFile $UseFile) }
     $t = ((ConvertTo-FujiHalfWidthDigit -Text $Time).Trim()).Replace([string][char]0xFF1A, ':')
     $m = [regex]::Match($t, '^([0-9]{1,2}):([0-9]{2})$')
     if (-not $m.Success -or [int]$m.Groups[1].Value -ge 24 -or [int]$m.Groups[2].Value -ge 60) { return @{ Error = (Get-FujiText 'schedule.badTime') } }
@@ -3489,6 +4003,127 @@ function New-FujiSchedule {
 function Get-FujiScheduleRepeatName {
     param([string]$Repeat)
     return [string](Get-FujiText ('schedule.repeats.' + $Repeat))
+}
+
+# ----------------------------------------------------------------- triggers
+function New-FujiTrigger {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates an in-memory value only')]
+    param([string]$MacroId, [string]$MacroName, [AllowEmptyString()][string]$CsvPath, [bool]$Header, [string]$Kind,
+        [AllowEmptyString()][string]$Hotkey, [AllowEmptyString()][string]$Folder, [AllowEmptyString()][string]$Pattern,
+        [AllowEmptyString()][string]$Window, [bool]$UseFile)
+    $s = [ordered]@{
+        id = (New-FujiId); kind = $Kind; macroId = $MacroId; macroName = $MacroName; csvPath = $CsvPath.Trim().Trim('"'); header = $Header
+        time = ''; repeat = ''; date = ''; enabled = $true; closeAfter = $false; lastRun = ''
+    }
+    switch ($Kind) {
+        'HOTKEY' {
+            $k = ConvertFrom-FujiHotkeyText -Text $Hotkey
+            if ($null -eq $k) { return @{ Error = (Get-FujiText 'schedule.badHotkey') } }
+            $s['hotkey'] = $k.Text
+        }
+        'FILE' {
+            $f = $Folder.Trim().Trim('"')
+            if (-not $f) { return @{ Error = (Get-FujiText 'schedule.badFolder') } }
+            $p = $Pattern.Trim()
+            if (-not $p) { $p = '*' }
+            if ($p.IndexOfAny([char[]]@('\', '/', ':')) -ge 0) { return @{ Error = (Get-FujiText 'schedule.badPattern') } }
+            $s['folder'] = $f
+            $s['pattern'] = $p
+            $s['useFile'] = $UseFile
+        }
+        'WINDOW' {
+            $w = $Window.Trim()
+            if (-not $w) { return @{ Error = (Get-FujiText 'schedule.badWindow') } }
+            $s['window'] = $w
+        }
+    }
+    return @{ Schedule = $s }
+}
+
+# "Ctrl+Shift+1" -> @{ Ctrl; Alt; Shift; Vk; Text } ($null when not a usable key). A letter or digit
+# needs Ctrl or Alt (alone it would fire while typing); F1-F12 may be used alone.
+function ConvertFrom-FujiHotkeyText {
+    param([AllowEmptyString()][string]$Text)
+    $parts = @(([string]$Text).ToUpperInvariant().Replace([string][char]0xFF0B, '+').Split('+') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+    if ($parts.Count -eq 0) { return $null }
+    $k = @{ Ctrl = $false; Alt = $false; Shift = $false; Vk = 0; Text = '' }
+    $key = ''
+    foreach ($p in $parts) {
+        switch -Regex ($p) {
+            '^(CTRL|CONTROL)$' { $k.Ctrl = $true; continue }
+            '^ALT$' { $k.Alt = $true; continue }
+            '^SHIFT$' { $k.Shift = $true; continue }
+            default { if ($key) { return $null }; $key = $p }
+        }
+    }
+    $key = ConvertTo-FujiHalfWidthDigit -Text $key
+    if ($key -match '^[A-Z]$' -or $key -match '^[0-9]$') {
+        if (-not ($k.Ctrl -or $k.Alt)) { return $null }
+        $k.Vk = [int][char]$key
+    } elseif ($key -match '^F([1-9]|1[0-2])$') {
+        $k.Vk = 0x6F + [int]$Matches[1]
+    } else {
+        return $null
+    }
+    $names = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    if ($k.Ctrl) { $names.Add('Ctrl') }
+    if ($k.Alt) { $names.Add('Alt') }
+    if ($k.Shift) { $names.Add('Shift') }
+    $names.Add($key)
+    $k.Text = $names.ToArray() -join '+'
+    return $k
+}
+
+# A file trigger fires for a file that was not in the folder when watching began, once its size
+# and time stayed the same for two looks (so a file still being copied is not used half written).
+# State: @{ Seen = @{}; Pending = @{} } (name -> "length|ticks"); Files: @(@{ Name; Length; Ticks }).
+# Returns the names that are ready now. First: the first look, which only records what is there.
+function Update-FujiFileTrigger {
+    param([Parameter(Mandatory)][hashtable]$State, [AllowEmptyCollection()][object[]]$Files, [bool]$First = $false)
+    $ready = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $now = @{}
+    foreach ($f in $Files) {
+        $key = ([string]$f.Name).ToLowerInvariant()
+        $sig = '{0}|{1}' -f $f.Length, $f.Ticks
+        $now[$key] = $true
+        if ($First) { $State.Seen[$key] = $sig; continue }
+        if ($State.Seen.ContainsKey($key)) { continue }
+        if ($State.Pending.ContainsKey($key) -and $State.Pending[$key] -eq $sig) {
+            $State.Pending.Remove($key)
+            $State.Seen[$key] = $sig
+            $ready.Add([string]$f.Name)
+        } else {
+            $State.Pending[$key] = $sig
+        }
+    }
+    # a file that went away and comes back later counts as new again (keys copied: the tables change)
+    foreach ($table in @($State.Seen, $State.Pending)) {
+        $keys = New-Object -TypeName 'string[]' -ArgumentList $table.Count
+        $table.Keys.CopyTo($keys, 0)
+        foreach ($key in $keys) { if (-not $now.ContainsKey($key)) { $table.Remove($key) } }
+    }
+    return , $ready.ToArray()
+}
+
+# A window trigger fires when the window appears (it was not there at the previous look)
+function Update-FujiWindowTrigger {
+    param([Parameter(Mandatory)][hashtable]$State, [bool]$Present, [bool]$First = $false)
+    $was = [bool]$State.Present
+    $State.Present = $Present
+    return ($Present -and -not $was -and -not $First)
+}
+
+# What the schedule list shows in its "when" column
+function Get-FujiScheduleWhenText {
+    param([System.Collections.IDictionary]$Schedule)
+    switch (Get-FujiScheduleKind $Schedule) {
+        'HOTKEY' { return (Get-FujiText 'schedule.whenHotkey' (Get-FujiScheduleValue $Schedule 'hotkey')) }
+        'FILE' { return (Get-FujiText 'schedule.whenFile' (Get-FujiScheduleValue $Schedule 'folder') (Get-FujiScheduleValue $Schedule 'pattern' '*')) }
+        'WINDOW' { return (Get-FujiText 'schedule.whenWindow' (Get-FujiScheduleValue $Schedule 'window')) }
+    }
+    $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $Schedule 'repeat'))
+    if (Get-FujiScheduleValue $Schedule 'date') { $repeat += ' ' + $Schedule.date }
+    return ([string](Get-FujiScheduleValue $Schedule 'time') + ' ' + $repeat)
 }
 
 # ===== src/Text.ps1 =====
@@ -4377,6 +5012,168 @@ function Open-FujiFolder {
     Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') -ArgumentList ('/select,"' + $Path + '"')
 }
 
+# ===== gui/Credential.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  The password dialog of the SECRET step: register, change or remove a credential
+#  (src/Credential.ps1 reads and writes the Windows Credential Manager)
+# ---------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------- the dialog: register, change, remove
+# Returns the status text for the step dialog
+# DefaultWindow: the window title offered when nothing is registered yet (the macro's target window)
+function Show-FujiCredentialDialog {
+    param([Parameter(Mandatory)][string]$Target, [AllowEmptyString()][string]$DefaultWindow = '')
+    $existing = $null
+    try { $existing = Read-FujiCredential -Target $Target } catch { $existing = $null }
+    $width = Get-FujiScaled 480
+    $f = New-FujiDialogForm -Title (Get-FujiText 'cred.title' $Target) -Width $width -Height (Get-FujiScaled 470)
+    $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $layout.ColumnCount = 1
+    Add-FujiFullColumn -Table $layout
+    $layout.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 10)
+    $inner = $width - (Get-FujiScaled 40)
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.help') -MaxWidth $inner))
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.user')))
+    $userText = ''
+    if ($null -ne $existing) { $userText = $existing.User }
+    $user = New-FujiTextBox -Text $userText -Width $inner
+    [void]$layout.Controls.Add($user)
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.password')))
+    $pass = New-FujiTextBox -Width $inner
+    $pass.UseSystemPasswordChar = $true
+    [void]$layout.Controls.Add($pass)
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.again')))
+    $again = New-FujiTextBox -Width $inner
+    $again.UseSystemPasswordChar = $true
+    [void]$layout.Controls.Add($again)
+    # the only window the password may be typed into
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'cred.place') -MaxWidth $inner))
+    $windowText = $DefaultWindow
+    $programText = ''
+    if ($null -ne $existing -and $existing.Window) { $windowText = $existing.Window; $programText = $existing.Program }
+    $window = New-FujiTextBox -Text $windowText -Width $inner
+    [void]$layout.Controls.Add($window)
+    $placeRow = New-FujiFlow -NoWrap
+    $point = New-FujiButton -Text (Get-FujiText 'cred.point') -Tip (Get-FujiText 'cred.pointTip')
+    $point.Add_Click({ Invoke-FujiUi { Start-FujiCredentialPoint } })
+    $program = New-FujiLabel -Text (Get-FujiCredentialProgramText $programText)
+    [void]$placeRow.Controls.Add($point)
+    [void]$placeRow.Controls.Add($program)
+    [void]$layout.Controls.Add($placeRow)
+    $err = New-FujiLabel -Text '' -MaxWidth $inner
+    $err.ForeColor = Get-FujiColor '#c62828'
+    [void]$layout.Controls.Add($err)
+    $bar = New-FujiButtonBar
+    $script:Ui.CredDialog = @{ Target = $Target; User = $user; Pass = $pass; Again = $again; Error = $err; Result = ''
+        Window = $window; Program = $programText; ProgramLabel = $program; Timer = $null; Remaining = 0 }
+    $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $save = New-FujiButton -Text (Get-FujiText 'cred.save')
+    $save.Font = $script:Ui.BoldFont
+    $save.Add_Click({ Invoke-FujiUi { Complete-FujiCredentialDialog } })
+    # RightToLeft bar: the last added is leftmost
+    [void]$bar.Controls.Add($cancel)
+    [void]$bar.Controls.Add($save)
+    if ($null -ne $existing) {
+        $remove = New-FujiButton -Text (Get-FujiText 'cred.remove')
+        $remove.Add_Click({ Invoke-FujiUi { Remove-FujiCredentialFromDialog } })
+        [void]$bar.Controls.Add($remove)
+    }
+    $f.AcceptButton = $save
+    $f.CancelButton = $cancel
+    [void]$f.Controls.Add($layout)
+    [void]$f.Controls.Add($bar)
+    $f.Add_Shown({ if ($script:Ui.CredDialog.User.Text) { $script:Ui.CredDialog.Pass.Focus() } else { $script:Ui.CredDialog.User.Focus() } })
+    $f.Add_FormClosed({ if ($script:Ui.CredDialog.Timer) { $script:Ui.CredDialog.Timer.Stop(); $script:Ui.CredDialog.Timer.Dispose() } })
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+    $result = $script:Ui.CredDialog.Result
+    $script:Ui.CredDialog = $null
+    if ($result) { return $result }
+    return (Get-FujiCredentialStatus -Target $Target)
+}
+
+function Complete-FujiCredentialDialog {
+    $d = $script:Ui.CredDialog
+    if ($d.Pass.Text -eq '') { $d.Error.Text = Get-FujiText 'cred.empty'; return }
+    if ($d.Pass.Text -cne $d.Again.Text) { $d.Error.Text = Get-FujiText 'cred.mismatch'; return }
+    if ($d.Window.Text.Trim() -eq '' -or -not $d.Program) { $d.Error.Text = Get-FujiText 'cred.placeEmpty'; return }
+    $secret = New-Object -TypeName System.Security.SecureString
+    foreach ($ch in $d.Pass.Text.ToCharArray()) { $secret.AppendChar($ch) }
+    $secret.MakeReadOnly()
+    try {
+        Write-FujiCredential -Target $d.Target -Account $d.User.Text.Trim() -Secret $secret -Program $d.Program -Window $d.Window.Text.Trim()
+    } catch {
+        $d.Error.Text = Get-FujiText 'cred.failed' $_.Exception.Message
+        return
+    } finally {
+        $secret.Dispose()
+    }
+    $d.Pass.Clear()
+    $d.Again.Clear()
+    Write-FujiUiLog -Message (Get-FujiText 'cred.saved' $d.Target) -Level 'ok'
+    $d.Result = Get-FujiText 'cred.statusSet' $d.User.Text.Trim()
+    $d.Pass.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK
+}
+
+function Remove-FujiCredentialFromDialog {
+    $d = $script:Ui.CredDialog
+    $answer = Show-FujiChoice -Title (Get-FujiText 'cred.removeTitle') -Message (Get-FujiText 'cred.removeConfirm' $d.Target) -Buttons @((Get-FujiText 'cred.remove'), (Get-FujiText 'gui.cancel'))
+    if ($answer -ne 0) { return }
+    [void](Remove-FujiCredential -Target $d.Target)
+    Write-FujiUiLog -Message (Get-FujiText 'cred.removed' $d.Target) -Level 'ok'
+    $d.Result = Get-FujiText 'cred.statusNone'
+    $d.Pass.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK
+}
+
+# "registered (user: x)" / "not registered yet" for the step dialog (the password is never shown)
+function Get-FujiCredentialStatus {
+    param([AllowEmptyString()][string]$Target)
+    if (-not $Target) { return (Get-FujiText 'cred.statusNoTarget') }
+    try { $c = Read-FujiCredential -Target $Target } catch { return (Get-FujiText 'cred.failed' $_.Exception.Message) }
+    if ($null -eq $c) { return (Get-FujiText 'cred.statusNone') }
+    return (Get-FujiText 'cred.statusSet' $c.User)
+}
+
+function Get-FujiCredentialProgramText {
+    param([AllowEmptyString()][string]$Program)
+    if ($Program) { return (Get-FujiText 'cred.program' $Program) }
+    return (Get-FujiText 'cred.programNone')
+}
+
+# "Point at the window": 3 seconds to click the login window, then its title and program are taken
+function Start-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d.Timer) {
+        $d.Timer = New-Object -TypeName System.Windows.Forms.Timer
+        $d.Timer.Interval = 1000
+        $d.Timer.Add_Tick({ Invoke-FujiUi { Step-FujiCredentialPoint } })
+    }
+    $d.Remaining = 3
+    $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining
+    $d.Timer.Start()
+}
+
+function Step-FujiCredentialPoint {
+    $d = $script:Ui.CredDialog
+    if ($null -eq $d) { return }
+    $d.Remaining--
+    if ($d.Remaining -gt 0) { $d.ProgramLabel.Text = Get-FujiText 'cred.pointWait' $d.Remaining; return }
+    $d.Timer.Stop()
+    $front = Get-FujiForegroundWindowInfo
+    $form = $d.Window.FindForm()
+    if ($null -eq $front -or (Test-FujiSelfForeground)) {
+        $d.ProgramLabel.Text = Get-FujiText 'cred.pointNone'
+    } else {
+        $d.Window.Text = $front.Title
+        $d.Program = $front.Program
+        $d.ProgramLabel.Text = Get-FujiCredentialProgramText $front.Program
+    }
+    [void](Invoke-FujiWindowActivate -Handle $form.Handle)
+}
+
 # ===== gui/Diagnostics.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Environment check: what this PC lets the app do (shown in a list, also written to the log)
@@ -4784,6 +5581,17 @@ function New-FujiTopPanel {
         $btn.Add_Click($b[2])
         [void]$row.Controls.Add($btn)
     }
+    # debugging while making a macro: stop here, run from here, try only this step
+    foreach ($b in @(
+            @('gui.breakpoint', 'gui.breakpointTip', { Invoke-FujiUi { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } } }),
+            @('gui.runFrom', 'gui.runFromTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'from') } }),
+            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } })
+        )) {
+        $btn = New-FujiButton -Text (Get-FujiText $b[0]) -Tip (Get-FujiText $b[1])
+        $btn.Add_Click($b[2])
+        $btn.BackColor = Get-FujiColor '#fff0f3'
+        [void]$row.Controls.Add($btn)
+    }
     $recBtn = New-FujiButton -Text (Get-FujiText 'rec.button') -Tip (Get-FujiText 'rec.buttonTip')
     $recBtn.Add_Click({ Invoke-FujiUi { Switch-FujiRecording } })
     $script:Ui.RecordButton = $recBtn
@@ -4930,6 +5738,13 @@ function Show-FujiStepRow {
         [void](Write-FujiRowText -Graphics $g -Text $glyph -Font $script:Ui.SmallFont -Color $grey -X $lay.Toggle -Bounds $b)
     }
     $x = $lay.ToggleEnd
+    if ($step.Contains('breakpoint') -and $step['breakpoint']) {
+        # a breakpoint: a red dot in front of the step number
+        $d = Get-FujiScaled 10
+        $dot = New-Object -TypeName System.Drawing.SolidBrush -ArgumentList (Get-FujiColor '#e53935')
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        try { $g.FillEllipse($dot, $x, $b.Y + [int](($b.Height - $d) / 2), $d, $d) } finally { $dot.Dispose(); $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::Default }
+    }
     $no = New-Object -TypeName System.Drawing.Rectangle -ArgumentList $x, $b.Y, (Get-FujiScaled 36), $b.Height
     [System.Windows.Forms.TextRenderer]::DrawText($g, [string]($row.Index + 1), $script:Ui.SmallFont, $no, $grey, ($script:TextFlags -bor [System.Windows.Forms.TextFormatFlags]::Right))
     $x += Get-FujiScaled 44
@@ -5603,9 +6418,23 @@ function Invoke-FujiShortcut {
         if ($k -eq $keys::Escape) {
             $script:RunCtl.StopReason = Get-FujiText 'run.stopEsc'
             $KeyEvent.SuppressKeyPress = $true
+        } elseif ($k -eq $keys::F10) {
+            Step-FujiRunUi
+            $KeyEvent.SuppressKeyPress = $true
+        } elseif ($k -eq $keys::F5 -and $script:RunCtl.Paused) {
+            Switch-FujiRunPause
+            $KeyEvent.SuppressKeyPress = $true
         }
         return
     }
+    # function keys work even while a text box has the focus (they type nothing)
+    $fkey = $true
+    if ($k -eq $keys::F5 -and -not $KeyEvent.Shift) { [void](Start-FujiRunUi) }
+    elseif ($k -eq $keys::F6) { [void](Start-FujiRunUi -Partial 'from') }
+    elseif ($k -eq $keys::F9) { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } }
+    elseif ($k -eq $keys::F10) { [void](Start-FujiRunUi -Stepping) }
+    else { $fkey = $false }
+    if ($fkey) { $KeyEvent.SuppressKeyPress = $true; $KeyEvent.Handled = $true; return }
     $active = $script:Ui.Form.ActiveControl
     if ($active -is [System.Windows.Forms.TextBoxBase] -or $active -is [System.Windows.Forms.ComboBox]) { return }
     $handled = $true
@@ -5692,6 +6521,16 @@ public class FujiRecorder {
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // The name of a text box under the point, so typing into it can be "put text into a field by name"
+    static string FieldName(int x, int y) {
+        try {
+            AutomationElement el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
+            if (el == null || el.Current.ControlType != ControlType.Edit) { return ""; }
+            string n = el.Current.Name;
+            if (string.IsNullOrEmpty(n)) { n = el.Current.AutomationId; }
+            return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
+        } catch { return ""; }
+    }
     void Click(bool right) {
         FujiRecPoint p; GetCursorPos(out p);
         FlushText(); imeNoted = false;
@@ -5700,7 +6539,10 @@ public class FujiRecorder {
             ev[lastClickIndex] = "C\t" + lastClickX + "\t" + lastClickY + "\tDOUBLE"; lastClickTick = 0; return;
         }
         string name = right ? "" : InvokableName(p.X, p.Y);
-        Add(name != "" ? "N\t" + name + "\t" + p.X + "\t" + p.Y : "C\t" + p.X + "\t" + p.Y + "\t" + (right ? "RIGHT" : "LEFT"));
+        string field = right || name != "" ? "" : FieldName(p.X, p.Y);
+        if (name != "") { Add("N\t" + name + "\t" + p.X + "\t" + p.Y); }
+        else if (field != "") { Add("F\t" + field + "\t" + p.X + "\t" + p.Y); }
+        else { Add("C\t" + p.X + "\t" + p.Y + "\t" + (right ? "RIGHT" : "LEFT")); }
         lastClickTick = now; lastClickX = p.X; lastClickY = p.Y; lastClickIndex = ev.Count - 1;
     }
     void Key(int vk, IntPtr fg) {
@@ -5836,6 +6678,7 @@ function Update-FujiRecordUi {
         $b.UseVisualStyleBackColor = $true
     }
     $script:Ui.RunButton.Enabled = -not $recording -and -not $script:RunCtl.Running
+    $script:Ui.StepRunButton.Enabled = -not $recording -and -not $script:RunCtl.Running
 }
 
 # ===== gui/RunUi.ps1 =====
@@ -5846,7 +6689,7 @@ function Update-FujiRecordUi {
 # ---------------------------------------------------------------------------------------------
 
 $script:Run = $null
-$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null }
+$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null; InBreak = $false; BreakChoice = 'run' }
 $script:EscHoldMs = 1000
 
 # ----------------------------------------------------------------- run controls
@@ -5864,10 +6707,18 @@ function New-FujiRunBar {
     $stop.Enabled = $false
     $stop.BackColor = Get-FujiColor '#ffd6dc'
     $stop.Add_Click({ $script:RunCtl.StopReason = Get-FujiText 'run.stopButtonReason' })
+    # debugging: start stopping before every step / go one step on while stopped
+    $stepRun = New-FujiButton -Text (Get-FujiText 'gui.stepRun') -Tip (Get-FujiText 'gui.stepRunTip')
+    $stepRun.Add_Click({ Invoke-FujiUi { [void](Start-FujiRunUi -Stepping) } })
+    $next = New-FujiButton -Text (Get-FujiText 'gui.stepNext') -Tip (Get-FujiText 'gui.stepNextTip')
+    $next.Enabled = $false
+    $next.Add_Click({ Invoke-FujiUi { Step-FujiRunUi } })
     $script:Ui.RunButton = $run
     $script:Ui.PauseButton = $pause
     $script:Ui.StopButton = $stop
-    foreach ($c in @($run, $pause, $stop)) { [void]$row.Controls.Add($c) }
+    $script:Ui.StepRunButton = $stepRun
+    $script:Ui.NextButton = $next
+    foreach ($c in @($run, $stepRun, $pause, $next, $stop)) { [void]$row.Controls.Add($c) }
     $script:Ui.StartRow = New-FujiTextBox -Text '1' -Width (Get-FujiScaled 50)
     $script:Ui.EndRow = New-FujiTextBox -Text '' -Width (Get-FujiScaled 50)
     $script:Ui.ToolTip.SetToolTip($script:Ui.EndRow, (Get-FujiText 'gui.endRowAll'))
@@ -5929,6 +6780,8 @@ function Set-FujiRunUi {
     param([bool]$Running)
     foreach ($bar in $script:Ui.Toolbars) { $bar.Enabled = -not $Running }
     $script:Ui.RunButton.Enabled = -not $Running
+    $script:Ui.StepRunButton.Enabled = -not $Running
+    $script:Ui.NextButton.Enabled = $false
     $script:Ui.PauseButton.Enabled = $Running
     $script:Ui.StopButton.Enabled = $Running
     $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
@@ -5955,18 +6808,61 @@ function Switch-FujiRunPause {
     $c.Paused = -not $c.Paused
     if ($c.Paused) {
         $script:Ui.PauseButton.Text = Get-FujiText 'gui.resume'
+        $script:Ui.NextButton.Enabled = $true
         $script:Ui.Progress.Text = (Get-FujiText 'run.paused') + $script:Ui.Progress.Text
         Write-FujiUiLog -Message (Get-FujiText 'run.pause') -Level 'warn'
     } else {
+        # resumed: run on to the end (or the next breakpoint)
+        $c.BreakChoice = 'run'
         $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
+        $script:Ui.NextButton.Enabled = $false
     }
+}
+
+# "Next" while stopped: run one step, then stop again before the following one
+function Step-FujiRunUi {
+    $c = $script:RunCtl
+    if (-not $c.Running -or -not $c.Paused) { return }
+    $c.BreakChoice = 'step'
+    if ($null -ne $script:Run) { $script:Run.Stepping = $true }
+    $c.Paused = $false
+    $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
+    $script:Ui.NextButton.Enabled = $false
+}
+
+# Io.Break: the run stops before a step (breakpoint or stepping) until Next, Resume or Stop.
+# Returns 'step' or 'run'; a stop throws like any wait.
+function Invoke-FujiUiBreak {
+    param([string]$Message)
+    $c = $script:RunCtl
+    $c.BreakChoice = 'run'
+    $c.Paused = $true
+    $script:Ui.PauseButton.Text = Get-FujiText 'gui.resume'
+    $script:Ui.NextButton.Enabled = $true
+    $script:Ui.Progress.Text = $Message
+    # the window comes to the front, so the variables and the highlighted step can be looked at
+    [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
+    if ($script:Ui.Watch.Visible) { Update-FujiWatchPanel }
+    $c.InBreak = $true
+    try {
+        while ($c.Paused -and -not $c.StopReason) {
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 30
+        }
+    } finally {
+        $c.InBreak = $false
+    }
+    if ($c.StopReason) { throw (New-FujiStopException $c.StopReason) }
+    return $c.BreakChoice
 }
 
 # ----------------------------------------------------------------- starting a run
 # Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
 # ('done', 'stopped', 'error') or '' when it did not start.
+# Stepping: stop before the first step. Partial 'from' / 'only': start at the selected step ('only':
+# just it, for one CSV row). Vars: values handed over by a trigger.
 function Start-FujiRunUi {
-    param([switch]$Unattended)
+    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null)
     if ($script:RunCtl.Running) { return '' }
     if ($null -ne $script:Rec) {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
@@ -5974,6 +6870,14 @@ function Start-FujiRunUi {
     }
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
+    $range = @{ StartAt = -1; EndAt = -1 }
+    if ($Partial) {
+        $range = Get-FujiPartialRun -Editor $script:Ed -Mode $Partial
+        if ($range.ContainsKey('Error')) {
+            Write-FujiUiLog -Message $range.Error -Level 'warn'
+            return ''
+        }
+    }
     $executable = 0
     $usesCsv = $false
     foreach ($s in $steps) {
@@ -6004,10 +6908,17 @@ function Start-FujiRunUi {
         return ''
     }
     if ($rr.Rows.Count -eq 0) { return '' }
+    $rows = $rr.Rows
+    if ($Partial -eq 'only' -and $rows.Count -gt 1) {
+        # trying one step: the first row of the range only
+        $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        $rows.Add($rr.Rows[0])
+    }
     $interval = [Math]::Max(0, (Get-FujiInt -Text $script:Ui.Interval.Text -Default 300))
-    $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rr.Rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
+    $script:Run = New-FujiRun -Macro $macro -Macros $script:Ed.Data.macros -Rows $rows -Header $script:Ed.Csv.Header -Io (New-FujiWinIo) `
         -Interval $interval -SafeMode $script:Ui.SafeCheck.Checked -Directory $script:Ed.Directory `
-        -ResolvePath { param($Path) Resolve-FujiEditorPath -Editor $script:Ed -Path $Path }
+        -ResolvePath { param($Path) Resolve-FujiEditorPath -Editor $script:Ed -Path $Path } `
+        -StartAt $range.StartAt -EndAt $range.EndAt -Breaks (-not $Unattended) -Stepping $Stepping.IsPresent -Vars $Vars
     $c = $script:RunCtl
     $c.Running = $true
     $c.Paused = $false
@@ -6016,7 +6927,9 @@ function Start-FujiRunUi {
     $c.Highlight = -1
     Set-FujiRunUi -Running $true
     Update-FujiRunButton
-    Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rr.Rows.Count $rr.Range $interval) -Level 'run'
+    Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rows.Count $rr.Range $interval) -Level 'run'
+    if ($Partial -eq 'only') { Write-FujiUiLog -Message (Get-FujiText 'run.onlyThis' ($range.StartAt + 1) ($range.EndAt + 1)) -Level 'run' }
+    if ($Stepping) { Write-FujiUiLog -Message (Get-FujiText 'run.steppingStart') -Level 'run' }
     $status = ''
     try {
         $status = Invoke-FujiRun -Run $script:Run
@@ -6099,6 +7012,15 @@ function New-FujiWinIo {
         Alarm = { Invoke-FujiAlarm }
         Notify = { Invoke-FujiNotify }
         EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
+        Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
+        SetField = { param($Request) Set-FujiUiaField -Request $Request }
+        GetField = { param($Request) Get-FujiUiaField -Request $Request }
+        ReadTable = { param($Request) Read-FujiUiaTable -Request $Request }
+        SaveText = { param($Path, $Text) Save-FujiRunText -Path $Path -Text $Text }
+        GetSecret = { param($Target) Read-FujiCredential -Target $Target }
+        TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
+        ForegroundWindow = { Get-FujiForegroundWindowInfo }
+        FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
     }
 }
 
@@ -6121,6 +7043,37 @@ function Get-FujiTopWindow {
         $list.Add(@{ Handle = $h; Title = $sb.ToString() })
     }
     return , $list.ToArray()
+}
+
+# @{ Title; Program } of the window in front (Program: the full path of its .exe), $null if none
+function Get-FujiForegroundWindowInfo {
+    $native = Get-FujiNativeType
+    $h = $native::GetForegroundWindow()
+    if ($h -eq [IntPtr]::Zero) { return $null }
+    $len = $native::GetWindowTextLength($h)
+    $title = ''
+    if ($len -gt 0) {
+        $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($len + 1)
+        [void]$native::GetWindowText($h, $sb, $sb.Capacity)
+        $title = $sb.ToString()
+    }
+    # GetWindowThreadProcessId writes the process id where its second argument points
+    $mem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(4)
+    try {
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($mem, 0)
+        [void]$native::GetWindowThreadProcessId($h, $mem)
+        $processId = [System.Runtime.InteropServices.Marshal]::ReadInt32($mem)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
+    }
+    $program = ''
+    if ($processId -gt 0) {
+        $p = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        # Path is empty for a process this user may not look into (e.g. one run as administrator):
+        # then nothing matches and no password is typed
+        if ($null -ne $p) { try { $program = [string]$p.Path } catch { $program = '' } }
+    }
+    return @{ Title = $title; Program = $program }
 }
 
 function Test-FujiSelfForeground {
@@ -6243,7 +7196,46 @@ function Save-FujiScreenshot {
     return ('{0}x{1}' -f $r.Width, $r.Height)
 }
 
+# A CSV a step writes (a table read from the screen): with a BOM, so Excel opens it as UTF-8
+function Save-FujiRunText {
+    param([string]$Path, [string]$Text)
+    $folder = Split-Path -Path $Path -Parent
+    if ($folder -and -not (Test-Path -LiteralPath $folder -PathType Container)) { [void](New-Item -ItemType Directory -Path $folder) }
+    Write-FujiTextFile -Path $Path -Text $Text -Bom
+}
+
 # ----------------------------------------------------------------- Excel and Outlook (COM)
+# An Excel book as the data of a run: the first sheet saved by Excel as a CSV (UTF-8), which keeps
+# what the cells show (dates and numbers as displayed). The book is opened read-only and its macros
+# never run. Returns the CSV text.
+function Read-FujiWorkbookCsv {
+    param([Parameter(Mandatory)][string]$Path)
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_book_' + [guid]::NewGuid().ToString('N') + '.csv')
+    $app = New-Object -ComObject Excel.Application
+    try {
+        $app.Visible = $false
+        $app.DisplayAlerts = $false
+        $app.AutomationSecurity = 3
+        $wb = $app.Workbooks.Open($Path, 0, $true)
+        try {
+            # Copy() without a place puts the sheet into a new book of its own
+            $wb.Worksheets.Item(1).Copy()
+            $copy = $app.ActiveWorkbook
+            try { $copy.SaveAs($tmp, 62) } finally { $copy.Close($false) }   # 62 = xlCSVUTF8
+        } finally {
+            $wb.Close($false)
+        }
+    } finally {
+        $app.Quit()
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($app)
+    }
+    try {
+        return (Read-FujiCsvText -Path $tmp -Encoding 'auto').Text
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-FujiExcelRequest {
     param([hashtable]$Request)
     $c = $script:RunCtl
@@ -6461,7 +7453,8 @@ function Export-FujiRunCsvUi {
 # ===== gui/Schedule.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Schedules from the window: the list dialog, the 20-second check while the app is open, Windows
-#  scheduled tasks (ScheduledTasks module) that start the app with -AutoRun <id>
+#  scheduled tasks (ScheduledTasks module) that start the app with -AutoRun <id>, and the triggers
+#  (a key, a new file, a window) watched every 150 ms while the app is open
 # ---------------------------------------------------------------------------------------------
 
 $script:Settings = $null
@@ -6475,7 +7468,107 @@ function Initialize-FujiSchedule {
     $t.Add_Tick({ Invoke-FujiUi { Invoke-FujiScheduleCheck } })
     $t.Start()
     $script:Ui.ScheduleTimer = $t
+    # triggers: keys are looked at every tick, folders and windows every 3 seconds
+    $tt = New-Object -TypeName System.Windows.Forms.Timer
+    $tt.Interval = 150
+    $tt.Add_Tick({ Invoke-FujiUi { Invoke-FujiTriggerCheck } })
+    $tt.Start()
+    $script:Ui.TriggerTimer = $tt
     Update-FujiScheduleState
+}
+
+# ----------------------------------------------------------------- triggers
+$script:TriggerState = @{}
+$script:TriggerTick = 0
+
+function Get-FujiTriggerState {
+    param([string]$Id)
+    if (-not $script:TriggerState.ContainsKey($Id)) {
+        $script:TriggerState[$Id] = @{ Started = $false; Down = $false; File = @{ Seen = @{}; Pending = @{} }; Window = @{ Present = $false }; Queue = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Missing = $false }
+    }
+    return $script:TriggerState[$Id]
+}
+
+function Test-FujiHotkeyDown {
+    param([hashtable]$Key)
+    $native = Get-FujiNativeType
+    $down = { param($Vk) (([int]$native::GetAsyncKeyState($Vk)) -band 0x8000) -ne 0 }
+    if ($Key.Ctrl -ne (& $down 0x11)) { return $false }
+    if ($Key.Alt -ne (& $down 0x12)) { return $false }
+    if ($Key.Shift -ne (& $down 0x10)) { return $false }
+    return (& $down $Key.Vk)
+}
+
+function Invoke-FujiTriggerCheck {
+    if ($null -eq $script:Settings) { return }
+    $script:TriggerTick++
+    $slow = ($script:TriggerTick % 20) -eq 0
+    $busy = $script:RunCtl.Running -or $null -ne $script:Rec
+    # a copy (not "@(...)" around the List: see Import-FujiEditorCsv)
+    foreach ($s in $script:Settings.schedules.ToArray()) {
+        $kind = Get-FujiScheduleKind $s
+        if ($kind -eq 'TIME' -or -not [bool](Get-FujiScheduleValue $s 'enabled' $false)) { continue }
+        $st = Get-FujiTriggerState -Id ([string]$s.id)
+        switch ($kind) {
+            'HOTKEY' {
+                $k = ConvertFrom-FujiHotkeyText -Text ([string](Get-FujiScheduleValue $s 'hotkey'))
+                if ($null -eq $k) { continue }
+                $down = Test-FujiHotkeyDown -Key $k
+                if ($down -and -not $st.Down -and -not $busy) { $st.Queue.Add('') }
+                $st.Down = $down
+            }
+            'FILE' {
+                if (-not $slow) { continue }
+                $folder = [string](Get-FujiScheduleValue $s 'folder')
+                if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+                    if (-not $st.Missing) { Write-FujiUiLog -Message (Get-FujiText 'schedule.folderMissing' $folder) -Level 'warn'; $st.Missing = $true }
+                    continue
+                }
+                $st.Missing = $false
+                $files = @(Get-ChildItem -LiteralPath $folder -Filter ([string](Get-FujiScheduleValue $s 'pattern' '*')) -File -ErrorAction SilentlyContinue | ForEach-Object { @{ Name = $_.Name; Length = $_.Length; Ticks = $_.LastWriteTimeUtc.Ticks } })
+                foreach ($name in (Update-FujiFileTrigger -State $st.File -Files $files -First (-not $st.Started))) { $st.Queue.Add((Join-Path $folder $name)) }
+                $st.Started = $true
+            }
+            'WINDOW' {
+                if (-not $slow) { continue }
+                $want = [string](Get-FujiScheduleValue $s 'window')
+                $present = $false
+                foreach ($w in (Get-FujiTopWindow)) { if ($w.Title.Contains($want)) { $present = $true; break } }
+                if (Update-FujiWindowTrigger -State $st.Window -Present $present -First (-not $st.Started)) { $st.Queue.Add($want) }
+                $st.Started = $true
+            }
+        }
+        if ($st.Queue.Count -eq 0 -or $busy) { continue }
+        if (Test-FujiDialogOpen) {
+            if ($slow) { Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn' }
+            if ($kind -eq 'HOTKEY') { $st.Queue.Clear() }
+            continue
+        }
+        $what = $st.Queue[0]
+        $st.Queue.RemoveAt(0)
+        [void](Invoke-FujiTrigger -Schedule $s -Kind $kind -What $what)
+        # one run per tick; the others wait for the next ticks
+        return
+    }
+}
+
+function Invoke-FujiTrigger {
+    param([System.Collections.IDictionary]$Schedule, [string]$Kind, [string]$What)
+    $vars = [ordered]@{}
+    $csv = ''
+    switch ($Kind) {
+        'HOTKEY' { Write-FujiUiLog -Message (Get-FujiText 'schedule.firedHotkey' (Get-FujiScheduleValue $Schedule 'hotkey')) -Level 'run' }
+        'FILE' {
+            $vars[(Get-FujiText 'data.triggerFileVar')] = $What
+            Write-FujiUiLog -Message (Get-FujiText 'schedule.firedFile' $What) -Level 'run'
+            if ([bool](Get-FujiScheduleValue $Schedule 'useFile' $false) -and ($What -match '\.(csv|txt)$' -or (Test-FujiWorkbookPath -Path $What))) { $csv = $What }
+        }
+        'WINDOW' {
+            $vars[(Get-FujiText 'data.triggerWindowVar')] = $What
+            Write-FujiUiLog -Message (Get-FujiText 'schedule.firedWindow' $What) -Level 'run'
+        }
+    }
+    return (Invoke-FujiSchedule -Schedule $Schedule -Vars $vars -CsvOverride $csv)
 }
 
 function Save-FujiScheduleSetting {
@@ -6530,9 +7623,11 @@ function Invoke-FujiScheduleCheck {
 
 # Runs a schedule now. Returns the run status, or '' when it did not start.
 function Invoke-FujiSchedule {
-    param([System.Collections.IDictionary]$Schedule)
-    $Schedule['lastRun'] = Format-FujiDate -Date (Get-Date)
-    Save-FujiScheduleSetting
+    param([System.Collections.IDictionary]$Schedule, [System.Collections.IDictionary]$Vars = $null, [string]$CsvOverride = '')
+    if ((Get-FujiScheduleKind $Schedule) -eq 'TIME') {
+        $Schedule['lastRun'] = Format-FujiDate -Date (Get-Date)
+        Save-FujiScheduleSetting
+    }
     $macro = Get-FujiScheduleMacro -Schedule $Schedule
     if ($null -eq $macro) {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.macroMissing' (Get-FujiScheduleValue $Schedule 'macroName')) -Level 'error'
@@ -6542,6 +7637,7 @@ function Invoke-FujiSchedule {
     $script:Ed.Selected = -1
     Update-FujiAll
     $csv = [string](Get-FujiScheduleValue $Schedule 'csvPath')
+    if ($CsvOverride) { $csv = $CsvOverride }
     if ($csv.Trim()) {
         $script:Refreshing = $true
         try {
@@ -6562,7 +7658,7 @@ function Invoke-FujiSchedule {
     $script:Ui.StartRow.Text = '1'
     $script:Ui.EndRow.Text = ''
     Write-FujiUiLog -Message (Get-FujiText 'schedule.starting' $macro.name) -Level 'run'
-    $status = Start-FujiRunUi -Unattended
+    $status = Start-FujiRunUi -Unattended -Vars $Vars
     Update-FujiScheduleState
     return $status
 }
@@ -6629,6 +7725,10 @@ function Get-FujiTaskName {
 
 function Register-FujiScheduleTask {
     param([System.Collections.IDictionary]$Schedule)
+    if ((Get-FujiScheduleKind $Schedule) -ne 'TIME') {
+        Write-FujiUiLog -Message (Get-FujiText 'schedule.registerTimeOnly') -Level 'warn'
+        return
+    }
     $name = Get-FujiTaskName -Schedule $Schedule
     try {
         $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -6680,7 +7780,7 @@ function Show-FujiScheduleDialog {
     $lv.MultiSelect = $false
     $lv.HideSelection = $false
     $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
-    foreach ($c in @(@('schedule.colTime', 70), @('schedule.colRepeat', 150), @('schedule.colMacro', 240), @('schedule.colCsv', 260), @('schedule.colState', 170))) {
+    foreach ($c in @(@('schedule.colWhen', 300), @('schedule.colMacro', 220), @('schedule.colCsv', 230), @('schedule.colState', 150))) {
         [void]$lv.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1]))
     }
     # buttons for the selected schedule
@@ -6708,6 +7808,16 @@ function Show-FujiScheduleDialog {
     if ($macro.Items.Count -gt 0) { $macro.SelectedIndex = [Math]::Max(0, $script:Ed.MacroIndex) }
     $csv = New-FujiTextBox -Text ([string]$script:Ed.Csv.Path) -Width (Get-FujiScaled 560)
     $header = New-FujiCheck -Text (Get-FujiText 'schedule.header') -Checked $true
+    $kindLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($k in $script:FujiScheduleKinds) { $kindLabels.Add((Get-FujiText ('schedule.kinds.' + $k))) }
+    $kind = New-FujiComboBox -Items $kindLabels.ToArray() -Values $script:FujiScheduleKinds -Width (Get-FujiScaled 420)
+    $kind.SelectedIndex = 0
+    $kind.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleKindUi } })
+    $hotkey = New-FujiTextBox -Width (Get-FujiScaled 200)
+    $folder = New-FujiTextBox -Width (Get-FujiScaled 560)
+    $pattern = New-FujiTextBox -Text '*.csv' -Width (Get-FujiScaled 160)
+    $useFile = New-FujiCheck -Text (Get-FujiText 'schedule.useFile') -Checked $true
+    $window = New-FujiTextBox -Width (Get-FujiScaled 360)
     $time = New-FujiTextBox -Width (Get-FujiScaled 90)
     $repLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($r in $script:FujiScheduleRepeats) { $repLabels.Add((Get-FujiScheduleRepeatName $r)) }
@@ -6718,7 +7828,8 @@ function Show-FujiScheduleDialog {
     $err = New-FujiLabel -Text ''
     $err.ForeColor = Get-FujiColor '#c62828'
     $row = 1
-    foreach ($pair in @(@('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close), @('', $err))) {
+    foreach ($pair in @(@('schedule.kind', $kind), @('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close),
+            @('schedule.hotkey', $hotkey), @('schedule.folder', $folder), @('schedule.pattern', $pattern), @('', $useFile), @('schedule.window', $window), @('', $err))) {
         if ($pair[0]) { $add.Controls.Add((New-FujiLabel -Text (Get-FujiText $pair[0])), 0, $row) }
         $add.Controls.Add($pair[1], 1, $row)
         $row++
@@ -6737,8 +7848,10 @@ function Show-FujiScheduleDialog {
     [void]$f.Controls.Add($actions)
     [void]$f.Controls.Add($add)
     [void]$f.Controls.Add($bar)
-    $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0] }
-    $f.Add_Shown({ $native = Get-FujiNativeType; [void]$native::SendMessage($script:Ui.SchedDlg.Time.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.timeCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Date.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.dateCue')) })
+    $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0]
+        Kind = $kind; Hotkey = $hotkey; Folder = $folder; Pattern = $pattern; UseFile = $useFile; Window = $window }
+    Update-FujiScheduleKindUi
+    $f.Add_Shown({ $native = Get-FujiNativeType; [void]$native::SendMessage($script:Ui.SchedDlg.Time.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.timeCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Date.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.dateCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Hotkey.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.hotkeyCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Folder.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.folderCue')); [void]$native::SendMessage($script:Ui.SchedDlg.Window.Handle, $script:EmSetCueBanner, [IntPtr]1, (Get-FujiText 'schedule.windowCue')) })
     $lv.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleToggleText } })
     Update-FujiScheduleList
     [void](Show-FujiDialog -Form $f)
@@ -6760,10 +7873,8 @@ function Update-FujiScheduleList {
         $state = Get-FujiText 'schedule.disabled'
         if (Get-FujiScheduleValue $s 'enabled' $false) { $state = Get-FujiText 'schedule.enabled' }
         if (Get-FujiScheduleValue $s 'taskName') { $state += Get-FujiText 'schedule.registered' }
-        $repeat = Get-FujiScheduleRepeatName ([string](Get-FujiScheduleValue $s 'repeat'))
-        if (Get-FujiScheduleValue $s 'date') { $repeat += ' ' + $s.date }
-        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList ([string]$s.time)
-        foreach ($sub in @($repeat, $macroText, $csv, $state)) { [void]$item.SubItems.Add([string]$sub) }
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList (Get-FujiScheduleWhenText -Schedule $s)
+        foreach ($sub in @($macroText, $csv, $state)) { [void]$item.SubItems.Add([string]$sub) }
         $item.Tag = $s
         [void]$lv.Items.Add($item)
     }
@@ -6807,20 +7918,35 @@ function Add-FujiScheduleFromDialog {
     if ($d.Macro.SelectedIndex -lt 0) { return }
     $macroId = [string]([object[]]$d.Macro.Tag)[$d.Macro.SelectedIndex]
     $repeat = [string]([object[]]$d.Repeat.Tag)[$d.Repeat.SelectedIndex]
-    $r = New-FujiSchedule -MacroId $macroId -MacroName ([string]$d.Macro.SelectedItem) -CsvPath $d.Csv.Text -Header $d.Header.Checked -Time $d.Time.Text -Repeat $repeat -DateText $d.Date.Text -CloseAfter $d.Close.Checked
+    $kind = [string]([object[]]$d.Kind.Tag)[$d.Kind.SelectedIndex]
+    $r = New-FujiSchedule -MacroId $macroId -MacroName ([string]$d.Macro.SelectedItem) -CsvPath $d.Csv.Text -Header $d.Header.Checked -Time $d.Time.Text -Repeat $repeat -DateText $d.Date.Text -CloseAfter $d.Close.Checked `
+        -Kind $kind -Hotkey $d.Hotkey.Text -Folder $d.Folder.Text -Pattern $d.Pattern.Text -Window $d.Window.Text -UseFile $d.UseFile.Checked
     if ($r.ContainsKey('Error')) { $d.Error.Text = $r.Error; return }
     $d.Error.Text = ''
     $script:Settings.schedules.Add($r.Schedule)
     Save-FujiScheduleSetting
-    Write-FujiUiLog -Message (Get-FujiText 'schedule.added' (Get-FujiScheduleRepeatName $repeat) $r.Schedule.time $r.Schedule.macroName) -Level 'ok'
+    Write-FujiUiLog -Message (Get-FujiText 'schedule.added2' (Get-FujiScheduleWhenText -Schedule $r.Schedule) $r.Schedule.macroName) -Level 'ok'
+    if ($kind -ne 'TIME') { Write-FujiUiLog -Message (Get-FujiText 'schedule.triggerNote') }
     Update-FujiScheduleList
+}
+
+# Only the boxes of the chosen kind can be typed in
+function Update-FujiScheduleKindUi {
+    $d = $script:Ui.SchedDlg
+    if ($null -eq $d) { return }
+    $kind = [string]([object[]]$d.Kind.Tag)[$d.Kind.SelectedIndex]
+    foreach ($c in @($d.Time, $d.Repeat, $d.Date, $d.Close)) { $c.Enabled = ($kind -eq 'TIME') }
+    $d.Hotkey.Enabled = ($kind -eq 'HOTKEY')
+    foreach ($c in @($d.Folder, $d.Pattern, $d.UseFile)) { $c.Enabled = ($kind -eq 'FILE') }
+    $d.Window.Enabled = ($kind -eq 'WINDOW')
 }
 
 # ===== gui/StepDialog.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Step editor dialog, built from the command's fields in fujikyun_commands.json
 #  Field types: text, textarea, select, keypreset, csvcol, imgpath, capture, rectcapture,
-#  macroselect; "placeholders" adds the insert-a-placeholder list, "hint" a note below.
+#  macroselect, uiapick (point at a part / try to find it), credential (register a password);
+#  "placeholders" adds the insert-a-placeholder list, "hint" a note below.
 # ---------------------------------------------------------------------------------------------
 
 $script:StepDlg = $null
@@ -7063,6 +8189,30 @@ function Add-FujiStepField {
             $row = New-FujiFlow -NoWrap
             [void]$row.Controls.Add($d.Status['rect'])
         }
+        'uiapick' {
+            $pick = New-FujiButton -Text (Get-FujiText 'gui.partPick') -Tip (Get-FujiText 'gui.partPickTip')
+            $pick.Add_Click({ Invoke-FujiUi { Start-FujiStepCapture -Mode 'part' } })
+            $try = New-FujiButton -Text (Get-FujiText 'gui.partTry') -Tip (Get-FujiText 'gui.partTryTip')
+            $try.Add_Click({ Invoke-FujiUi { Test-FujiPartFind } })
+            [void]$row.Controls.Add($pick)
+            [void]$row.Controls.Add($try)
+            [void]$Panel.Controls.Add($row)
+            $row = New-FujiFlow -NoWrap
+            $d.Status['part'] = New-FujiHintLabel -Text (Get-FujiText 'gui.partHint') -Width $Width
+            [void]$row.Controls.Add($d.Status['part'])
+        }
+        'credential' {
+            $reg = New-FujiButton -Text (Get-FujiText 'cred.button') -Tip (Get-FujiText 'cred.buttonTip')
+            $reg.Add_Click({ Invoke-FujiUi { Register-FujiStepCredential } })
+            [void]$row.Controls.Add($reg)
+            $target = ''
+            if ($d.Inputs.ContainsKey('target')) {
+                $target = $d.Inputs['target'].Text.Trim()
+                $d.Inputs['target'].Add_Leave({ Invoke-FujiUi { Update-FujiStepCredentialStatus } })
+            }
+            $d.Status['cred'] = New-FujiHintLabel -Text (Get-FujiCredentialStatus -Target $target) -Width ($Width - (Get-FujiScaled 200))
+            [void]$row.Controls.Add($d.Status['cred'])
+        }
         'macroselect' {
             $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
             $values = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -7162,7 +8312,7 @@ function Select-FujiImageFile {
 # ----------------------------------------------------------------- mouse position / region / image capture
 # Counts down with a timer (the window stays responsive), then reads the cursor position
 function Start-FujiStepCapture {
-    param([ValidateSet('pos', 'rect1', 'img')][string]$Mode)
+    param([ValidateSet('pos', 'rect1', 'img', 'part')][string]$Mode)
     $d = $script:StepDlg
     if ($null -eq $d.Timer) {
         $d.Timer = New-Object -TypeName System.Windows.Forms.Timer
@@ -7184,6 +8334,7 @@ function Update-FujiCaptureStatus {
         'rect1' { $d.Status['rect'].Text = Get-FujiText 'gui.rectWait1' $d.Remaining }
         'rect2' { $d.Status['rect'].Text = Get-FujiText 'gui.rectWait2' $d.Remaining }
         'img' { $d.Status['img'].Text = Get-FujiText 'gui.imgWait' $d.Remaining }
+        'part' { $d.Status['part'].Text = Get-FujiText 'gui.partWait' $d.Remaining }
     }
 }
 
@@ -7225,7 +8376,107 @@ function Step-FujiStepCapture {
             $d.Timer.Stop()
             Save-FujiCursorImage -Cursor $p
         }
+        'part' {
+            $d.Timer.Stop()
+            Complete-FujiPartPick -Cursor $p
+        }
     }
+}
+
+# ----------------------------------------------------------------- parts by UI Automation (point at it, try it)
+# The part under the cursor: its name goes into the step's name field and a red frame shows it
+function Complete-FujiPartPick {
+    param([Parameter(Mandatory)][System.Drawing.Point]$Cursor)
+    $d = $script:StepDlg
+    $mode = 'PICK'
+    if ($d.Cmd -eq 'TABLE_READ') { $mode = 'PICKTABLE' }
+    $d.Status['part'].Text = Get-FujiText 'gui.partLooking'
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        $r = Invoke-FujiUia -Mode $mode -X $Cursor.X -Y $Cursor.Y
+    } catch {
+        $d.Status['part'].Text = Get-FujiText 'gui.partFailed' $_.Exception.Message
+        return
+    }
+    if ($r -is [string]) {
+        $key = 'gui.partNone'
+        if ($r -eq 'NOTABLE') { $key = 'gui.partNoTable' }
+        $d.Status['part'].Text = Get-FujiText $key
+        return
+    }
+    $name = Select-FujiPartName -Cmd $d.Cmd -Info $r
+    $info = Get-FujiText 'gui.partInfo' $r.Kind $r.Name $r.Id $r.Label
+    if ($name) {
+        $d.Inputs['name'].Text = $name
+        $d.Status['part'].Text = (Get-FujiText 'gui.partPicked' $name) + "`r`n" + $info
+    } elseif ($d.Cmd -eq 'TABLE_READ') {
+        $d.Inputs['name'].Text = ''
+        $d.Status['part'].Text = (Get-FujiText 'gui.partTableNoName') + "`r`n" + $info
+    } else {
+        $d.Status['part'].Text = (Get-FujiText 'gui.partNoName') + "`r`n" + $info
+    }
+    Show-FujiPartFrame -Rect $r.Rect
+}
+
+# The name a step should use for a pointed-at part: a field's own name, else its label, else its id;
+# a button's name; a table's name, else its id
+function Select-FujiPartName {
+    param([string]$Cmd, [hashtable]$Info)
+    $n = ([string]$Info.Name).Trim()
+    $id = ([string]$Info.Id).Trim()
+    switch ($Cmd) {
+        'CLICK_NAME' { return $n }
+        'TABLE_READ' { if ($n) { return $n }; return $id }
+    }
+    if ($n) { return $n }
+    if ($Info.Label) { return [string]$Info.Label }
+    return $id
+}
+
+# Looks for the part the step names, the way a run will (in the macro's target window), and
+# shows it with a red frame
+function Test-FujiPartFind {
+    $d = $script:StepDlg
+    $name = ''
+    if ($d.Inputs.ContainsKey('name')) { $name = $d.Inputs['name'].Text.Trim() }
+    if (-not $name -and $d.Cmd -ne 'TABLE_READ') { $d.Status['part'].Text = Get-FujiText 'gui.partTryEmpty'; return }
+    $nth = 1
+    if ($d.Inputs.ContainsKey('nth')) { $nth = [Math]::Max(1, (Get-FujiInt -Text $d.Inputs['nth'].Text -Default 1)) }
+    $hint = [string](Get-FujiCurrentMacro $script:Ed).targetWindow
+    $mode = 'LOCATE'
+    if ($d.Cmd -eq 'CLICK_NAME') { $mode = 'LOCATENAME' } elseif ($d.Cmd -eq 'TABLE_READ') { $mode = 'LOCATETABLE' }
+    $d.Status['part'].Text = Get-FujiText 'gui.partLooking'
+    [System.Windows.Forms.Application]::DoEvents()
+    try {
+        $r = Invoke-FujiUia -Mode $mode -Name $name -Nth $nth -Hint $hint
+    } catch {
+        $d.Status['part'].Text = Get-FujiText 'gui.partFailed' $_.Exception.Message
+        return
+    }
+    if ($r -is [string]) {
+        $where = Get-FujiText 'gui.partEverywhere'
+        if ($hint) { $where = Get-FujiText 'gui.partInTarget' $hint }
+        $d.Status['part'].Text = Get-FujiText 'gui.partTryNone' $where
+        return
+    }
+    $text = Get-FujiText 'gui.partFound' $r.Kind $r.Name $r.Id
+    if ($r.ContainsKey('Rows')) { $text += Get-FujiText 'gui.partRows' $r.Rows }
+    $d.Status['part'].Text = $text
+    Show-FujiPartFrame -Rect $r.Rect
+}
+
+# ----------------------------------------------------------------- passwords (SECRET)
+function Register-FujiStepCredential {
+    $d = $script:StepDlg
+    $target = $d.Inputs['target'].Text.Trim()
+    if (-not $target) { $d.Status['cred'].Text = Get-FujiText 'cred.statusNoTarget'; return }
+    $d.Status['cred'].Text = Show-FujiCredentialDialog -Target $target -DefaultWindow ([string](Get-FujiCurrentMacro $script:Ed).targetWindow)
+}
+
+function Update-FujiStepCredentialStatus {
+    $d = $script:StepDlg
+    if ($null -eq $d -or -not $d.Status.ContainsKey('cred')) { return }
+    $d.Status['cred'].Text = Get-FujiCredentialStatus -Target $d.Inputs['target'].Text.Trim()
 }
 
 function Save-FujiCursorImage {
@@ -7255,6 +8506,339 @@ function Save-FujiCursorImage {
     if ($r.Width -lt $w - 1 -or $r.Height -lt $h - 1) { $text += Get-FujiText 'gui.imgEdge' }
     $d.Status['img'].Text = $text
     Write-FujiUiLog -Message (Get-FujiText 'gui.imgSaved' $relative) -Level 'ok'
+}
+
+# ===== gui/Uia.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Fields and tables by UI Automation: put text into a field, read a field, read a whole table,
+#  find the part under the mouse (the step dialog's "point at it"), show where a part is
+#  A field is found by its name or automation id, or by the label just left of it (or above it),
+#  in the window that has the focus and then in the windows whose title contains the target
+#  window's title. The search runs in a second runspace (Invoke-FujiBackground), like click by name.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiUiaScript = @'
+param($State, $Mode, $Name, $Nth, $Hint, $Text, $X, $Y, $OwnPid)
+try {
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+    Add-Type -AssemblyName WindowsBase
+    $AE = [System.Windows.Automation.AutomationElement]
+    $CT = [System.Windows.Automation.ControlType]
+    $TS = [System.Windows.Automation.TreeScope]
+    $maxRows = 5000
+
+    function New-TypeCondition([object[]]$Types) {
+        $list = New-Object -TypeName 'System.Collections.Generic.List[System.Windows.Automation.Condition]'
+        foreach ($t in $Types) { $list.Add((New-Object -TypeName System.Windows.Automation.PropertyCondition -ArgumentList $AE::ControlTypeProperty, $t)) }
+        if ($list.Count -eq 1) { return $list[0] }
+        return (New-Object -TypeName System.Windows.Automation.OrCondition -ArgumentList (, $list.ToArray()))
+    }
+    function Get-Rect($El) {
+        $r = $El.Current.BoundingRectangle
+        if ($r.IsEmpty -or $r.Width -le 0 -or $r.Height -le 0) { return $null }
+        return @{ X = [int]$r.X; Y = [int]$r.Y; W = [int]$r.Width; H = [int]$r.Height }
+    }
+    # A label's text without the marks around it: "Name:" "Name *" " Name " are all "Name"
+    function Get-Clean([string]$S) { return ([string]$S).Trim().TrimEnd([char[]]@(':', [char]0xFF1A, '*', [char]0x203B, ' ', [char]0x3000)).Trim() }
+    function Get-Info($El) {
+        $c = $El.Current
+        return @{ Kind = [string]$c.ControlType.ProgrammaticName -replace '^ControlType\.', ''; Name = [string]$c.Name; Id = [string]$c.AutomationId; Rect = (Get-Rect $El) }
+    }
+    # Where to look: the window with the focus, then the target window. A try from the step dialog
+    # (LOCATE...) has the focus itself: it looks in the target window, or else in every other window.
+    function Get-Scopes {
+        $scopes = New-Object -TypeName System.Collections.ArrayList
+        $trying = $Mode -like 'LOCATE*'
+        if ($trying) {
+            foreach ($w in $AE::RootElement.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+                if ($w.Current.ProcessId -eq $OwnPid) { continue }
+                $wn = [string]$w.Current.Name
+                if (-not $Hint -or $wn.Contains($Hint)) { [void]$scopes.Add($w) }
+            }
+            return , $scopes
+        }
+        $focused = $null
+        try { $focused = $AE::FocusedElement } catch { $focused = $null }
+        if ($null -ne $focused) {
+            $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+            $node = $focused
+            $top = $focused
+            while ($null -ne $node -and -not [System.Windows.Automation.Automation]::Compare($node, $AE::RootElement)) {
+                $top = $node
+                $node = $walker.GetParent($node)
+            }
+            [void]$scopes.Add($top)
+        }
+        if ($Hint) {
+            foreach ($w in $AE::RootElement.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+                $wn = $w.Current.Name
+                if ($null -ne $wn -and $wn.Contains($Hint)) { [void]$scopes.Add($w) }
+            }
+        }
+        return , $scopes
+    }
+    $editCond = New-TypeCondition @($CT::Edit, $CT::ComboBox, $CT::Document, $CT::Spinner)
+    # The field Nth called Name: by name / automation id first, then the field next to a label
+    function Find-Field($Scope) {
+        $want = Get-Clean $Name
+        $edits = @($Scope.FindAll($TS::Descendants, $editCond))
+        $direct = @($edits | Where-Object { (Get-Clean $_.Current.Name) -ceq $want -or $_.Current.AutomationId -ceq $Name })
+        if ($direct.Count -ge $Nth) { return $direct[$Nth - 1] }
+        $labels = @($Scope.FindAll($TS::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object {
+                $t = $_.Current.ControlType
+                $t -ne $CT::Edit -and $t -ne $CT::ComboBox -and $t -ne $CT::Document -and (Get-Clean $_.Current.Name) -ceq $want })
+        if ($labels.Count -lt $Nth) { return $null }
+        $l = Get-Rect $labels[$Nth - 1]
+        if ($null -eq $l) { return $null }
+        $best = $null
+        $bestScore = [double]::MaxValue
+        foreach ($e in $edits) {
+            $r = Get-Rect $e
+            if ($null -eq $r) { continue }
+            $score = [double]::MaxValue
+            if ($r.Y -lt $l.Y + $l.H -and $r.Y + $r.H -gt $l.Y -and $r.X -ge $l.X + $l.W - 8) {
+                # same row, to the right of the label
+                $score = $r.X - ($l.X + $l.W)
+            } elseif ($r.Y -ge $l.Y + $l.H - 4 -and [Math]::Abs($r.X - $l.X) -lt 400) {
+                # below the label
+                $score = 2000 + ($r.Y - ($l.Y + $l.H)) * 2 + [Math]::Abs($r.X - $l.X)
+            }
+            if ($score -lt $bestScore) { $bestScore = $score; $best = $e }
+        }
+        return $best
+    }
+    function Find-InScopes([scriptblock]$Finder) {
+        foreach ($s in (Get-Scopes)) {
+            $el = & $Finder $s
+            if ($null -ne $el) { return $el }
+        }
+        return $null
+    }
+    function Get-ElementText($El) {
+        $p = $null
+        if ($El.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p)) { return [string]$p.Current.Value }
+        if ($El.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$p)) { return [string]$p.DocumentRange.GetText(-1) }
+        return [string]$El.Current.Name
+    }
+    $tableCond = New-TypeCondition @($CT::DataGrid, $CT::Table, $CT::List)
+    function Find-Table($Scope) {
+        $tables = @($Scope.FindAll($TS::Descendants, $tableCond))
+        if ($Name) { return @($tables | Where-Object { $_.Current.Name -ceq $Name -or $_.Current.AutomationId -ceq $Name })[0] }
+        $best = $null
+        $area = 0
+        foreach ($t in $tables) {
+            $r = Get-Rect $t
+            if ($null -ne $r -and $r.W * $r.H -gt $area) { $area = $r.W * $r.H; $best = $t }
+        }
+        return $best
+    }
+    function Read-Table($Table) {
+        $header = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        $p = $null
+        if ($Table.TryGetCurrentPattern([System.Windows.Automation.TablePattern]::Pattern, [ref]$p)) {
+            foreach ($h in $p.Current.GetColumnHeaders()) { $header.Add([string]$h.Current.Name) }
+        }
+        if ($header.Count -eq 0) {
+            $hdr = $Table.FindFirst($TS::Children, (New-TypeCondition @($CT::Header)))
+            if ($null -ne $hdr) { foreach ($h in $hdr.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)) { $header.Add([string]$h.Current.Name) } }
+        }
+        if ($Table.TryGetCurrentPattern([System.Windows.Automation.GridPattern]::Pattern, [ref]$p)) {
+            $rc = [Math]::Min($p.Current.RowCount, $maxRows)
+            $cc = $p.Current.ColumnCount
+            for ($r = 0; $r -lt $rc; $r++) {
+                $cells = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                for ($c = 0; $c -lt $cc; $c++) {
+                    $item = $null
+                    try { $item = $p.GetItem($r, $c) } catch { $item = $null }
+                    if ($null -eq $item) { $cells.Add('') } else { $cells.Add((Get-ElementText $item)) }
+                }
+                $rows.Add($cells.ToArray())
+            }
+        } else {
+            $itemCond = New-TypeCondition @($CT::DataItem, $CT::ListItem, $CT::TreeItem)
+            foreach ($item in $Table.FindAll($TS::Children, $itemCond)) {
+                if ($rows.Count -ge $maxRows) { break }
+                $cells = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                foreach ($c in $item.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)) { $cells.Add((Get-ElementText $c)) }
+                if ($cells.Count -eq 0) { $cells.Add([string]$item.Current.Name) }
+                $rows.Add($cells.ToArray())
+            }
+        }
+        return @{ Header = $header.ToArray(); Rows = $rows.ToArray() }
+    }
+    # What a pointed-at part should be called in a step: its name, else the label left of it, else its id
+    function Get-NearLabel($El) {
+        $r = Get-Rect $El
+        if ($null -eq $r) { return '' }
+        $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+        $parent = $walker.GetParent($El)
+        if ($null -eq $parent) { return '' }
+        $best = ''
+        $bestScore = [double]::MaxValue
+        foreach ($t in $parent.FindAll($TS::Descendants, (New-TypeCondition @($CT::Text)))) {
+            $l = Get-Rect $t
+            $n = Get-Clean $t.Current.Name
+            if ($null -eq $l -or -not $n) { continue }
+            $score = [double]::MaxValue
+            if ($r.Y -lt $l.Y + $l.H -and $r.Y + $r.H -gt $l.Y -and $l.X + $l.W -le $r.X + 8) { $score = $r.X - ($l.X + $l.W) }
+            elseif ($l.Y + $l.H -le $r.Y + 4 -and [Math]::Abs($r.X - $l.X) -lt 400) { $score = 2000 + ($r.Y - ($l.Y + $l.H)) * 2 + [Math]::Abs($r.X - $l.X) }
+            if ($score -lt $bestScore) { $bestScore = $score; $best = $n }
+        }
+        return $best
+    }
+
+    switch ($Mode) {
+        { $_ -in @('SET', 'FOCUS', 'GET', 'LOCATE') } {
+            $el = Find-InScopes { param($s) Find-Field $s }
+            if ($null -eq $el -and $Mode -in @('GET', 'LOCATE')) {
+                # a read-only display text found by its automation id
+                $byId = New-Object -TypeName System.Windows.Automation.PropertyCondition -ArgumentList $AE::AutomationIdProperty, $Name
+                $el = Find-InScopes { param($s) $s.FindFirst($TS::Descendants, $byId) }
+            }
+            if ($null -eq $el) { $State.Result = 'NOTFOUND'; break }
+            if ($Mode -eq 'GET') { $State.Result = @{ Text = (Get-ElementText $el) }; break }
+            if ($Mode -eq 'LOCATE') { $State.Result = Get-Info $el; break }
+            $p = $null
+            if ($Mode -eq 'SET' -and $el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p) -and -not $p.Current.IsReadOnly) {
+                try {
+                    $p.SetValue([string]$Text)
+                    # the field also gets the focus, as if typed into: a following Enter or Tab goes there
+                    try { $el.SetFocus() } catch { $null = $_ }
+                    $State.Result = 'SET'
+                    break
+                } catch { $p = $null }
+            }
+            try {
+                $el.SetFocus()
+                $State.Result = 'FOCUSED'
+            } catch {
+                # some fields refuse the focus by automation: the window clicks their middle
+                $r = Get-Rect $el
+                if ($null -eq $r) { throw }
+                $State.Result = @{ ClickX = $r.X + [int]($r.W / 2); ClickY = $r.Y + [int]($r.H / 2) }
+            }
+        }
+        'ISPASSWORD' {
+            $focused = $null
+            try { $focused = $AE::FocusedElement } catch { $focused = $null }
+            $State.Result = ($null -ne $focused -and [bool]$focused.Current.IsPassword)
+        }
+        'TABLE' {
+            $t = Find-InScopes { param($s) Find-Table $s }
+            if ($null -eq $t) { $State.Result = 'NOTFOUND'; break }
+            $State.Result = Read-Table $t
+        }
+        'LOCATETABLE' {
+            $t = Find-InScopes { param($s) Find-Table $s }
+            if ($null -eq $t) { $State.Result = 'NOTFOUND'; break }
+            $info = Get-Info $t
+            $info.Rows = (Read-Table $t).Rows.Count
+            $State.Result = $info
+        }
+        'LOCATENAME' {
+            # a button for "click by name": any part with exactly this name
+            $byName = New-Object -TypeName System.Windows.Automation.PropertyCondition -ArgumentList $AE::NameProperty, $Name
+            $el = Find-InScopes { param($s) $s.FindFirst($TS::Descendants, $byName) }
+            if ($null -eq $el) { $State.Result = 'NOTFOUND'; break }
+            $State.Result = Get-Info $el
+        }
+        { $_ -in @('PICK', 'PICKTABLE') } {
+            $el = $AE::FromPoint((New-Object -TypeName System.Windows.Point -ArgumentList $X, $Y))
+            if ($null -eq $el) { $State.Result = 'NOTFOUND'; break }
+            if ($Mode -eq 'PICKTABLE') {
+                $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+                $node = $el
+                while ($null -ne $node) {
+                    $t = $node.Current.ControlType
+                    if ($t -eq $CT::DataGrid -or $t -eq $CT::Table -or $t -eq $CT::List) { break }
+                    $node = $walker.GetParent($node)
+                    if ($null -ne $node -and [System.Windows.Automation.Automation]::Compare($node, $AE::RootElement)) { $node = $null }
+                }
+                if ($null -eq $node) { $State.Result = 'NOTABLE'; break }
+                $el = $node
+            }
+            $info = Get-Info $el
+            $info.Label = ''
+            $t = $el.Current.ControlType
+            if ($t -eq $CT::Edit -or $t -eq $CT::ComboBox -or $t -eq $CT::Document -or $t -eq $CT::Spinner) { $info.Label = Get-NearLabel $el }
+            $State.Result = $info
+        }
+    }
+} catch {
+    $State.Error = $_.Exception.Message
+} finally {
+    $State.Ready = $true
+}
+'@
+
+function Invoke-FujiUia {
+    param([string]$Mode, [string]$Name = '', [int]$Nth = 1, [string]$Hint = '', [string]$Text = '', [int]$X = 0, [int]$Y = 0)
+    return (Invoke-FujiBackground -Script $script:FujiUiaScript -TimeoutSec $script:FujiVisionLimits.NameTimeoutSec -Arguments @($Mode, $Name, $Nth, $Hint, $Text, $X, $Y, $PID))
+}
+
+# Io.SetField: 'SET' (the value went in) or 'FOCUSED' (the runner pastes)
+function Set-FujiUiaField {
+    param([hashtable]$Request)
+    $mode = 'SET'
+    if ($Request.Mode -eq 'PASTE') { $mode = 'FOCUS' }
+    $r = Invoke-FujiUia -Mode $mode -Name $Request.Name -Nth $Request.Nth -Hint $Request.Window -Text $Request.Text
+    if ($r -is [string] -and $r -eq 'NOTFOUND') { throw (Get-FujiText 'run.fieldNotFound' $Request.Name) }
+    if ($r -is [hashtable]) {
+        Invoke-FujiMouseClick -X $r.ClickX -Y $r.ClickY -Kind 'LEFT'
+        [void](Wait-FujiUiRun -Ms 200)
+        return 'FOCUSED'
+    }
+    if ($r -eq 'FOCUSED') { [void](Wait-FujiUiRun -Ms 150) }
+    return [string]$r
+}
+
+function Get-FujiUiaField {
+    param([hashtable]$Request)
+    $r = Invoke-FujiUia -Mode 'GET' -Name $Request.Name -Nth $Request.Nth -Hint $Request.Window
+    if ($r -is [string] -and $r -eq 'NOTFOUND') { throw (Get-FujiText 'run.fieldNotFound' $Request.Name) }
+    return [string]$r.Text
+}
+
+function Read-FujiUiaTable {
+    param([hashtable]$Request)
+    $r = Invoke-FujiUia -Mode 'TABLE' -Name $Request.Name -Hint $Request.Window
+    if ($r -is [string] -and $r -eq 'NOTFOUND') {
+        if ($Request.Name) { throw (Get-FujiText 'run.tableNotFoundNamed' $Request.Name) }
+        throw (Get-FujiText 'run.tableNotFound')
+    }
+    return $r
+}
+
+# ----------------------------------------------------------------- showing where a part is
+# A red frame around Rect for a moment. The window is shown without being activated, so the focus
+# stays where it was; inside the frame it is see-through (TransparencyKey)
+function Show-FujiPartFrame {
+    param([hashtable]$Rect)
+    if ($null -eq $Rect) { return }
+    $pad = Get-FujiScaled 3
+    $f = New-Object -TypeName System.Windows.Forms.Form
+    $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $f.ShowInTaskbar = $false
+    $f.TopMost = $true
+    $f.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $f.BackColor = [System.Drawing.Color]::Magenta
+    $f.TransparencyKey = [System.Drawing.Color]::Magenta
+    $f.Bounds = New-Object -TypeName System.Drawing.Rectangle -ArgumentList ($Rect.X - $pad), ($Rect.Y - $pad), ($Rect.W + $pad * 2), ($Rect.H + $pad * 2)
+    $f.Add_Paint({
+            $e = $_
+            $w = Get-FujiScaled 3
+            $pen = New-Object -TypeName System.Drawing.Pen -ArgumentList (Get-FujiColor '#e53935'), $w
+            try { $e.Graphics.DrawRectangle($pen, [int]($w / 2), [int]($w / 2), $this.ClientSize.Width - $w, $this.ClientSize.Height - $w) } finally { $pen.Dispose() }
+        })
+    $t = New-Object -TypeName System.Windows.Forms.Timer
+    $t.Interval = 1800
+    $t.Tag = $f
+    $t.Add_Tick({ $this.Stop(); $this.Tag.Close(); $this.Tag.Dispose(); $this.Dispose() })
+    # SW_SHOWNOACTIVATE: shown on top without taking the focus
+    [void](Get-FujiNativeType)::ShowWindow($f.Handle, 4)
+    $t.Start()
 }
 
 # ===== gui/Vision.ps1 =====
@@ -7578,6 +9162,8 @@ function Invoke-FujiNameClick {
     $script:Ed = New-FujiEditor -Directory $here -Log { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
     # CSV step labels show the loaded CSV's column names
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
+    # An Excel book in the CSV box: Excel reads its first sheet
+    $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
     $textOld = Test-FujiTextVersion
     if ($textOld) {

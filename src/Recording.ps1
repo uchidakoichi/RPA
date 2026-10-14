@@ -1,18 +1,28 @@
 # ---------------------------------------------------------------------------------------------
 #  Recording: the recorder's event lines -> steps (the HTA's rules)
 #  Lines (tab separated): S title = window came to the front, W ms = pause, C x y kind = click at,
-#  N name x y = click on a named button, K keys = key with Ctrl / Alt / named key, T text = typed
-#  text, J = typing through the Japanese input method (not recordable as keys)
+#  N name x y = click on a named button, F name x y = click into a named text box, K keys = key
+#  with Ctrl / Alt / named key, T text = typed text, J = typing through the Japanese input method
+#  (not recordable as keys). A click into a named text box followed by typing becomes FIELD_SET.
 # ---------------------------------------------------------------------------------------------
 
 function ConvertFrom-FujiRecording {
     param([AllowEmptyString()][string]$Payload)
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $lastSwitch = ''
+    # a click into a named text box waits for what is typed next (pauses in between are kept)
+    $field = $null
     foreach ($line in ([string]$Payload).Split("`n")) {
         $f = $line.TrimEnd("`r").Split("`t")
         $step = $null
+        if ($null -ne $field -and $f[0] -ne 'T' -and $f[0] -ne 'W') {
+            $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' }))))
+            $field = $null
+        }
         switch ($f[0]) {
+            'F' {
+                if ($f.Count -ge 4) { $field = @{ Name = $f[1]; X = $f[2]; Y = $f[3] } }
+            }
             'S' {
                 if ($f.Count -lt 2) { break }
                 $title = $f[1].Trim()
@@ -53,7 +63,12 @@ function ConvertFrom-FujiRecording {
             'T' {
                 $v = ''
                 if ($f.Count -ge 2) { $v = $f[1] }
-                $step = @{ cmd = 'TEXT'; val = $v }
+                if ($null -ne $field) {
+                    $step = @{ cmd = 'FIELD_SET'; val = (ConvertTo-FujiStepValue -Cmd 'FIELD_SET' -Settings ([ordered]@{ name = $field.Name; text = $v; nth = '1'; how = 'AUTO' })) }
+                    $field = $null
+                } else {
+                    $step = @{ cmd = 'TEXT'; val = $v }
+                }
             }
             'J' { $step = @{ cmd = 'COMMENT'; val = (Get-FujiText 'rec.imeNote') } }
         }
@@ -61,6 +76,7 @@ function ConvertFrom-FujiRecording {
             $steps.Add([ordered]@{ cmd = $step.cmd; val = $step.val; label = (Get-FujiStepLabel -Cmd $step.cmd -Value $step.val) })
         }
     }
+    if ($null -ne $field) { $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' })))) }
     while ($steps.Count -gt 0 -and $steps[$steps.Count - 1].cmd -eq 'WAIT') { $steps.RemoveAt($steps.Count - 1) }
     return , $steps
 }

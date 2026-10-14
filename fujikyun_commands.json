@@ -67,6 +67,103 @@
       ],
       "definesVar": "name"
     },
+    "FIELD_SET": {
+      "title": "欄に入力（名前で）",
+      "icon": "🧩",
+      "category": "input",
+      "format": "json",
+      "help": "入力欄を、欄の名前・すぐ左（上）の見出し・部品のIDで探して、文字を入れるキュン。座標やTABの回数を合わせなくていいから、画面の配置が変わっても動くよ。［🎯 部品を指す］で欄をマウスで指せば、名前が自動で入るよ。［🔍 見つかるか試す］で、見つけた欄を赤い枠で教えるよ。",
+      "defaultVal": "{\"name\":\"\",\"text\":\"\",\"nth\":\"1\",\"how\":\"AUTO\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "欄の名前・見出し・ID",
+          "type": "text",
+          "placeholder": "例: 宛名番号"
+        },
+        {
+          "id": "pick",
+          "label": "欄をマウスで指して決める",
+          "type": "uiapick"
+        },
+        {
+          "id": "text",
+          "label": "入れる文字（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{宛名番号}}",
+          "placeholders": true
+        },
+        {
+          "id": "nth",
+          "label": "同じ名前の欄がいくつもあるとき、何番目か",
+          "type": "text",
+          "placeholder": "1"
+        },
+        {
+          "id": "how",
+          "label": "入れ方",
+          "type": "select",
+          "options": [
+            [
+              "AUTO",
+              "おまかせ（直接入れる。入れられない欄はクリックして貼り付け）"
+            ],
+            [
+              "PASTE",
+              "欄を選んで貼り付ける（Webの画面などで、直接入れても反映されないとき）"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "text": "",
+        "nth": "1",
+        "how": "AUTO"
+      },
+      "hideVal": true
+    },
+    "SECRET": {
+      "title": "パスワードを入力",
+      "icon": "🔑",
+      "category": "input",
+      "format": "json",
+      "help": "Windows の資格情報マネージャーに登録したユーザー名・パスワードを、いまの入力欄に打ち込むキュン。マクロやCSVにパスワードを書かなくていいし、ログや実行結果にも値は残らないよ。最初に［🔑 登録・変更］で登録してね（登録はこのPCのこのユーザーだけのものだよ）。",
+      "defaultVal": "{\"target\":\"\",\"part\":\"PASSWORD\"}",
+      "fields": [
+        {
+          "id": "target",
+          "label": "登録名（どのシステムのものか分かる名前）",
+          "type": "text",
+          "placeholder": "例: 基幹系"
+        },
+        {
+          "id": "register",
+          "label": "このPCへの登録",
+          "type": "credential"
+        },
+        {
+          "id": "part",
+          "label": "入力するもの",
+          "type": "select",
+          "options": [
+            [
+              "PASSWORD",
+              "パスワード"
+            ],
+            [
+              "USER",
+              "ユーザー名"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "target": "",
+        "part": "PASSWORD"
+      },
+      "hideVal": true
+    },
     "WAIT": {
       "title": "待機",
       "icon": "⏳",
@@ -188,7 +285,7 @@
       "icon": "👆",
       "category": "mouse",
       "format": "text",
-      "help": "【名前でクリック・第一推奨】座標じゃなくて、UI Automation でボタンなどの表示名（Name）を探して直接押すキュン。表示名は完全一致だよ。画面の位置や大きさが変わっても動くよ。",
+      "help": "【名前でクリック・第一推奨】座標じゃなくて、UI Automation でボタンなどの表示名（Name）を探して直接押すキュン。表示名は完全一致だよ。画面の位置や大きさが変わっても動くよ。 ［🎯 部品を指す］でボタンを指せば、名前が自動で入るよ。",
       "defaultVal": "",
       "fields": [
         {
@@ -196,6 +293,11 @@
           "label": "ボタンなどの表示名",
           "type": "text",
           "placeholder": "例: 登録"
+        },
+        {
+          "id": "pick",
+          "label": "ボタンをマウスで指して決める",
+          "type": "uiapick"
         }
       ]
     },
@@ -429,6 +531,87 @@
         "name": ""
       },
       "definesVar": "name",
+      "hideVal": true
+    },
+    "FIELD_GET": {
+      "title": "欄の値を読む（名前で）",
+      "icon": "🔎",
+      "category": "mouse",
+      "format": "json",
+      "help": "入力欄や表示欄を名前・見出し・IDで探して、中の文字を変数に入れるキュン。クリックやコピーをしないから速くて確実だよ。読んだ値は［↓ 実行結果CSV］にも同じ名前の列で残るよ。",
+      "defaultVal": "{\"name\":\"\",\"nth\":\"1\",\"var\":\"\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "欄の名前・見出し・ID",
+          "type": "text",
+          "placeholder": "例: 未納額"
+        },
+        {
+          "id": "pick",
+          "label": "欄をマウスで指して決める",
+          "type": "uiapick"
+        },
+        {
+          "id": "nth",
+          "label": "同じ名前の欄がいくつもあるとき、何番目か",
+          "type": "text",
+          "placeholder": "1"
+        },
+        {
+          "id": "var",
+          "label": "入れる変数名（実行結果CSVの列名にもなるよ）",
+          "type": "text",
+          "placeholder": "例: 未納額"
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "nth": "1",
+        "var": ""
+      },
+      "definesVar": "var",
+      "hideVal": true
+    },
+    "TABLE_READ": {
+      "title": "表を読み取ってCSVに保存",
+      "icon": "📋",
+      "category": "mouse",
+      "format": "json",
+      "help": "画面の一覧表（表・リスト）を丸ごと読み取って、CSVファイルに保存するキュン。照会結果の一覧を写す作業がいらなくなるよ。表の名前を空にすると、いちばん大きい表を読むよ。保存したCSVは、そのまま別のマクロのデータにできるよ。",
+      "defaultVal": "{\"name\":\"\",\"path\":\"\",\"var\":\"\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "表の名前・ID（空ならいちばん大きい表）",
+          "type": "text",
+          "placeholder": "例: 検索結果"
+        },
+        {
+          "id": "pick",
+          "label": "表をマウスで指して決める",
+          "type": "uiapick"
+        },
+        {
+          "id": "path",
+          "label": "保存するCSVのパス（差し込み可）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\一覧_{{YYYYMMDD}}.csv",
+          "placeholders": true
+        },
+        {
+          "id": "var",
+          "label": "行数を入れる変数名（空なら入れない）",
+          "type": "text",
+          "placeholder": "例: 件数"
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "path": "",
+        "var": ""
+      },
+      "definesVar": "var",
       "hideVal": true
     },
     "SWITCH": {
@@ -901,6 +1084,42 @@
       "defaultVal": "",
       "fields": []
     },
+    "RETRY_START": {
+      "title": "うまくいくまでやり直す",
+      "icon": "🔂",
+      "category": "flow",
+      "format": "json",
+      "help": "中でエラーが起きたら、少し待ってから中身を最初からやり直すキュン。決めた回数やり直してもだめなら、いつものエラーとして止まる（外側に「エラー時の処理」があればそこへ）よ。画面の反応が遅いシステムで、ときどき失敗する所を囲んでね。何回目かは {{$やり直し回数}} で使えるよ。",
+      "defaultVal": "{\"times\":\"3\",\"wait\":\"2000\"}",
+      "fields": [
+        {
+          "id": "times",
+          "label": "やり直す回数（最初の1回は数えない）",
+          "type": "text",
+          "placeholder": "3"
+        },
+        {
+          "id": "wait",
+          "label": "やり直す前に待つ時間（ミリ秒・1000＝1秒）",
+          "type": "text",
+          "placeholder": "2000"
+        }
+      ],
+      "parseDefaults": {
+        "times": "3",
+        "wait": "2000"
+      },
+      "hideVal": true
+    },
+    "RETRY_END": {
+      "title": "やり直しここまで",
+      "icon": "└",
+      "category": "flow",
+      "format": "none",
+      "help": "「うまくいくまでやり直す」の終わりの目印だよ。ここまでエラーなしで来たら成功だキュン。",
+      "defaultVal": "",
+      "fields": []
+    },
     "CALL_MACRO": {
       "title": "マクロを呼び出す",
       "icon": "📞",
@@ -1306,7 +1525,9 @@
         "KEY",
         "TEXT",
         "CSV",
-        "COPY"
+        "COPY",
+        "FIELD_SET",
+        "SECRET"
       ]
     },
     {
@@ -1327,7 +1548,9 @@
         "CLICK_TEXT",
         "CLICK_IMG",
         "CLICK_POS",
-        "READ_TEXT"
+        "READ_TEXT",
+        "FIELD_GET",
+        "TABLE_READ"
       ]
     },
     {
@@ -1350,6 +1573,7 @@
         "IF_START",
         "ELSE",
         "TRY_START",
+        "RETRY_START",
         "CALL_MACRO",
         "RETURN"
       ]
@@ -1380,7 +1604,8 @@
       "GROUP_START": "GROUP_END",
       "LOOP_START": "LOOP_END",
       "IF_START": "IF_END",
-      "TRY_START": "TRY_END"
+      "TRY_START": "TRY_END",
+      "RETRY_START": "RETRY_END"
     },
     "middles": {
       "ELSE": "IF_START",
