@@ -1,6 +1,6 @@
 # 準備
 
-ふじキュン♡のRPAマクロビルダーは、Windows に最初から入っている **Windows PowerShell 5.1** と Windows Forms だけで動きます。ほかのソフトのインストールは不要です。
+ふじキュン♡のおしごとロボットは、Windows に最初から入っている **Windows PowerShell 5.1** と Windows Forms だけで動きます。ほかのソフトのインストールは不要です。
 
 ## ファイルを置く
 

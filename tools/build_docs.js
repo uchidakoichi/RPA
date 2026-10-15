@@ -276,8 +276,8 @@ function decorateTemplates(body) {
 
 function page(title, nav, current, body) {
     return "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
-        "<title>" + esc(title) + " - ふじキュン♡のRPAマクロビルダー</title>\n<style>" + CSS + "</style>\n</head>\n<body>\n" +
-        '<header><span class="title"><b>ふじキュン♡</b>のRPAマクロビルダー</span><nav>' +
+        "<title>" + esc(title) + " - ふじキュン♡のおしごとロボット</title>\n<style>" + CSS + "</style>\n</head>\n<body>\n" +
+        '<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav>' +
         nav.map(p => '<a href="' + p.out + '"' + (p.out === current ? ' class="current"' : "") + ">" + esc(p.nav) + "</a>").join("") +
         "</nav></header>\n<main>\n" + body + "\n<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>\n</main>\n</body>\n</html>\n";
 }
@@ -357,7 +357,7 @@ function makeZip(entries) {
 }
 
 const TOP = "fujikyun_docs_samples/";
-const readme = "﻿ふじキュン♡のRPAマクロビルダー　ドキュメントと見本CSV\r\n\r\n" +
+const readme = "﻿ふじキュン♡のおしごとロボット　ドキュメントと見本CSV\r\n\r\n" +
     "・docs\\index.html をダブルクリックすると、ブラウザでマニュアルが開きます（ネット接続は不要です）。\r\n" +
     "・samples フォルダには、テンプレートの見本CSV（すべて架空のデータ）が入っています。\r\n" +
     "・ツール本体（リポジトリ直下の5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
