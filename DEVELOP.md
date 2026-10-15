@@ -1,4 +1,4 @@
-# ふじキュン♡のRPAマクロビルダー（保守する人向け）
+# ふじキュン♡のおしごとロボット（保守する人向け）
 
 Windows PowerShell 5.1 ＋ Windows Forms で動く本体です。使う人向けの説明は [docs/src/setup.md](../docs/src/setup.md) にあります。
 

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Pre-check for the PowerShell edition of the Fujikyun RPA Macro Builder.
+    Pre-check for the PowerShell edition of the Fujikyun Oshigoto Robot app.
 
 .DESCRIPTION
     Checks whether this PC can run the Windows Forms / PowerShell 5.1 port: language mode,

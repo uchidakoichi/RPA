@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>テンプレート解説 - ふじキュン♡のRPAマクロビルダー</title>
+<title>テンプレート解説 - ふじキュン♡のおしごとロボット</title>
 <style>
 :root {
   --ink: #2a2530; --muted: #625a6b; --paper: #ffffff; --desk: #eef2f6; --grid: #dbe5ee; --rule: #cfdbe6;
@@ -62,11 +62,11 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 </style>
 </head>
 <body>
-<header><span class="title"><b>ふじキュン♡</b>のRPAマクロビルダー</span><nav><a href="index.html">目次</a><a href="setup.html">準備</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html" class="current">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
+<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav><a href="index.html">目次</a><a href="setup.html">準備</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html" class="current">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
 <main>
 <h1 id="テンプレート解説">テンプレート解説</h1>
 <blockquote><p>このファイルは <code>build/Build-FujiTemplateDoc.ps1</code> で <code>fujikyun_templates.json</code> から自動生成しています。直接編集せず、JSON を直してから再生成してください。</p></blockquote>
-<p>ふじキュン♡のRPAマクロビルダーには <strong>381 種類</strong> のテンプレート（お手本マクロ）が入っています。画面上部の <strong>［📚 テンプレート］</strong> から選んで <strong>［✨ 作る］</strong> を押すと、マクロが追加され、見本CSVが <code>samples</code> フォルダに用意されて自動で読み込まれます。</p>
+<p>ふじキュン♡のおしごとロボットには <strong>381 種類</strong> のテンプレート（お手本マクロ）が入っています。画面上部の <strong>［📚 テンプレート］</strong> から選んで <strong>［✨ 作る］</strong> を押すと、マクロが追加され、見本CSVが <code>samples</code> フォルダに用意されて自動で読み込まれます。</p>
 <ul><li>見本CSVの人名・番号・URL・メールアドレスはすべて <strong>架空</strong> です。</li><li>画面のボタン名・ウィンドウ名・TAB の回数は職場のシステムごとに違います。各テンプレートの「準備」「カスタマイズのポイント」を読んで合わせてください。</li><li>基幹系システムや庶務事務システムのテンプレートは、メニュー名・ボタン名・欄の並びを <strong>架空の例</strong> で書いています（自治体ごとに画面が違うため）。最初は確認ポイント（✋）で入力欄を手でクリックする半自動で動き、慣れたら無効化されている座標クリック（CLICK_POS）や読み取りグループを有効化して完全自動にできます。</li><li>［📚 テンプレート］の <strong>［🔍 探す］</strong> に「PDF」「コピー」「メール」のようなことばを入れると、やりたいことに近いテンプレートだけを出せます。ブラウザで読む版（docs/templates.html）では、このページの上の検索欄でも探せます。</li><li>はじめて動かすときは、実行欄の <strong>開始行・終了行を両方 1</strong> にして 1 件だけ試しましょう。</li></ul>
 <div class="finder" hidden><label for="tpl-q">やりたいことで探す</label><input id="tpl-q" type="search" placeholder="例: PDF、コピー、メール、Excel 転記" autocomplete="off"><select id="tpl-cat" aria-label="分類"><option value="">すべての分類</option></select><span class="hits" id="tpl-hits" aria-live="polite"></span><p class="none" id="tpl-none" hidden>見つかりませんでした。ことばを短くするか、分類を「すべての分類」にしてください。</p></div>
 <h2 id="一覧">一覧</h2>
