@@ -8078,13 +8078,17 @@ function Show-FujiScheduleDialog {
     $lv.FullRowSelect = $true
     $lv.MultiSelect = $false
     $lv.HideSelection = $false
-    $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $lv.Dock = [System.Windows.Forms.DockStyle]::Top
+    # only a few rows when there is nothing yet, so the add form below is in view
+    $count = 0
+    if ($null -ne $script:Settings.schedules) { $count = $script:Settings.schedules.Count }
+    $lv.Height = $script:Ui.Font.Height * 2 + ($script:Ui.Font.Height + (Get-FujiScaled 6)) * [Math]::Min(8, [Math]::Max(3, $count))
     foreach ($c in @(@('schedule.colWhen', 300), @('schedule.colMacro', 220), @('schedule.colCsv', 230), @('schedule.colState', 150))) {
         [void]$lv.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1]))
     }
     # buttons for the selected schedule
-    $actions = New-FujiFlow
-    $actions.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $actions = New-FujiFlow -NoWrap
+    $actions.Dock = [System.Windows.Forms.DockStyle]::Top
     foreach ($b in @(@('toggle', 'schedule.toggleOff'), @('register', 'schedule.register'), @('unregister', 'schedule.unregister'), @('delete', 'schedule.delete'))) {
         $btn = New-FujiButton -Text (Get-FujiText $b[1]) -Tag $b[0]
         $btn.Add_Click({ $what = [string]$this.Tag; Invoke-FujiUi { Invoke-FujiScheduleAction -Action $what } })
@@ -8092,7 +8096,7 @@ function Show-FujiScheduleDialog {
     }
     # the add form
     $add = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $add.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $add.Dock = [System.Windows.Forms.DockStyle]::Top
     $add.AutoSize = $true
     $add.ColumnCount = 2
     $add.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
@@ -8150,18 +8154,19 @@ function Show-FujiScheduleDialog {
     [void]$bar.Controls.Add($closeButton)
     [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.schedule')))
     $f.CancelButton = $closeButton
+    # the last added is docked first: help, list, its buttons and the add form stack from the top
+    [void]$f.Controls.Add($add)
+    [void]$f.Controls.Add($actions)
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($help)
-    [void]$f.Controls.Add($actions)
-    [void]$f.Controls.Add($add)
     [void]$f.Controls.Add($bar)
-    # height that fits every part with room for the list; on a small screen the dialog scrolls instead of overlapping
+    # height that fits every part; on a small screen the dialog scrolls instead of overlapping
     $inner = $f.ClientSize.Width
     $needW = [Math]::Max($inner, $add.GetPreferredSize([System.Drawing.Size]::Empty).Width)
-    $needH = Get-FujiScaled 160
+    $needH = $lv.Height
     foreach ($c in @($help, $actions, $add, $bar)) { $needH += $c.GetPreferredSize((New-Object -TypeName System.Drawing.Size -ArgumentList $needW, 0)).Height }
     $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min($needW, [int]($area.Width * 0.95))), ([Math]::Min([Math]::Max($needH, $f.ClientSize.Height), [int]($area.Height * 0.9)))
+    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min($needW, [int]($area.Width * 0.95))), ([Math]::Min($needH, [int]($area.Height * 0.9)))
     $f.AutoScroll = $true
     $f.AutoScrollMinSize = New-Object -TypeName System.Drawing.Size -ArgumentList $needW, $needH
     $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0]
