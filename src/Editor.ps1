@@ -485,16 +485,34 @@ function ConvertTo-FujiSearchText {
     return (Invoke-FujiStringOp -Op 'ZEN2HAN' -Text $Text).ToLowerInvariant()
 }
 
-# $true when the template (name, category, what it is for, how to prepare and change it) holds
-# every word of Query; an empty query matches all
-function Test-FujiTemplateMatch {
-    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
-    $words = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
-    if ($words.Count -eq 0) { return $true }
+# The searched text of a template (name, category, what it is for, how to prepare and change it).
+# Made once per built-in template: converting it on every key press made typing slow
+$script:FujiTemplateSearchCache = @{}
+$script:FujiTemplateQuery = $null
+$script:FujiTemplateWords = @()
+function Get-FujiTemplateSearchText {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
+    $id = [string]$Template['id']
+    if ($id -and $script:FujiTemplateSearchCache.ContainsKey($id)) { return $script:FujiTemplateSearchCache[$id] }
     $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
     foreach ($k in @('name', 'category', 'summary', 'useCase')) { $parts.Add([string]$Template[$k]) }
     foreach ($k in @('prepare', 'customize', 'ideas')) { foreach ($x in $Template[$k]) { $parts.Add([string]$x) } }
     $hay = ConvertTo-FujiSearchText ([string]::Join("`n", $parts.ToArray()))
+    if ($id) { $script:FujiTemplateSearchCache[$id] = $hay }
+    return $hay
+}
+
+# $true when the template holds every word of Query; an empty query matches all
+function Test-FujiTemplateMatch {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
+    # the same query is checked against every template: its words are made once
+    if ($Query -cne $script:FujiTemplateQuery) {
+        $script:FujiTemplateQuery = $Query
+        $script:FujiTemplateWords = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
+    }
+    $words = $script:FujiTemplateWords
+    if ($words.Count -eq 0) { return $true }
+    $hay = Get-FujiTemplateSearchText -Template $Template
     foreach ($w in $words) { if (-not $hay.Contains($w)) { return $false } }
     return $true
 }

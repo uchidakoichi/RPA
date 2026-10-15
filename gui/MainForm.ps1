@@ -986,13 +986,20 @@ function Show-FujiTemplateGallery {
     [void]$f.Controls.Add($split)
     [void]$f.Controls.Add($topRow)
     [void]$f.Controls.Add($bar)
-    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo; Search = $search; Hits = $hits }
+    # the list is filtered once typing pauses, not on every key press
+    $searchTimer = New-Object -TypeName System.Windows.Forms.Timer
+    $searchTimer.Interval = 200
+    $searchTimer.Add_Tick({ $this.Stop(); Invoke-FujiUi { Update-FujiTemplateList } })
+    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo; Search = $search; Hits = $hits; Timer = $searchTimer }
     $combo.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
-    $search.Add_TextChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
+    $search.Add_TextChanged({ $script:Ui.Gallery.Timer.Stop(); $script:Ui.Gallery.Timer.Start() })
     # Down arrow or Enter from the search box goes on to the list
     $search.Add_KeyDown({
             $k = $_.KeyCode
-            if (($k -eq [System.Windows.Forms.Keys]::Down -or $k -eq [System.Windows.Forms.Keys]::Enter) -and $script:Ui.Gallery.List.Items.Count -gt 0) {
+            if ($k -ne [System.Windows.Forms.Keys]::Down -and $k -ne [System.Windows.Forms.Keys]::Enter) { return }
+            # a search still waiting for the pause is done now, so the list matches what was typed
+            if ($script:Ui.Gallery.Timer.Enabled) { $script:Ui.Gallery.Timer.Stop(); Invoke-FujiUi { Update-FujiTemplateList } }
+            if ($script:Ui.Gallery.List.Items.Count -gt 0) {
                 $_.SuppressKeyPress = $true
                 [void]$script:Ui.Gallery.List.Focus()
             }
@@ -1001,13 +1008,16 @@ function Show-FujiTemplateGallery {
     $script:Ui.Gallery.Create = $create
     $search.Add_Enter({ $this.FindForm().AcceptButton = $null })
     $search.Add_Leave({ $this.FindForm().AcceptButton = $script:Ui.Gallery.Create })
-    $f.Add_Shown({ [void]$script:Ui.Gallery.Search.Focus() })
+    # the searched text is made right after the dialog appears, so the first search is quick too
+    $f.Add_Shown({ [void]$script:Ui.Gallery.Search.Focus(); $this.Update(); foreach ($t in (Get-FujiTemplateData)['templates']) { [void](Get-FujiTemplateSearchText -Template $t) } })
     $lb.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateDetail } })
     $lb.Add_DoubleClick({ if ($this.SelectedIndex -ge 0) { $this.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK } })
     $combo.SelectedIndex = 0
     $result = Show-FujiDialog -Form $f
     $chosen = $null
     if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $lb.SelectedIndex -ge 0) { $chosen = $script:Ui.Gallery.Shown[$lb.SelectedIndex] }
+    $searchTimer.Stop()
+    $searchTimer.Dispose()
     $f.Dispose()
     $script:Ui.Gallery = $null
     return $chosen

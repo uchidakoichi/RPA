@@ -1478,16 +1478,34 @@ function ConvertTo-FujiSearchText {
     return (Invoke-FujiStringOp -Op 'ZEN2HAN' -Text $Text).ToLowerInvariant()
 }
 
-# $true when the template (name, category, what it is for, how to prepare and change it) holds
-# every word of Query; an empty query matches all
-function Test-FujiTemplateMatch {
-    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
-    $words = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
-    if ($words.Count -eq 0) { return $true }
+# The searched text of a template (name, category, what it is for, how to prepare and change it).
+# Made once per built-in template: converting it on every key press made typing slow
+$script:FujiTemplateSearchCache = @{}
+$script:FujiTemplateQuery = $null
+$script:FujiTemplateWords = @()
+function Get-FujiTemplateSearchText {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
+    $id = [string]$Template['id']
+    if ($id -and $script:FujiTemplateSearchCache.ContainsKey($id)) { return $script:FujiTemplateSearchCache[$id] }
     $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
     foreach ($k in @('name', 'category', 'summary', 'useCase')) { $parts.Add([string]$Template[$k]) }
     foreach ($k in @('prepare', 'customize', 'ideas')) { foreach ($x in $Template[$k]) { $parts.Add([string]$x) } }
     $hay = ConvertTo-FujiSearchText ([string]::Join("`n", $parts.ToArray()))
+    if ($id) { $script:FujiTemplateSearchCache[$id] = $hay }
+    return $hay
+}
+
+# $true when the template holds every word of Query; an empty query matches all
+function Test-FujiTemplateMatch {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template, [AllowEmptyString()][string]$Query)
+    # the same query is checked against every template: its words are made once
+    if ($Query -cne $script:FujiTemplateQuery) {
+        $script:FujiTemplateQuery = $Query
+        $script:FujiTemplateWords = @((ConvertTo-FujiSearchText $Query).Split([char[]]@(' ', "`t"), [System.StringSplitOptions]::RemoveEmptyEntries))
+    }
+    $words = $script:FujiTemplateWords
+    if ($words.Count -eq 0) { return $true }
+    $hay = Get-FujiTemplateSearchText -Template $Template
     foreach ($w in $words) { if (-not $hay.Contains($w)) { return $false } }
     return $true
 }
@@ -6475,13 +6493,20 @@ function Show-FujiTemplateGallery {
     [void]$f.Controls.Add($split)
     [void]$f.Controls.Add($topRow)
     [void]$f.Controls.Add($bar)
-    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo; Search = $search; Hits = $hits }
+    # the list is filtered once typing pauses, not on every key press
+    $searchTimer = New-Object -TypeName System.Windows.Forms.Timer
+    $searchTimer.Interval = 200
+    $searchTimer.Add_Tick({ $this.Stop(); Invoke-FujiUi { Update-FujiTemplateList } })
+    $script:Ui.Gallery = @{ List = $lb; Details = $details; Shown = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Combo = $combo; Search = $search; Hits = $hits; Timer = $searchTimer }
     $combo.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
-    $search.Add_TextChanged({ Invoke-FujiUi { Update-FujiTemplateList } })
+    $search.Add_TextChanged({ $script:Ui.Gallery.Timer.Stop(); $script:Ui.Gallery.Timer.Start() })
     # Down arrow or Enter from the search box goes on to the list
     $search.Add_KeyDown({
             $k = $_.KeyCode
-            if (($k -eq [System.Windows.Forms.Keys]::Down -or $k -eq [System.Windows.Forms.Keys]::Enter) -and $script:Ui.Gallery.List.Items.Count -gt 0) {
+            if ($k -ne [System.Windows.Forms.Keys]::Down -and $k -ne [System.Windows.Forms.Keys]::Enter) { return }
+            # a search still waiting for the pause is done now, so the list matches what was typed
+            if ($script:Ui.Gallery.Timer.Enabled) { $script:Ui.Gallery.Timer.Stop(); Invoke-FujiUi { Update-FujiTemplateList } }
+            if ($script:Ui.Gallery.List.Items.Count -gt 0) {
                 $_.SuppressKeyPress = $true
                 [void]$script:Ui.Gallery.List.Focus()
             }
@@ -6490,13 +6515,16 @@ function Show-FujiTemplateGallery {
     $script:Ui.Gallery.Create = $create
     $search.Add_Enter({ $this.FindForm().AcceptButton = $null })
     $search.Add_Leave({ $this.FindForm().AcceptButton = $script:Ui.Gallery.Create })
-    $f.Add_Shown({ [void]$script:Ui.Gallery.Search.Focus() })
+    # the searched text is made right after the dialog appears, so the first search is quick too
+    $f.Add_Shown({ [void]$script:Ui.Gallery.Search.Focus(); $this.Update(); foreach ($t in (Get-FujiTemplateData)['templates']) { [void](Get-FujiTemplateSearchText -Template $t) } })
     $lb.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiTemplateDetail } })
     $lb.Add_DoubleClick({ if ($this.SelectedIndex -ge 0) { $this.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK } })
     $combo.SelectedIndex = 0
     $result = Show-FujiDialog -Form $f
     $chosen = $null
     if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $lb.SelectedIndex -ge 0) { $chosen = $script:Ui.Gallery.Shown[$lb.SelectedIndex] }
+    $searchTimer.Stop()
+    $searchTimer.Dispose()
     $f.Dispose()
     $script:Ui.Gallery = $null
     return $chosen
