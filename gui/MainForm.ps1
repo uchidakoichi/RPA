@@ -948,7 +948,7 @@ function Show-FujiTemplateGallery {
         $values.Add([string]$c)
     }
     $combo = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 300)
-    $combo.MaxDropDownItems = 40
+    $combo.MaxDropDownItems = 50
     [void]$topRow.Controls.Add($combo)
     $hits = New-FujiLabel -Text ''
     $hits.ForeColor = Get-FujiColor '#6b5aa6'

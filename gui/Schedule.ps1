@@ -318,7 +318,7 @@ function Show-FujiScheduleDialog {
     $width = Get-FujiScaled 940
     $f = New-FujiDialogForm -Title (Get-FujiText 'schedule.title') -Width $width -Height (Get-FujiScaled 640)
     $f.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList (Get-FujiScaled 640), (Get-FujiScaled 480)
-    $help = New-FujiLabel -Text (Get-FujiText 'schedule.help') -MaxWidth ($width - (Get-FujiScaled 30))
+    $help = New-FujiLabel -Text (Get-FujiText 'schedule.help') -MaxWidth ($f.ClientSize.Width - (Get-FujiScaled 30))
     $help.Dock = [System.Windows.Forms.DockStyle]::Top
     $help.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6)
     $lv = New-Object -TypeName System.Windows.Forms.ListView
@@ -326,13 +326,17 @@ function Show-FujiScheduleDialog {
     $lv.FullRowSelect = $true
     $lv.MultiSelect = $false
     $lv.HideSelection = $false
-    $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $lv.Dock = [System.Windows.Forms.DockStyle]::Top
+    # only a few rows when there is nothing yet, so the add form below is in view
+    $count = 0
+    if ($null -ne $script:Settings.schedules) { $count = $script:Settings.schedules.Count }
+    $lv.Height = $script:Ui.Font.Height * 2 + ($script:Ui.Font.Height + (Get-FujiScaled 6)) * [Math]::Min(8, [Math]::Max(3, $count))
     foreach ($c in @(@('schedule.colWhen', 300), @('schedule.colMacro', 220), @('schedule.colCsv', 230), @('schedule.colState', 150))) {
         [void]$lv.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1]))
     }
     # buttons for the selected schedule
-    $actions = New-FujiFlow
-    $actions.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $actions = New-FujiFlow -NoWrap
+    $actions.Dock = [System.Windows.Forms.DockStyle]::Top
     foreach ($b in @(@('toggle', 'schedule.toggleOff'), @('register', 'schedule.register'), @('unregister', 'schedule.unregister'), @('delete', 'schedule.delete'))) {
         $btn = New-FujiButton -Text (Get-FujiText $b[1]) -Tag $b[0]
         $btn.Add_Click({ $what = [string]$this.Tag; Invoke-FujiUi { Invoke-FujiScheduleAction -Action $what } })
@@ -340,7 +344,7 @@ function Show-FujiScheduleDialog {
     }
     # the add form
     $add = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
-    $add.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $add.Dock = [System.Windows.Forms.DockStyle]::Top
     $add.AutoSize = $true
     $add.ColumnCount = 2
     $add.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
@@ -353,7 +357,7 @@ function Show-FujiScheduleDialog {
     foreach ($m in $script:Ed.Data.macros) { $labels.Add([string]$m.name); $values.Add([string]$m.id) }
     $macro = New-FujiComboBox -Items $labels.ToArray() -Values $values.ToArray() -Width (Get-FujiScaled 420)
     if ($macro.Items.Count -gt 0) { $macro.SelectedIndex = [Math]::Max(0, $script:Ed.MacroIndex) }
-    $csv = New-FujiTextBox -Text ([string]$script:Ed.Csv.Path) -Width (Get-FujiScaled 560)
+    $csv = New-FujiTextBox -Text ([string]$script:Ed.Csv.Path) -Width (Get-FujiScaled 460)
     $header = New-FujiCheck -Text (Get-FujiText 'schedule.header') -Checked $true
     $kindLabels = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($k in $script:FujiScheduleKinds) { $kindLabels.Add((Get-FujiText ('schedule.kinds.' + $k))) }
@@ -361,7 +365,7 @@ function Show-FujiScheduleDialog {
     $kind.SelectedIndex = 0
     $kind.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiScheduleKindUi } })
     $hotkey = New-FujiTextBox -Width (Get-FujiScaled 200)
-    $folder = New-FujiTextBox -Width (Get-FujiScaled 560)
+    $folder = New-FujiTextBox -Width (Get-FujiScaled 460)
     $pattern = New-FujiTextBox -Text '*.csv' -Width (Get-FujiScaled 160)
     $useFile = New-FujiCheck -Text (Get-FujiText 'schedule.useFile') -Checked $true
     $window = New-FujiTextBox -Width (Get-FujiScaled 360)
@@ -372,30 +376,47 @@ function Show-FujiScheduleDialog {
     $repeat.SelectedIndex = 0
     $date = New-FujiTextBox -Width (Get-FujiScaled 130)
     $close = New-FujiCheck -Text (Get-FujiText 'schedule.closeAfter') -Checked $false
-    $err = New-FujiLabel -Text ''
+    $err = New-FujiLabel -Text '' -MaxWidth (Get-FujiScaled 560)
     $err.ForeColor = Get-FujiColor '#c62828'
-    $row = 1
-    foreach ($pair in @(@('schedule.kind', $kind), @('schedule.macro', $macro), @('schedule.csv', $csv), @('', $header), @('schedule.time', $time), @('schedule.colRepeat', $repeat), @('schedule.date', $date), @('', $close),
-            @('schedule.hotkey', $hotkey), @('schedule.folder', $folder), @('schedule.pattern', $pattern), @('', $useFile), @('schedule.window', $window), @('', $err))) {
-        if ($pair[0]) { $add.Controls.Add((New-FujiLabel -Text (Get-FujiText $pair[0])), 0, $row) }
-        $add.Controls.Add($pair[1], 1, $row)
-        $row++
-    }
     $addButton = New-FujiButton -Text (Get-FujiText 'schedule.add')
     $addButton.Font = $script:Ui.BoldFont
     $addButton.Add_Click({ Invoke-FujiUi { Add-FujiScheduleFromDialog } })
-    $add.Controls.Add($addButton, 1, $row)
+    # related boxes share a row, so the form stays short enough for the list above it
+    $row = 1
+    foreach ($pair in @(@('schedule.kind', @($kind)), @('schedule.macro', @($macro)), @('schedule.csv', @($csv, $header)),
+            @('schedule.time', @($time, 'schedule.colRepeat', $repeat, 'schedule.date', $date)), @('', @($close)),
+            @('schedule.hotkey', @($hotkey)), @('schedule.folder', @($folder, 'schedule.pattern', $pattern)), @('', @($useFile)),
+            @('schedule.window', @($window)), @('', @($addButton, $err)))) {
+        if ($pair[0]) { $add.Controls.Add((New-FujiLabel -Text (Get-FujiText $pair[0])), 0, $row) }
+        $cell = New-FujiFlow -NoWrap
+        foreach ($c in $pair[1]) {
+            if ($c -is [string]) { $c = New-FujiLabel -Text (Get-FujiText $c) }
+            [void]$cell.Controls.Add($c)
+        }
+        $add.Controls.Add($cell, 1, $row)
+        $row++
+    }
     $bar = New-FujiButtonBar
     $closeButton = New-FujiButton -Text (Get-FujiText 'gui.close')
     $closeButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($closeButton)
     [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.schedule')))
     $f.CancelButton = $closeButton
+    # the last added is docked first: help, list, its buttons and the add form stack from the top
+    [void]$f.Controls.Add($add)
+    [void]$f.Controls.Add($actions)
     [void]$f.Controls.Add($lv)
     [void]$f.Controls.Add($help)
-    [void]$f.Controls.Add($actions)
-    [void]$f.Controls.Add($add)
     [void]$f.Controls.Add($bar)
+    # height that fits every part; on a small screen the dialog scrolls instead of overlapping
+    $inner = $f.ClientSize.Width
+    $needW = [Math]::Max($inner, $add.GetPreferredSize([System.Drawing.Size]::Empty).Width)
+    $needH = $lv.Height
+    foreach ($c in @($help, $actions, $add, $bar)) { $needH += $c.GetPreferredSize((New-Object -TypeName System.Drawing.Size -ArgumentList $needW, 0)).Height }
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $f.ClientSize = New-Object -TypeName System.Drawing.Size -ArgumentList ([Math]::Min($needW, [int]($area.Width * 0.95))), ([Math]::Min($needH, [int]($area.Height * 0.9)))
+    $f.AutoScroll = $true
+    $f.AutoScrollMinSize = New-Object -TypeName System.Drawing.Size -ArgumentList $needW, $needH
     $script:Ui.SchedDlg = @{ List = $lv; Macro = $macro; Csv = $csv; Header = $header; Time = $time; Repeat = $repeat; Date = $date; Close = $close; Error = $err; Toggle = $actions.Controls[0]
         Kind = $kind; Hotkey = $hotkey; Folder = $folder; Pattern = $pattern; UseFile = $useFile; Window = $window }
     Update-FujiScheduleKindUi
