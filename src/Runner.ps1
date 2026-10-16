@@ -27,7 +27,7 @@
 # ---------------------------------------------------------------------------------------------
 
 $script:FujiRunLimits = @{
-    PasteSettleMs = 250; CopyWaitMs = 400; WindowRetryMax = 3; WindowRetryMs = 1000; CallDepthMax = 10
+    PasteSettleMs = 250; ClipboardSettleMs = 150; CopyWaitMs = 400; WindowRetryMax = 3; WindowRetryMs = 1000; CallDepthMax = 10
 }
 $script:FujiEvidenceFolder = 'evidence'
 
@@ -394,16 +394,22 @@ function Restore-FujiRunTarget {
     return (Get-FujiRunNext 0)
 }
 
-# The clipboard is written right before Ctrl+V (a pause in between must not paste whatever the
-# user copied meanwhile); the next step waits until the target app has taken the paste
+# The clipboard is written right before Ctrl+V (a long pause in between could paste whatever the
+# user copied meanwhile). Ctrl+V comes ClipboardSettleMs later: an app sometimes drops a paste sent
+# the moment the clipboard changes (Notepad on a city hall PC: 5 of 140, none of 140 with 150 ms).
+# The next step waits until the target app has taken the paste.
 function Invoke-FujiPaste {
     param([hashtable]$Run, [AllowEmptyString()][string]$Text, [string]$What)
     if ($Text -eq '') {
         Write-FujiRunLog $Run (Get-FujiText 'run.pasteEmpty' $What)
         return (Get-FujiRunNext)
     }
-    Wait-FujiRun -Run $Run -Ms 80
-    if (-not (& $Run.Io.SetClipboard $Text)) { return (Get-FujiRunError (Get-FujiText 'run.clipboardFailed')) }
+    # after a pause the user may have copied something: the clipboard is written again
+    do {
+        if (-not (& $Run.Io.SetClipboard $Text)) { return (Get-FujiRunError (Get-FujiText 'run.clipboardFailed')) }
+        $resumed = & $Run.Io.Wait $script:FujiRunLimits.ClipboardSettleMs
+        if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run }
+    } while ($resumed -eq $true)
     & $Run.Io.SendKeys '^v'
     Write-FujiRunLog $Run (Get-FujiText 'run.pasted' $What (Format-FujiShort $Text 30))
     return (Get-FujiRunNext ([Math]::Max($Run.Interval, $script:FujiRunLimits.PasteSettleMs)))
