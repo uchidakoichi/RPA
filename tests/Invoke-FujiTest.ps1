@@ -494,13 +494,13 @@ function New-FakeIo {
     $script:Fake = @{
         Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
-        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'
+        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
-        Wait = { $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
+        Wait = { param($Ms) $script:Fake.WaitAt.Add(('{0}:{1}' -f $script:Fake.Calls.Count, $Ms)); if ($script:Fake.PauseAfterClip -and $script:Fake.Calls.Count -gt 0 -and $script:Fake.Calls[$script:Fake.Calls.Count - 1].StartsWith('CLIP')) { $script:Fake.PauseAfterClip = $false; $script:Fake.Clipboard = 'copied while paused'; return $true }; $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
         Activate = { param($Title) $script:Fake.Calls.Add('ACT ' + $Title); return ($script:Fake.Windows -contains $Title) }
         WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
         SelfHasFocus = { return $script:Fake.Self }
@@ -569,9 +569,18 @@ $J = { param($o) ConvertTo-FujiJson -InputObject $o -Indent 0 }
 $run = New-TestRun -Steps @(@('CSV', '1'), @('KEY', '{TAB}'), @('TEXT', '{{2}}-{{ROW}}'), @('KEY', '{SPACE 2}'), @('CSV', '5')) -Rows @(, [string[]]@('a', 'b'))
 Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: done'
 Assert-Equal 'CLIP a | KEYS ^v | KEYS {TAB} | CLIP b-1 | KEYS ^v | KEYS   ' ((@($script:Fake.Calls | Where-Object { $_ -match '^(CLIP|KEYS)' })) -join ' | ') 'run: paste, keys, placeholders, {SPACE n}, empty CSV cell not pasted'
+# a paste right after the clipboard changes is sometimes dropped by the target (Notepad: 5 of 140 on
+# a city hall PC, none of 140 with 150 ms in between): Ctrl+V only after the clipboard has settled
+$clipAt = $script:Fake.Calls.IndexOf('CLIP a')
+$settled = @($script:Fake.WaitAt | Where-Object { $_ -match ('^' + ($clipAt + 1) + ':(\d+)$') -and [int]$Matches[1] -ge $script:FujiRunLimits.ClipboardSettleMs })
+Assert-True ($clipAt -ge 0 -and $script:FujiRunLimits.ClipboardSettleMs -ge 150 -and $settled.Count -eq 1 -and $script:Fake.Calls[$clipAt + 1] -eq 'KEYS ^v') 'run: Ctrl+V waits for the clipboard to settle'
 Assert-True ($script:Fake.Calls[0] -eq 'ACT App' -and $script:Fake.Calls[$script:Fake.Calls.Count - 1] -eq 'END' -and $script:Fake.Calls.Contains('NOTIFY')) 'run: target activated first, end and finish sound'
 Assert-True ($run.DoneRows -eq 1 -and $run.ResultRows[0].Status -eq (Get-FujiText 'run.resultDone')) 'run: row result'
 Assert-True (@($script:Fake.Logs | Where-Object { $_ -like ('warn*' + (Get-FujiText 'run.csvMissingCol' 5 2)) }).Count -eq 1) 'run: missing CSV column warned'
+$run = New-TestRun -Steps @(, @('CSV', '1')) -Rows @(, [string[]]@('a'))
+$script:Fake.PauseAfterClip = $true
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: paused while the clipboard settles'
+Assert-Equal 'CLIP a | CLIP a | KEYS ^v' ((@($script:Fake.Calls | Where-Object { $_ -match '^(CLIP|KEYS)' })) -join ' | ') 'run: after a pause the clipboard is written again before Ctrl+V'
 
 # first / last row groups, disabled block
 $run = New-TestRun -Steps @(@('GROUP_START', 'g1', @{ when = 'first' }), @('KEY', 'a'), @('GROUP_END', ''), @('KEY', 'b'), @('GROUP_START', 'g2', @{ when = 'last' }), @('KEY', 'c'), @('GROUP_END', ''),
