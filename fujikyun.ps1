@@ -2250,6 +2250,9 @@ function Get-FujiNativeType {
         @($u, 'ShowWindow', [bool], [type[]]@([IntPtr], [int]), $auto),
         @($u, 'SetForegroundWindow', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'GetForegroundWindow', [IntPtr], [type[]]@(), $auto),
+        @($u, 'GetClipboardSequenceNumber', [uint32], [type[]]@(), $auto),
+        @($u, 'GetOpenClipboardWindow', [IntPtr], [type[]]@(), $auto),
+        @($u, 'IsClipboardFormatAvailable', [bool], [type[]]@([uint32]), $auto),
         @($u, 'BringWindowToTop', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'GetWindowThreadProcessId', [uint32], [type[]]@([IntPtr], [IntPtr]), $auto),
         @($u, 'AttachThreadInput', [bool], [type[]]@([uint32], [uint32], [bool]), $auto),
@@ -2535,6 +2538,8 @@ function Add-FujiRecordedStep {
 #    Activate {Title} -> bool  (exact, then prefix, then suffix title match; never this app)
 #    WindowExists {Title} -> bool   SelfHasFocus {} -> bool   FocusSelf {}
 #    SendKeys {Keys}   SetClipboard {Text} -> bool   GetClipboard {} -> string
+#    ClipboardSeq {} -> number changed by every clipboard write
+#    ClipboardReady {Seq} -> $true when the number is no longer Seq, no program has the clipboard open and text is on it
 #    Start {CommandLine} -> note   ClickAt {X, Y, Kind}   Screenshot {Path, Full} -> note
 #    ClickName {Name, WindowTitle} -> note   ClickImage {Path, Threshold} -> @{ X; Y; Score }
 #    Ocr {Settings, Find, Nth} -> text read, or a note of the click
@@ -2554,7 +2559,7 @@ function Add-FujiRecordedStep {
 # ---------------------------------------------------------------------------------------------
 
 $script:FujiRunLimits = @{
-    PasteSettleMs = 250; ClipboardSettleMs = 150; CopyWaitMs = 400; WindowRetryMax = 3; WindowRetryMs = 1000; CallDepthMax = 10
+    PasteSettleMs = 250; ClipboardSettleMs = 150; CopyPollMs = 20; CopyWaitMaxMs = 3000; WindowRetryMax = 3; WindowRetryMs = 1000; CallDepthMax = 10
 }
 $script:FujiEvidenceFolder = 'evidence'
 
@@ -3347,8 +3352,14 @@ function Invoke-FujiRunCommand {
             if ($err) { return $err }
             $name = $val.Trim()
             [void](& $Run.Io.SetClipboard '')
+            $seq = & $Run.Io.ClipboardSeq
             & $Run.Io.SendKeys '^c'
-            Wait-FujiRun -Run $Run -Ms $script:FujiRunLimits.CopyWaitMs
+            # read as soon as the app has put the text there: a fixed wait read too late on a city hall
+            # PC (SecureBrowser II: another program held the clipboard open from about 400 ms on,
+            # 7 of 20 copies empty; 0 of 20 when read at about 60 ms). Nothing selected: empty after the limit.
+            for ($waited = 0; $waited -lt $script:FujiRunLimits.CopyWaitMaxMs -and -not (& $Run.Io.ClipboardReady $seq); $waited += $script:FujiRunLimits.CopyPollMs) {
+                Wait-FujiRun -Run $Run -Ms $script:FujiRunLimits.CopyPollMs
+            }
             $text = ([string](& $Run.Io.GetClipboard)) -replace '(\r\n|\n|\r)+$', ''
             $Run.Vars[$name] = $text
             Add-FujiResultValue -Run $Run -Name $name -Value $text
@@ -7326,6 +7337,8 @@ function New-FujiWinIo {
         SendKeys = { param($Keys) [System.Windows.Forms.SendKeys]::SendWait($Keys) }
         SetClipboard = { param($Text) Set-FujiClipboard -Text $Text }
         GetClipboard = { Get-FujiClipboard }
+        ClipboardSeq = { (Get-FujiNativeType)::GetClipboardSequenceNumber() }
+        ClipboardReady = { param($Seq) Test-FujiClipboardReady -Seq $Seq }
         Start = { param($CommandLine) Start-FujiCommandLine -CommandLine $CommandLine }
         ClickAt = { param($X, $Y, $Kind) Invoke-FujiMouseClick -X $X -Y $Y -Kind $Kind }
         Screenshot = { param($Path, $Full) Save-FujiScreenshot -Path $Path -Full $Full }
@@ -7464,6 +7477,16 @@ function Set-FujiClipboard {
         }
     }
     return $false
+}
+
+# The clipboard changed since Seq and the program that wrote it has closed it with text on it
+# (CF_UNICODETEXT 13). The number goes up when the clipboard is emptied too, before the data is there.
+function Test-FujiClipboardReady {
+    param([uint32]$Seq)
+    $native = Get-FujiNativeType
+    if ($native::GetClipboardSequenceNumber() -eq $Seq) { return $false }
+    if ($native::GetOpenClipboardWindow() -ne [IntPtr]::Zero) { return $false }
+    return $native::IsClipboardFormatAvailable(13)
 }
 
 function Get-FujiClipboard {

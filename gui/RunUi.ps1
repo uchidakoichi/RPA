@@ -309,6 +309,8 @@ function New-FujiWinIo {
         SendKeys = { param($Keys) [System.Windows.Forms.SendKeys]::SendWait($Keys) }
         SetClipboard = { param($Text) Set-FujiClipboard -Text $Text }
         GetClipboard = { Get-FujiClipboard }
+        ClipboardSeq = { (Get-FujiNativeType)::GetClipboardSequenceNumber() }
+        ClipboardReady = { param($Seq) Test-FujiClipboardReady -Seq $Seq }
         Start = { param($CommandLine) Start-FujiCommandLine -CommandLine $CommandLine }
         ClickAt = { param($X, $Y, $Kind) Invoke-FujiMouseClick -X $X -Y $Y -Kind $Kind }
         Screenshot = { param($Path, $Full) Save-FujiScreenshot -Path $Path -Full $Full }
@@ -447,6 +449,16 @@ function Set-FujiClipboard {
         }
     }
     return $false
+}
+
+# The clipboard changed since Seq and the program that wrote it has closed it with text on it
+# (CF_UNICODETEXT 13). The number goes up when the clipboard is emptied too, before the data is there.
+function Test-FujiClipboardReady {
+    param([uint32]$Seq)
+    $native = Get-FujiNativeType
+    if ($native::GetClipboardSequenceNumber() -eq $Seq) { return $false }
+    if ($native::GetOpenClipboardWindow() -ne [IntPtr]::Zero) { return $false }
+    return $native::IsClipboardFormatAvailable(13)
 }
 
 function Get-FujiClipboard {
