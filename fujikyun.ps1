@@ -3351,15 +3351,20 @@ function Invoke-FujiRunCommand {
             $err = Confirm-FujiInputTarget -Run $Run
             if ($err) { return $err }
             $name = $val.Trim()
-            [void](& $Run.Io.SetClipboard '')
-            $seq = & $Run.Io.ClipboardSeq
-            & $Run.Io.SendKeys '^c'
             # read as soon as the app has put the text there: a fixed wait read too late on a city hall
             # PC (SecureBrowser II: another program held the clipboard open from about 400 ms on,
             # 7 of 20 copies empty; 0 of 20 when read at about 60 ms). Nothing selected: empty after the limit.
-            for ($waited = 0; $waited -lt $script:FujiRunLimits.CopyWaitMaxMs -and -not (& $Run.Io.ClipboardReady $seq); $waited += $script:FujiRunLimits.CopyPollMs) {
-                Wait-FujiRun -Run $Run -Ms $script:FujiRunLimits.CopyPollMs
-            }
+            # After a pause the user may have copied something: the copy is made again.
+            do {
+                [void](& $Run.Io.SetClipboard '')
+                $seq = & $Run.Io.ClipboardSeq
+                & $Run.Io.SendKeys '^c'
+                $resumed = $false
+                for ($waited = 0; $waited -lt $script:FujiRunLimits.CopyWaitMaxMs -and -not (& $Run.Io.ClipboardReady $seq); $waited += $script:FujiRunLimits.CopyPollMs) {
+                    $resumed = & $Run.Io.Wait $script:FujiRunLimits.CopyPollMs
+                    if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run; break }
+                }
+            } while ($resumed -eq $true)
             $text = ([string](& $Run.Io.GetClipboard)) -replace '(\r\n|\n|\r)+$', ''
             $Run.Vars[$name] = $text
             Add-FujiResultValue -Run $Run -Name $name -Value $text
