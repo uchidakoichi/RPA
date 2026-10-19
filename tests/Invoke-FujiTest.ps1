@@ -494,13 +494,13 @@ function New-FakeIo {
     $script:Fake = @{
         Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
-        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0
+        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
-        Wait = { param($Ms) $script:Fake.WaitAt.Add(('{0}:{1}' -f $script:Fake.Calls.Count, $Ms)); if ($script:Fake.PauseAfterClip -and $script:Fake.Calls.Count -gt 0 -and $script:Fake.Calls[$script:Fake.Calls.Count - 1].StartsWith('CLIP')) { $script:Fake.PauseAfterClip = $false; $script:Fake.Clipboard = 'copied while paused'; return $true }; $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
+        Wait = { param($Ms) $script:Fake.WaitAt.Add(('{0}:{1}' -f $script:Fake.Calls.Count, $Ms)); if ($script:Fake.PauseAfterClip -and $script:Fake.Calls.Count -gt 0 -and $script:Fake.Calls[$script:Fake.Calls.Count - 1].StartsWith('CLIP')) { $script:Fake.PauseAfterClip = $false; $script:Fake.Clipboard = 'copied while paused'; return $true }; if ($script:Fake.PauseAfterCopy -and $script:Fake.Calls.Count -gt 0 -and $script:Fake.Calls[$script:Fake.Calls.Count - 1] -eq 'KEYS ^c') { $script:Fake.PauseAfterCopy = $false; $script:Fake.Clipboard = 'copied while paused'; $script:Fake.ClipSeq++; return $true }; $script:Fake.Waits++; if ($script:Fake.Waits -eq $script:Fake.StopAtWait) { throw (New-Object -TypeName System.OperationCanceledException -ArgumentList 'test stop') } }
         Activate = { param($Title) $script:Fake.Calls.Add('ACT ' + $Title); return ($script:Fake.Windows -contains $Title) }
         WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
         SelfHasFocus = { return $script:Fake.Self }
@@ -704,6 +704,12 @@ Assert-True ($run.Vars['c'] -eq 'late' -and @($script:Fake.WaitAt | Where-Object
 $run = New-TestRun -Steps @(@('COPY', 'c'))
 [void](Invoke-FujiRun -Run $run)
 Assert-True ($run.Vars['c'] -eq '' -and @($script:Fake.WaitAt | Where-Object { $_ -eq '2:20' }).Count -eq 150 -and @($script:Fake.Logs | Where-Object { $_.StartsWith('warn') }).Count -eq 1) 'run: nothing copied: empty after the limit, warned'
+$run = New-TestRun -Steps @(@('COPY', 'c'))
+$script:Fake.CopySource = 'right'
+$script:Fake.CopyLate = 1
+$script:Fake.PauseAfterCopy = $true
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['c'] -eq 'right' -and @($script:Fake.Calls | Where-Object { $_ -eq 'KEYS ^c' }).Count -eq 2) 'run: paused while waiting for a copy: copied again'
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"1/0","mode":"CALC"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: calculation error stops'
 
