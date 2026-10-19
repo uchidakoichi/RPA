@@ -7,6 +7,7 @@
 #                              throws OperationCanceledException(reason) when the run is stopped
 #    Activate {Title} -> bool  (exact, then prefix, then suffix title match; never this app)
 #    WindowExists {Title} -> bool   SelfHasFocus {} -> bool   FocusSelf {}
+#    InputBlocked {Title} -> $true when the window's program runs as administrator and this app does not
 #    SendKeys {Keys}   SetClipboard {Text} -> bool   GetClipboard {} -> string
 #    ClipboardSeq {} -> number changed by every clipboard write
 #    ClipboardReady {Seq} -> $true when the number is no longer Seq, no program has the clipboard open and text is on it
@@ -359,6 +360,7 @@ function Invoke-FujiActivate {
     param([hashtable]$Run, [string]$Title)
     for ($attempt = 1; $attempt -le $script:FujiRunLimits.WindowRetryMax; $attempt++) {
         if (& $Run.Io.Activate $Title) {
+            Assert-FujiInputReaches -Run $Run -Title $Title
             Wait-FujiRun -Run $Run -Ms 250
             return $true
         }
@@ -368,6 +370,13 @@ function Invoke-FujiActivate {
         }
     }
     return $false
+}
+
+# Windows drops keys and pastes sent to a program run as administrator unless this app runs so too,
+# and no error tells: stop instead of going on as if they had arrived
+function Assert-FujiInputReaches {
+    param([hashtable]$Run, [string]$Title)
+    if (& $Run.Io.InputBlocked $Title) { throw (New-FujiRunFailure (Get-FujiText 'run.targetElevated' $Title)) }
 }
 
 # Makes sure keystrokes never land in this app itself. Returns $null or an error result.
@@ -1039,6 +1048,7 @@ function Invoke-FujiWaitFor {
     Write-FujiRunLog $Run (Get-FujiText 'run.waitFor' $title $timeout)
     for ($count = 0; ; $count++) {
         if (& $Run.Io.Activate $title) {
+            Assert-FujiInputReaches -Run $Run -Title $title
             Write-FujiRunLog $Run (Get-FujiText 'run.appeared' $title) 'ok'
             if ($key) {
                 Wait-FujiRun -Run $Run -Ms 300
@@ -1064,6 +1074,7 @@ function Invoke-FujiWindowCheck {
         return (Get-FujiRunNext 0)
     }
     Write-FujiRunLog $Run (Get-FujiText 'run.checkFound' $title) 'warn'
+    if ($key) { Assert-FujiInputReaches -Run $Run -Title $title }
     Wait-FujiRun -Run $Run -Ms 300
     if ($key) {
         & $Run.Io.SendKeys (ConvertTo-FujiSendKey $key)

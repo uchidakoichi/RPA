@@ -494,7 +494,7 @@ function New-FakeIo {
     $script:Fake = @{
         Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
-        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false
+        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
     }
@@ -504,6 +504,7 @@ function New-FakeIo {
         Activate = { param($Title) $script:Fake.Calls.Add('ACT ' + $Title); return ($script:Fake.Windows -contains $Title) }
         WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
         SelfHasFocus = { return $script:Fake.Self }
+        InputBlocked = { param($Title) return ($script:Fake.Elevated -contains $Title) }
         FocusSelf = { $script:Fake.Calls.Add('SELF') }
         SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq '^c' -and $script:Fake.CopySource -ne '') { $script:Fake.Clipboard = $script:Fake.CopySource; $script:Fake.ClipSeq++ } }
         SetClipboard = { param($Text) $script:Fake.Clipboard = $Text; $script:Fake.ClipSeq++; if ($Text -ne '') { $script:Fake.Calls.Add('CLIP ' + $Text) }; return $true }
@@ -712,6 +713,20 @@ $script:Fake.PauseAfterCopy = $true
 Assert-True ($run.Vars['c'] -eq 'right' -and @($script:Fake.Calls | Where-Object { $_ -eq 'KEYS ^c' }).Count -eq 2) 'run: paused while waiting for a copy: copied again'
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"1/0","mode":"CALC"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: calculation error stops'
+
+# a program run as administrator gets none of the input: stop
+$run = New-TestRun -Steps @(@('KEY', 'a'))
+$script:Fake.Elevated = @('App')
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: target run as administrator: stop'
+Assert-True ((Get-FakeCall 'KEYS') -eq '' -and @($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.targetElevated' 'App')) }).Count -eq 1) 'run: target run as administrator: nothing typed, told why'
+$run = New-TestRun -Target '' -Steps @(@('WAIT_FOR', '{"title":"Admin","key":"{ENTER}","timeout":"5"}'))
+$script:Fake.Windows = @('Admin')
+$script:Fake.Elevated = @('Admin')
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'error' -and (Get-FakeCall 'KEYS') -eq '') 'run: wait for a window run as administrator: no key, stop'
+$run = New-TestRun -Target '' -Steps @(@('WINDOW_CHECK', '{"title":"Admin","key":"","mode":"CONTINUE"}'))
+$script:Fake.Windows = @('Admin')
+$script:Fake.Elevated = @('Admin')
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'run: window check without a key: a window run as administrator is fine'
 
 # keystrokes never land in this app
 $run = New-TestRun -Target '' -Steps @(@('KEY', 'a'))
