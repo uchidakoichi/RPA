@@ -494,7 +494,7 @@ function New-FakeIo {
     $script:Fake = @{
         Calls = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Logs = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
-        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false
+        Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
     }
@@ -505,9 +505,11 @@ function New-FakeIo {
         WindowExists = { param($Title) return ($script:Fake.Windows -contains $Title) }
         SelfHasFocus = { return $script:Fake.Self }
         FocusSelf = { $script:Fake.Calls.Add('SELF') }
-        SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq '^c') { $script:Fake.Clipboard = $script:Fake.CopySource } }
-        SetClipboard = { param($Text) $script:Fake.Clipboard = $Text; if ($Text -ne '') { $script:Fake.Calls.Add('CLIP ' + $Text) }; return $true }
+        SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq '^c' -and $script:Fake.CopySource -ne '') { $script:Fake.Clipboard = $script:Fake.CopySource; $script:Fake.ClipSeq++ } }
+        SetClipboard = { param($Text) $script:Fake.Clipboard = $Text; $script:Fake.ClipSeq++; if ($Text -ne '') { $script:Fake.Calls.Add('CLIP ' + $Text) }; return $true }
         GetClipboard = { return $script:Fake.Clipboard }
+        ClipboardSeq = { return $script:Fake.ClipSeq }
+        ClipboardReady = { param($Seq) if ($script:Fake.ClipSeq -eq $Seq) { return $false }; if ($script:Fake.CopyLate -gt 0) { $script:Fake.CopyLate--; return $false }; return $true }
         Start = { param($CommandLine) $script:Fake.Calls.Add('START ' + $CommandLine); return '' }
         ClickAt = { param($X, $Y, $Kind) $script:Fake.Calls.Add(('CLICK {0},{1} {2}' -f $X, $Y, $Kind)) }
         Screenshot = { param($Path, $Full) $script:Fake.Calls.Add('SHOT ' + $Path + ' ' + $Full); return '10x10' }
@@ -693,6 +695,15 @@ $run = New-TestRun -Steps @(@('COPY', 'c'))
 $script:Fake.CopySource = "copied`r`n"
 [void](Invoke-FujiRun -Run $run)
 Assert-True ($run.Vars['c'] -eq 'copied' -and $run.ResultColumns.Contains('c')) 'run: copy to a variable (trailing line break dropped)'
+Assert-Equal 0 @($script:Fake.WaitAt | Where-Object { $_ -eq '2:20' }).Count 'run: copy read at once when the text is there'
+$run = New-TestRun -Steps @(@('COPY', 'c'))
+$script:Fake.CopySource = 'late'
+$script:Fake.CopyLate = 3
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['c'] -eq 'late' -and @($script:Fake.WaitAt | Where-Object { $_ -eq '2:20' }).Count -eq 3) 'run: copy waits in short steps until the text is there'
+$run = New-TestRun -Steps @(@('COPY', 'c'))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['c'] -eq '' -and @($script:Fake.WaitAt | Where-Object { $_ -eq '2:20' }).Count -eq 150 -and @($script:Fake.Logs | Where-Object { $_.StartsWith('warn') }).Count -eq 1) 'run: nothing copied: empty after the limit, warned'
 $run = New-TestRun -Steps @(@('SET_VAR', '{"name":"n","value":"1/0","mode":"CALC"}'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: calculation error stops'
 
