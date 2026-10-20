@@ -41,7 +41,12 @@ function Get-FujiNativeType {
         @($u, 'mouse_event', [void], [type[]]@([uint32], [uint32], [uint32], [uint32], [UIntPtr]), $auto),
         # rect: int[4] left, top, right, bottom (a blittable array is pinned, so it is filled in)
         @($u, 'GetWindowRect', [bool], [type[]]@([IntPtr], [int[]]), $auto),
-        @('kernel32.dll', 'GetCurrentThreadId', [uint32], [type[]]@(), $auto)
+        @('kernel32.dll', 'GetCurrentThreadId', [uint32], [type[]]@(), $auto),
+        # out arguments: pointers to memory the caller allocated
+        @('kernel32.dll', 'OpenProcess', [IntPtr], [type[]]@([uint32], [bool], [uint32]), $auto),
+        @('kernel32.dll', 'CloseHandle', [bool], [type[]]@([IntPtr]), $auto),
+        @('advapi32.dll', 'OpenProcessToken', [bool], [type[]]@([IntPtr], [uint32], [IntPtr]), $auto),
+        @('advapi32.dll', 'GetTokenInformation', [bool], [type[]]@([IntPtr], [int], [IntPtr], [int], [IntPtr]), $auto)
     )
     foreach ($d in $declarations) {
         $m = $tb.DefinePInvokeMethod($d[1], $d[0],

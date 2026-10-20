@@ -189,10 +189,12 @@ public static class FujiCheckNative {
             try { BringWindowToTop(h); SetForegroundWindow(h); } finally { AttachThreadInput(me, fgThread, false); }
             if (GetForegroundWindow() == h) { return "AttachThreadInput"; }
         }
-        keybd_event(0x12, 0, 0, UIntPtr.Zero);      // Alt down: the system then allows a foreground change
-        keybd_event(0x12, 0, 2, UIntPtr.Zero);      // Alt up
+        // an unassigned key code (0xE8): a key press lets the system allow a foreground change, and unlike
+        // Alt it opens no menu in the window brought to the front (the same way as the app)
+        keybd_event(0xE8, 0, 0, UIntPtr.Zero);
+        keybd_event(0xE8, 0, 2, UIntPtr.Zero);
         SetForegroundWindow(h);
-        if (GetForegroundWindow() == h) { return "AltKey"; }
+        if (GetForegroundWindow() == h) { return "UnassignedKey"; }
         return "";
     }
 }

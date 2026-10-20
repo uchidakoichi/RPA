@@ -305,6 +305,7 @@ function New-FujiWinIo {
         Activate = { param($Title) Invoke-FujiActivateTitle -Title $Title }
         WindowExists = { param($Title) return ($null -ne (Select-FujiWindow -Windows (Get-FujiTopWindow) -Title $Title)) }
         SelfHasFocus = { Test-FujiSelfForeground }
+        InputBlocked = { param($Title) $w = Select-FujiWindow -Windows (Get-FujiTopWindow) -Title $Title; return ($null -ne $w -and (Test-FujiWindowElevated -Handle $w.Handle)) }
         FocusSelf = { [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle) }
         SendKeys = { param($Keys) [System.Windows.Forms.SendKeys]::SendWait($Keys) }
         SetClipboard = { param($Text) Set-FujiClipboard -Text $Text }
@@ -429,14 +430,51 @@ function Invoke-FujiWindowActivate {
         }
         if ($native::GetForegroundWindow() -eq $Handle) { return $true }
     }
-    # Alt down and up counts as user input, which lifts the foreground lock
-    $native::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
-    $native::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    # a key press counts as input of this process, which lifts the foreground lock. Not Alt: its key up
+    # reached the window brought to the front, opened its menu and the next keys went there (VM probe:
+    # 0 of 18 keys arrived). 0xE8 is an unassigned key code: nothing reacts to it (25 of 25 arrived).
+    $native::keybd_event(0xE8, 0, 0, [UIntPtr]::Zero)
+    $native::keybd_event(0xE8, 0, 2, [UIntPtr]::Zero)
     [void]$native::SetForegroundWindow($Handle)
     return ($native::GetForegroundWindow() -eq $Handle)
 }
 
 # ----------------------------------------------------------------- clipboard, programs, mouse, screen
+# $true when the window belongs to a program run as administrator and this app is not: Windows then
+# drops the keys and pastes sent to it without any error (User Interface Privilege Isolation)
+function Test-FujiWindowElevated {
+    param([IntPtr]$Handle)
+    if ($null -eq $script:FujiSelfElevated) {
+        $principal = New-Object -TypeName Security.Principal.WindowsPrincipal -ArgumentList ([Security.Principal.WindowsIdentity]::GetCurrent())
+        $script:FujiSelfElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    if ($script:FujiSelfElevated) { return $false }
+    $native = Get-FujiNativeType
+    $marshal = [System.Runtime.InteropServices.Marshal]
+    # 16 bytes: the process id, then the token handle, then TokenElevation and its length
+    $mem = $marshal::AllocHGlobal(16)
+    try {
+        $marshal::WriteInt32($mem, 0)
+        [void]$native::GetWindowThreadProcessId($Handle, $mem)
+        $processId = $marshal::ReadInt32($mem)
+        if ($processId -le 0) { return $false }
+        # PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_QUERY, TokenElevation (20)
+        $process = $native::OpenProcess([uint32]0x1000, $false, [uint32]$processId)
+        if ($process -eq [IntPtr]::Zero) { return $false }
+        try {
+            $marshal::WriteIntPtr($mem, [IntPtr]::Zero)
+            if (-not $native::OpenProcessToken($process, [uint32]8, $mem)) { return $false }
+            $token = $marshal::ReadIntPtr($mem)
+            try {
+                if (-not $native::GetTokenInformation($token, 20, $mem, 4, [IntPtr]::Add($mem, 8))) { return $false }
+                return ($marshal::ReadInt32($mem) -ne 0)
+            } finally { [void]$native::CloseHandle($token) }
+        } finally { [void]$native::CloseHandle($process) }
+    } finally {
+        $marshal::FreeHGlobal($mem)
+    }
+}
+
 function Set-FujiClipboard {
     param([AllowEmptyString()][string]$Text)
     for ($i = 0; $i -lt 5; $i++) {
