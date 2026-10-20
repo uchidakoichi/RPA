@@ -7,6 +7,7 @@
 $script:Run = $null
 $script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null; InBreak = $false; BreakChoice = 'run' }
 $script:EscHoldMs = 1000
+$script:FujiSelfElevated = $null
 
 # ----------------------------------------------------------------- run controls
 function New-FujiRunBar {
