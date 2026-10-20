@@ -189,6 +189,7 @@ header nav a:hover { color: var(--ink); border-bottom-color: var(--grid); }
 header nav a.current { color: var(--ink); font-weight: 700; border-bottom-color: var(--kyun); }
 main { max-width: 980px; margin: 0 auto; padding: 0 32px 56px; background: var(--paper); min-height: 100vh; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
 h1, h2, h3 { scroll-margin-top: 72px; line-height: 1.45; }
+[id] { scroll-margin-top: 72px; }
 h1 { font-size: 32px; font-weight: 700; margin: 0 -32px 28px; padding: 44px 32px 20px; letter-spacing: .03em;
   background-color: #f8fafc;
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -196,7 +197,7 @@ h1 { font-size: 32px; font-weight: 700; margin: 0 -32px 28px; padding: 44px 32px
 h2 { font-size: 22px; margin: 48px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
 h2::before { content: ""; display: inline-block; width: .62em; height: .62em; margin-right: .45em; background: var(--kyun); vertical-align: .08em; }
 h3 { font-size: 18px; margin: 34px 0 10px; color: var(--fuji); }
-main > p, main > ul, main > ol, blockquote, .finder { max-width: 46em; }
+.page > p, .page > ul, .page > ol, blockquote, .finder { max-width: 46em; }
 li { margin: 2px 0; }
 a { color: var(--link); text-underline-offset: 3px; }
 a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--kyun); outline-offset: 2px; }
@@ -274,12 +275,53 @@ function decorateTemplates(body) {
     return body.replace('<h2 id="一覧">', FINDER_HTML + '\n<h2 id="一覧">') + "\n" + FINDER_JS;
 }
 
-function page(title, nav, current, body) {
+// Every file holds all the pages and shows one at a time: a browser may refuse a link from one local
+// file (file://) to another ("'file:' URLs are treated as unique security origins"), but a "#" inside
+// the same file always works. Links between pages become "#page-manual/<heading>"; the page shown
+// first is the file's own (body data-page). Without scripts every page shows, one after another.
+const NAV_JS = `<script>
+(function () {
+  var pages = [].slice.call(document.querySelectorAll("section.page"));
+  if (!pages.length) { return; }
+  var navs = [].slice.call(document.querySelectorAll("header nav a"));
+  var home = document.getElementById("page-" + document.body.getAttribute("data-page")) || pages[0];
+  var shown = null;
+  function find(sec, id) { return sec.querySelector('[id="' + id.replace(/["\\\\]/g, "\\\\$&") + '"]'); }
+  function show(sec) {
+    pages.forEach(function (s) { s.hidden = s !== sec; });
+    navs.forEach(function (a) { a.className = a.getAttribute("href") === "#" + sec.id ? "current" : ""; });
+    document.title = sec.getAttribute("data-title") + " - ふじキュン♡のおしごとロボット";
+    shown = sec;
+  }
+  function go() {
+    var h = location.hash.slice(1), sec = null, target = null, m, moved;
+    try { h = decodeURIComponent(h); } catch (e) { }
+    m = /^page-([\\w-]+)(?:\\/(.*))?$/.exec(h);
+    if (m) {
+      sec = document.getElementById("page-" + m[1]);
+      if (sec && m[2]) { target = find(sec, m[2]); }
+    } else if (h) {
+      sec = shown || home;
+      target = find(sec, h);
+      if (!target) { pages.some(function (s) { target = find(s, h); if (target) { sec = s; } return !!target; }); }
+    }
+    if (!sec) { sec = shown || home; }
+    moved = sec !== shown;
+    show(sec);
+    if (target) { target.scrollIntoView(); } else if (moved) { window.scrollTo(0, 0); }
+  }
+  window.addEventListener("hashchange", go);
+  go();
+})();
+</script>`;
+
+const pageName = out => out.replace(/\.html$/, "");
+function page(current, nav, sections) {
     return "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
-        "<title>" + esc(title) + " - ふじキュン♡のおしごとロボット</title>\n<style>" + CSS + "</style>\n</head>\n<body>\n" +
+        "<title>" + esc(built[current].title) + " - ふじキュン♡のおしごとロボット</title>\n<style>" + CSS + "</style>\n</head>\n<body data-page=\"" + pageName(current) + "\">\n" +
         '<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav>' +
-        nav.map(p => '<a href="' + p.out + '"' + (p.out === current ? ' class="current"' : "") + ">" + esc(p.nav) + "</a>").join("") +
-        "</nav></header>\n<main>\n" + body + "\n<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>\n</main>\n</body>\n</html>\n";
+        nav.map(p => '<a href="#page-' + pageName(p.out) + '"' + (p.out === current ? ' class="current"' : "") + ">" + esc(p.nav) + "</a>").join("") +
+        "</nav></header>\n<main>\n" + sections + "\n<footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>\n</main>\n" + NAV_JS + "\n</body>\n</html>\n";
 }
 
 const built = {};
@@ -289,9 +331,7 @@ for (const p of PAGES) {
     let body = convert(md.split("\n"), ids);
     if (p.out === "templates.html") { body = decorateTemplates(body); }
     const title = (md.match(/^# +(.*)$/m) || [null, p.nav])[1];
-    const html = page(title, PAGES, p.out, body);
-    fs.writeFileSync(path.join(outDir, p.out), html, "utf8");
-    built[p.out] = { html, ids };
+    built[p.out] = { html: body, ids, title };
 }
 
 // Every internal link must point at an existing page and heading
@@ -309,6 +349,17 @@ for (const [name, b] of Object.entries(built)) {
 if (problems.length) {
     console.error(problems.join("\n"));
     process.exit(1);
+}
+
+// "manual.html#x" -> "#page-manual/x"; "#x" stays (a heading of the same page)
+function toInternal(body) {
+    return body.replace(/href="([\w-]+\.html)(?:#([^"]*))?"/g, (m, file, hash) => built[file] ? 'href="#page-' + pageName(file) + (hash ? "/" + hash : "") + '"' : m);
+}
+const sections = PAGES.map(p => '<section class="page" id="page-' + pageName(p.out) + '" data-title="' + esc(built[p.out].title) + '">\n' + toInternal(built[p.out].html) + "\n</section>").join("\n");
+const files = {};
+for (const p of PAGES) {
+    files[p.out] = page(p.out, PAGES, sections);
+    fs.writeFileSync(path.join(outDir, p.out), files[p.out], "utf8");
 }
 
 // ---------------------------------------------------------------- ZIP (deflate, fixed timestamps)
@@ -363,7 +414,7 @@ const readme = "﻿ふじキュン♡のおしごとロボット　ドキュメ�
     "・ツール本体（リポジトリ直下の5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
 const entries = [{ name: TOP + "README.txt", data: Buffer.from(readme, "utf8") }];
 for (const p of PAGES) {
-    entries.push({ name: TOP + "docs/" + p.out, data: Buffer.from(built[p.out].html, "utf8") });
+    entries.push({ name: TOP + "docs/" + p.out, data: Buffer.from(files[p.out], "utf8") });
 }
 for (const f of fs.readdirSync(path.join(root, "samples")).filter(f => f.endsWith(".csv")).sort()) {
     entries.push({ name: TOP + "samples/" + f, data: fs.readFileSync(path.join(root, "samples", f)) });
