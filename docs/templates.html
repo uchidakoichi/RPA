@@ -24,6 +24,7 @@ header nav a:hover { color: var(--ink); border-bottom-color: var(--grid); }
 header nav a.current { color: var(--ink); font-weight: 700; border-bottom-color: var(--kyun); }
 main { max-width: 980px; margin: 0 auto; padding: 0 32px 56px; background: var(--paper); min-height: 100vh; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
 h1, h2, h3 { scroll-margin-top: 72px; line-height: 1.45; }
+[id] { scroll-margin-top: 72px; }
 h1 { font-size: 32px; font-weight: 700; margin: 0 -32px 28px; padding: 44px 32px 20px; letter-spacing: .03em;
   background-color: #f8fafc;
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -31,7 +32,7 @@ h1 { font-size: 32px; font-weight: 700; margin: 0 -32px 28px; padding: 44px 32px
 h2 { font-size: 22px; margin: 48px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
 h2::before { content: ""; display: inline-block; width: .62em; height: .62em; margin-right: .45em; background: var(--kyun); vertical-align: .08em; }
 h3 { font-size: 18px; margin: 34px 0 10px; color: var(--fuji); }
-main > p, main > ul, main > ol, blockquote, .finder { max-width: 46em; }
+.page > p, .page > ul, .page > ol, blockquote, .finder { max-width: 46em; }
 li { margin: 2px 0; }
 a { color: var(--link); text-underline-offset: 3px; }
 a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--kyun); outline-offset: 2px; }
@@ -61,9 +62,315 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 @media print { header, .finder { display: none; } main { max-width: none; border: 0; } h1 { background: none; } body { background: #fff; } }
 </style>
 </head>
-<body>
-<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav><a href="index.html">目次</a><a href="setup.html">準備</a><a href="tutorial.html">チュートリアル</a><a href="manual.html">操作マニュアル</a><a href="templates.html" class="current">テンプレート解説</a><a href="faq.html">Q&amp;A</a></nav></header>
+<body data-page="templates">
+<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav><a href="#page-index">目次</a><a href="#page-setup">準備</a><a href="#page-tutorial">チュートリアル</a><a href="#page-manual">操作マニュアル</a><a href="#page-templates" class="current">テンプレート解説</a><a href="#page-faq">Q&amp;A</a></nav></header>
 <main>
+<section class="page" id="page-index" data-title="ドキュメント">
+<h1 id="ドキュメント">ドキュメント</h1>
+<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>準備したい</td><td><a href="#page-setup">準備</a> — 5つのファイルの置き方・起動のしくみ・困ったとき</td></tr><tr><td>とにかく動かしてみたい</td><td><a href="#page-tutorial">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="#page-templates">テンプレート解説</a> — 381種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="#page-manual">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="#page-faq">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr></tbody></table></div>
+<p>見本のCSVは <a href="../samples"><code>samples</code></a> フォルダにあります。ツールの［📚 テンプレート］から作ると、同じCSVが自動で用意されます。</p>
+</section>
+<section class="page" id="page-setup" data-title="準備">
+<h1 id="準備">準備</h1>
+<p>ふじキュン♡のおしごとロボットは、Windows に最初から入っている <strong>Windows PowerShell 5.1</strong> と Windows Forms だけで動きます。ほかのソフトのインストールは不要です。</p>
+<h2 id="ファイルを置く">ファイルを置く</h2>
+<ol><li>次の5つのファイルを、書き込みできる <strong>同じフォルダ</strong>（例: <code>C:\RPA作業\</code>）に置きます。<ul><li><code>fujikyun.bat</code></li><li><code>fujikyun.ps1</code></li><li><code>fujikyun_ja.json</code></li><li><code>fujikyun_commands.json</code></li><li><code>fujikyun_templates.json</code></li></ul>
+<p>GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにし、<strong>JSON は文字コード「UTF-8」で保存</strong> します（GitHub のリポジトリ直下にあります）。自治体セキュリティクラウドのダウンロード機能では、ファイルが壊れることがあるのでダウンロードしないでください。</p></li><li><code>fujikyun.bat</code> をダブルクリックします。</li><li><strong>［🩺 環境チェック］</strong> で、この端末で使える機能を確認します。</li><li><strong>［📚 テンプレート］</strong> からお手本マクロを作って、動かしてみましょう（<a href="#page-tutorial">チュートリアル</a>）。</li></ol>
+<p>マクロのファイル（<code>fujikyun_macros.json</code>）・見本CSV（<code>samples</code>）・参照画像（<code>rpa_images</code>）・証跡（<code>evidence</code>）・書き出したマクロ（<code>macro_export</code>）・予定（<code>fujikyun_settings.json</code>）は、このフォルダに作られます。別の PC に移るときは、フォルダごとコピーします。</p>
+<p>新しい版に入れ替えるときは、5つのファイルを <strong>まとめて</strong> 置き換えます（<code>fujikyun.ps1</code> だけを新しくすると、起動時に「<code>fujikyun_ja.json</code> が古い」とお知らせが出ます）。</p>
+<h3 id="起動のしくみ">起動のしくみ</h3>
+<p><code>fujikyun.bat</code> は、PowerShell 5.1 を STA モード（Windows Forms に必要）・コンソールなしで起動します。<code>-ExecutionPolicy Bypass</code> の指定はその1回の起動にだけ効き、端末の設定は変えません。グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。</p>
+<h3 id="安全のための動き">安全のための動き</h3>
+<ul><li>実行結果CSV・エラー行CSVで、ツールが付け足す列（記録した値・備考・エラー内容）が <code>=</code> などで始まるときは、Excel で数式として動かないよう先頭に <code>'</code> を付けます（元データの列はそのまま）。</li><li>EXCEL_WRITE で、差し込みで入った値が <code>=</code> などで始まるときは文字として書きます。ステップに直接書いた数式（<code>=SUM(A1:A3)</code> など）は数式のままです。Excel のブックはマクロを無効にして開きます。</li><li>画像でクリックの参照画像がネットワーク上（<code>\\サーバー\…</code>）にあるときは、編集画面を開いただけでは読み込みません。</li></ul>
+<h2 id="困ったとき">困ったとき</h2>
+<div class="table-wrap"><table><thead><tr><th>こんなとき</th><th>どうする</th></tr></thead><tbody><tr><td>ボタンなどが <code>gui.schedule</code> のような英字の名前で表示される</td><td><code>fujikyun_ja.json</code> が古いままです。<code>fujikyun.ps1</code> と同じ版の <code>fujikyun_ja.json</code> に置き換えてください（起動時にもお知らせが出ます）</td></tr><tr><td>起動すると「起動できなかったキュン」と出る</td><td>メッセージの内容を確認します。JSON を UTF-8 以外（Shift_JIS など）で保存すると読み込めません</td></tr><tr><td>画面が出ない・すぐ消える</td><td>5つのファイルが同じフォルダにあるか確認します。それでも出ないときは、PowerShell が組織の設定で止められていないか情報担当に確認します</td></tr><tr><td>起動に時間がかかる</td><td>ログの「⏱ 起動にかかった時間」の内訳を見ます</td></tr><tr><td>予定が動かない</td><td>PC がスリープ・画面ロック中でないか、ログインしたままか、［⏰ 予定］で「✅ 有効」になっているかを確認します</td></tr></tbody></table></div>
+<p>そのほかは <a href="#page-faq">Q&amp;A</a> を見てください。</p>
+<h2 id="保守する人向け">保守する人向け</h2>
+<p>ソースは <code>src</code>・<code>gui</code>・<code>build</code> フォルダにあり、<code>.ps1</code> は英数字（ASCII）だけで書いています。Windows PowerShell 5.1 は BOM のない <code>.ps1</code> を Shift_JIS として読むためで、日本語の文言はすべて UTF-8 の <code>fujikyun_ja.json</code> に分けています。</p>
+<ul><li><code>fujikyun.ps1</code> は <code>build/Build-FujiBundle.ps1</code> が <code>build/Main.ps1</code>・<code>src</code>・<code>gui</code> から作る1ファイルです（直接編集しない）。</li><li>テスト：<code>tests/Invoke-FujiTest.ps1</code>（Windows では <code>tests\run_tests.bat</code>）。画面に依存しない部分（編集・実行の決まり・CSV・計算・和暦・予定・記録の変換・画像照合・OCR 結果の処理など）を、偽の画面操作で確かめます。</li><li>詳しくは <a href="https://github.com/uchidakoichi/RPA/blob/master/DEVELOP.md"><code>DEVELOP.md</code></a> を見てください。</li></ul>
+</section>
+<section class="page" id="page-tutorial" data-title="チュートリアル：はじめてのロボットづくり">
+<h1 id="チュートリアルはじめてのロボットづくり">チュートリアル：はじめてのロボットづくり</h1>
+<p>RPA が初めての方向けに、5つのレッスンで少しずつ使い方を覚えます。レッスン1〜3は <strong>メモ帳と電卓だけ</strong> で試せるので、職場のシステムに触らずに安心して練習できます。</p>
+<div class="table-wrap"><table><thead><tr><th>レッスン</th><th>内容</th><th>時間の目安</th></tr></thead><tbody><tr><td><a href="#レッスン0準備">0. 準備</a></td><td>置き場所・起動・環境チェック</td><td>5分</td></tr><tr><td><a href="#レッスン1お手本を動かす">1. お手本を動かす</a></td><td>テンプレートを実行して流れを見る</td><td>10分</td></tr><tr><td><a href="#レッスン2自分で組み立てる">2. 自分で組み立てる</a></td><td>空のマクロから作る・差し込みを使う</td><td>20分</td></tr><tr><td><a href="#レッスン3値を読み取る">3. 値を読み取る</a></td><td>COPY と実行結果CSV</td><td>15分</td></tr><tr><td><a href="#レッスン4職場のシステムに向ける">4. 職場のシステムに向ける</a></td><td>対象ウィンドウ・確認ポイント・1件テスト</td><td>30分</td></tr><tr><td><a href="#レッスン5止まらないロボットにする">5. 止まらないロボットにする</a></td><td>WINDOW_CHECK・WAIT_FOR・エラー行の再実行</td><td>20分</td></tr><tr><td><a href="#レッスン6変数繰り返し分岐を使う">6. 変数・繰り返し・分岐を使う</a></td><td>変数・文字の加工・もし〜なら・エラー時の処理</td><td>20分</td></tr></tbody></table></div>
+<hr>
+<h2 id="レッスン0準備">レッスン0：準備</h2>
+<ol><li>書き込みできるフォルダ（例: <code>C:\RPA作業\</code>）を1つ作り、次の5つのファイルを置きます（<a href="#page-setup/ファイルを置く">準備</a>）。<ul><li><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code></li></ul></li><li><code>fujikyun.bat</code> をダブルクリックで起動します。</li><li>いちばん上の段の <strong>［🩺 環境チェック］</strong> を押します。<ul><li>すべて <strong>OK</strong> なら準備完了です。</li><li><strong>NG</strong> があっても大丈夫。どの機能が使えないかが表示されるので、<a href="#page-faq">Q&amp;A</a> を参考にしてください。</li></ul></li></ol>
+<blockquote><p>💡 ふじキュンは、<code>fujikyun.bat</code> と同じフォルダにマクロや結果を保存します。専用のフォルダを1つ作って、その中で使うのがおすすめです。</p></blockquote>
+<p><strong>画面の見方</strong></p>
+<div class="table-wrap"><table><thead><tr><th>場所</th><th>あるもの</th></tr></thead><tbody><tr><td>上の3段</td><td>保存・予定・環境チェック ／ マクロの選択・テンプレート・対象ウィンドウ ／ CSV</td></tr><tr><td>左側</td><td>「追加」のコマンド（分類ごとに1行）、実行の操作（▶ 実行・開始行・終了行・間隔 など）、ログ</td></tr><tr><td>右側</td><td>「編集」の操作と、ブロック（マクロの手順）の一覧</td></tr></tbody></table></div>
+<p>左右の境目（薄い紫の線）はドラッグで動かせます。ブロックが多いときは左へ動かすと見やすくなります。</p>
+<hr>
+<h2 id="レッスン1お手本を動かす">レッスン1：お手本を動かす</h2>
+<p><strong>ゴール:</strong> ロボットが「アプリを開く → 切り替える → 貼り付ける → キーを押す」様子を見る。</p>
+<ol><li>上の段の <strong>［📚 テンプレート］</strong> を押します。</li><li>「入門・Windows」の <strong>「はじめての1本：メモ帳にCSVを入力」</strong> の［✨ 作る］を押します。<ul><li>マクロが追加され、見本CSV <code>samples\01_basic_meibo.csv</code> が自動で読み込まれます。</li></ul></li><li>表示されたブロックを上から読んでみましょう。<div class="table-wrap"><table><thead><tr><th>#</th><th>ブロック</th><th>意味</th></tr></thead><tbody><tr><td>1</td><td>💬 COMMENT</td><td>説明メモ（実行時は何もしない）</td></tr><tr><td>2〜5</td><td>📁 準備（最初の1行だけ）</td><td>1行目のときだけメモ帳を起動して2秒待つ</td></tr><tr><td>6</td><td>🪟 SWITCH メモ帳</td><td>メモ帳を前面にする</td></tr><tr><td>7〜14</td><td>📁 1行ぶんの入力</td><td>CSV 1列目 → Tab → 2列目 → Tab → 3列目 → Enter</td></tr></tbody></table></div></li><li>左側の <strong>［▶ 実行］</strong> を押し、手を離して見守ります。</li><li>メモ帳に5人分が入力されたら成功です 🎉</li></ol>
+<p><strong>やってみよう</strong></p>
+<ul><li>止め方を先に覚えておくと安心です。ロボットはメモ帳を前に出して入力するので、止めるときは <strong>Esc を約1秒長押し</strong> します（どの画面からでも止まります）。ふじキュンの画面をクリックしてから Esc か［⏹ 停止］でも止まります。</li><li>「間隔」を 300 → 1000 にすると、ゆっくり動くので流れが追いやすくなります。</li></ul>
+<hr>
+<h2 id="レッスン2自分で組み立てる">レッスン2：自分で組み立てる</h2>
+<p><strong>ゴール:</strong> 空のマクロから作り、差し込み <code>{{ }}</code> を使う。</p>
+<ol><li><strong>［＋ 新規］</strong> で「お知らせ文づくり」という名前のマクロを作ります。</li><li>CSV欄の［📂 参照］で <code>samples\02_letters.csv</code> を選びます（見出し: 氏名・イベント名・受付番号・会場）。</li><li>「追加」の行から、次の順にコマンドを足します（追加したブロックが選ばれるので、次のブロックはその下に入ります）。<ol><li><strong>［🚀 アプリ起動］</strong>（RUN）→ <code>notepad.exe</code></li><li><strong>［⏳ 待機］</strong>（WAIT）→ <code>2000</code></li><li><strong>［🪟 ウィンドウ切替］</strong>（SWITCH）→ <code>メモ帳</code></li><li><strong>［📝 文字列貼付］</strong>（TEXT）→ 下の文章。［＋ 差し込みを追加 ▼］から <code>{{氏名}}</code> などを選んで入れられます。<pre><code>{{氏名}} 様
+受付番号は {{受付番号}} です。{{会場}} へお越しください。（{{WAREKI}}）
+----</code></pre></li></ol></li><li>このままだと、<strong>行ごとにメモ帳が開いてしまいます</strong>。RUN と WAIT を「最初の1行だけ」にしましょう。<ol><li>RUN を選んだ状態で <strong>［📁 グループ］</strong> を追加し、名前を「準備」、実行タイミングを <strong>「最初の1行だけ」</strong> にします。</li><li>RUN と WAIT のブロックを、ドラッグで「準備」グループの中（開始と終了の間）に入れます。</li></ol></li><li><strong>開始行 1・終了行 1</strong> にして［▶ 実行］。1通だけできることを確かめます。</li><li>終了行を空欄（最後まで）にして、もう一度実行します。</li><li><strong>［💾 本番ファイルに保存］</strong>（Ctrl+S）で保存します。</li></ol>
+<p><strong>ポイント</strong></p>
+<ul><li><code>{{列名}}</code> は CSV の見出しと <strong>完全に同じ文字</strong> にします。</li><li>入力は <strong>TEXT（貼り付け）</strong> が基本です。KEY は Tab や Enter などの「操作キー」に使います。</li></ul>
+<hr>
+<h2 id="レッスン3値を読み取る">レッスン3：値を読み取る</h2>
+<p><strong>ゴール:</strong> 画面の値をコピーして記録し、結果をCSVで受け取る。</p>
+<ol><li><strong>［📚 テンプレート］→「発見！便利ワザ」→「電卓で検算して結果を記録」</strong> を作ります。</li><li>［▶ 実行］すると、電卓で「単価×数量」を計算し、答えを <strong>COPY「電卓の答え」</strong> で変数に入れて記録します。</li><li>終わったら <strong>［↓ 実行結果CSV］</strong> を押して、<code>fujikyun_result.csv</code> を Excel で開きます。</li><li>「台帳の金額」と「電卓の答え」を見比べてください。<strong>1件だけ合わない行</strong> があるはずです。</li></ol>
+<p><strong>ここで覚えること</strong></p>
+<ul><li>COPY で入れた値は、実行結果CSV の <strong>列</strong> になります。</li><li>COPY は値を <strong>変数</strong> に入れるので、あとの TEXT で <code>{{$電卓の答え}}</code> と書けば、別の画面に貼り付けられます（例:「Excelの表を読みながら別の画面へ転記」テンプレート）。</li></ul>
+<hr>
+<h2 id="レッスン4職場のシステムに向ける">レッスン4：職場のシステムに向ける</h2>
+<p><strong>ゴール:</strong> 本物の画面で、安全に1件だけ動かす。</p>
+<p>ここからは職場のシステム（文書起案・財務会計・グループウェア・福祉システムなど）を使います。まずは <strong>照会（見るだけ）</strong> のテンプレートから始めましょう。</p>
+<ol><li><strong>［📚 テンプレート］</strong> から、使うシステムに近いものを選びます。<strong>［🔍 探す］</strong> にシステム名ややりたいこと（例: <code>照会</code>、<code>撮影</code>）を入れると早く見つかります。<ul><li>初めてなら「文書番号で検索して決裁状況の画面を保存」「受給者の照会画面を連続で撮影」など <strong>初級の照会系</strong> がおすすめです。</li></ul></li><li><strong>対象ウィンドウ</strong> を合わせます。<ol><li>使うシステムの画面を開いておきます。</li><li>対象ウィンドウの右の <strong>［🔍 一覧］</strong> を押し、システムのタイトルを選びます。</li><li>タイトルに日付や件名など毎回変わる部分があれば、変わらない <strong>先頭部分か末尾部分だけ</strong> を残します（<a href="#page-manual/9-ウィンドウ名の合わせ方">マニュアル9章</a>）。</li></ol></li><li><strong>ボタン名</strong> を合わせます。CLICK_NAME「登録」などは、画面に表示されている文字と完全に同じにします。</li><li><strong>カーソルの位置</strong> を合わせます。<ul><li>テンプレートによっては、最初に <strong>✋ 確認ポイント</strong> で「入力欄をクリックしてから続行してね」と聞いてきます。画面の入力欄をクリックしてから［▶ 続行］を押します。</li><li>慣れたら、無効になっている（薄い）CLICK_POS を開いて［📍 3秒後のマウス位置を取得］で座標を入れ、<strong>⊘ 無効化</strong> ボタンで有効にし、確認ポイントの方を無効化します。これで完全自動になります。</li><li>入力欄に名前や見出しがある画面なら、もっと確実な方法があります。CLICK_POS と TAB の代わりに <strong>🧩 欄に入力（名前で）</strong> を追加し、編集画面の <strong>［🎯 部品を指す］</strong> で入力欄を指します。欄の名前が自動で入り、赤い枠で示されます。［🔍 見つかるか試す］で見つかることを確かめたら、座標もTABの回数も合わせる必要はありません。</li></ul></li><li>CSV を自分のデータに差し替えます（見本CSVを Excel で開いて書き換え、CSV形式で保存）。</li><li><strong>開始行 1・終了行 1</strong> で実行し、画面の動きを最後まで見守ります。<ul><li>最初は <strong>［⏯ 1ステップずつ］</strong>（F10）で実行すると安心です。毎ステップの前で止まるので、［⏭ 次へ］で1つずつ進めながら、画面の動きを確かめられます。気になるステップだけ止めたいときは、そのステップを選んで <strong>［🔴 止める所］</strong>（F9）を付けます。</li><li>途中のステップを直したら、そのステップを選んで <strong>［▶ ここから］</strong>（F6）や <strong>［▶ これだけ］</strong> で、直した所だけを試せます。</li></ul></li><li>問題がなければ終了行を増やして、少しずつ件数を増やします。</li></ol>
+<blockquote><p>⚠ 登録・送信・決裁など <strong>取り消しにくい操作の前には、確認ポイント（CONFIRM）を入れておきましょう</strong>。十分に試して安心できたら、確認ポイントを無効化して連続実行にします。</p></blockquote>
+<hr>
+<h2 id="レッスン5止まらないロボットにする">レッスン5：止まらないロボットにする</h2>
+<p><strong>ゴール:</strong> よくある「途中で止まる」を防ぐ。</p>
+<div class="table-wrap"><table><thead><tr><th>症状</th><th>対策</th></tr></thead><tbody><tr><td>画面が出る前に入力してしまう</td><td>WAIT を増やす。別ウィンドウが開くなら <strong>WAIT_FOR</strong>（出るまで待つ）に変える</td></tr><tr><td>ときどき「お知らせ」が出て止まる</td><td><strong>WINDOW_CHECK</strong>（モード CONTINUE）で「出ていたら閉じて続行」</td></tr><tr><td>「該当なし」の行で止まる</td><td><strong>WINDOW_CHECK</strong>（モード SKIP）で「その行は飛ばして記録」</td></tr><tr><td>想定外のエラー画面</td><td><strong>WINDOW_CHECK</strong>（モード STOP）で「アラームを鳴らして停止」</td></tr><tr><td>入力欄に前の文字が残る</td><td>貼り付けの前に <strong>KEY <code>^a</code></strong>（全選択）を入れる。<strong>🧩 欄に入力（名前で）</strong> なら中身を入れ替えるので要らない</td></tr><tr><td>ときどき失敗するが、やり直すとうまくいく</td><td>その部分を <strong>🔂 うまくいくまでやり直す</strong> で囲む（回数と待ち時間を決められる）</td></tr><tr><td>ログインのパスワードをマクロに書きたくない</td><td><strong>🔑 パスワードを入力</strong> で、Windows の資格情報マネージャーに登録したものを打ち込む</td></tr></tbody></table></div>
+<p><strong>エラーになった行だけやり直す</strong></p>
+<ol><li>実行が終わったら <strong>［↓ エラー行をCSV保存］</strong> を押します（<code>fujikyun_error_list.csv</code>）。</li><li>Excel で開いて原因を直します（右端に「エラー内容」が付いています）。</li><li>そのCSVを読み込んで、もう一度実行します。「元データ行No」の番号がそのまま使われるので、<code>{{ROW}}</code> もずれません。</li><li>WINDOW_CHECK の SKIP 以外のエラー（STOP・タイムアウト・ウィンドウが見つからない など）は実行そのものが止まるので、その後ろの行がまだ残っています。元のCSVに戻して、<strong>開始行</strong> を続きの行にして実行します。</li></ol>
+<p><strong>証跡を残す</strong></p>
+<ul><li>登録のあとに <strong>SCREENSHOT</strong> を入れると、画面が <code>evidence\日付\</code> に保存されます。ファイル名に <code>{{ROW}}</code> や <code>{{氏名}}</code> を入れておくと、あとで探しやすくなります。</li><li>エラーで止まったときは、その瞬間の画面が自動で <code>evidence\日付\エラー_行○_時刻.png</code> に保存されます。</li></ul>
+<hr>
+<h2 id="レッスン6変数繰り返し分岐を使う">レッスン6：変数・繰り返し・分岐を使う</h2>
+<p><strong>ゴール:</strong> 値を加工したり、条件で分けたり、エラーでも止めずに続けたりする。</p>
+<ol><li><strong>［📚 テンプレート］→「変数・繰り返し・分岐」</strong> を開きます。メモ帳だけで試せるものが入っています。</li><li><strong>「全角・半角や桁数がバラバラな番号をそろえてから入力」</strong> を作って実行し、実行の操作の <strong>［📊 変数］</strong> を押して、<code>$番号7桁</code> や <code>$電話</code> が行ごとに変わる様子を見てみましょう。</li><li><strong>「金額で分岐：10万円以上だけ人が確認してから入力」</strong> を実行すると、高額の行だけ確認ポイントで止まります。❓もし〜なら と ↔そうでなければ の位置を見てください。</li><li><strong>「エラーが出ても止めずに記録して次の行へ」</strong> を実行すると、2行目はわざとエラーになりますが、止まらずに3行目まで進みます。［↓ 実行結果CSV］の「結果」列を見てみましょう。</li></ol>
+<p><strong>ポイント</strong></p>
+<ul><li>変数は <code>{{$名前}}</code> で使います（CSVの列は <code>{{列名}}</code>、変数は <code>$</code> 付き）。</li><li>繰り返し・もし〜なら・エラー時の処理は、グループと同じく「始まり〜終わり」のブロックです。</li><li>くわしくは <a href="#page-manual/7-変数繰り返し分岐">操作マニュアル 7章</a> を見てください。</li></ul>
+<hr>
+<h2 id="次のステップ">次のステップ</h2>
+<ul><li><a href="#page-templates">テンプレート解説</a> で、ほかのお手本の「応用・発見のヒント」を読んでみましょう。</li><li><a href="#page-manual">操作マニュアル</a> で全コマンドの詳しい動きを確認できます。</li><li>作ったマクロは <strong>［📤 書出］</strong> で同僚と共有できます。</li></ul>
+</section>
+<section class="page" id="page-manual" data-title="ふじキュン♡のおしごとロボット 操作マニュアル">
+<h1 id="ふじキュンのおしごとロボット-操作マニュアル">ふじキュン♡のおしごとロボット 操作マニュアル</h1>
+<p>Windows だけで動く RPA（パソコン作業の自動化）ツールです。インストール不要で、<code>fujikyun.bat</code> をダブルクリックすると起動します。ネットワークにはつながりません。</p>
+<ul><li>はじめての方は <a href="#page-tutorial">チュートリアル</a> から読むのがおすすめです。</li><li>お手本マクロの解説は <a href="#page-templates">テンプレート解説</a> にあります。</li><li>困ったときは <a href="#page-faq">Q&amp;A</a> を見てください。</li></ul>
+<hr>
+<h2 id="目次">目次</h2>
+<p><strong>使いはじめる</strong></p>
+<ol><li><a href="#1-動作環境と置き場所">動作環境と置き場所</a></li><li><a href="#2-画面の見かた">画面の見かた</a></li><li><a href="#3-基本の考え方csvの1行1回">基本の考え方：CSVの1行＝1回</a></li><li><a href="#4-マクロの作成と編集">マクロの作成と編集</a></li></ol>
+<p><strong>コマンド</strong></p>
+<ol start="5"><li><a href="#5-コマンド一覧">コマンド一覧</a></li><li><a href="#6-差し込み">差し込み（{{ }}）</a></li><li><a href="#7-変数繰り返し分岐">変数・繰り返し・分岐</a></li><li><a href="#8-キーの書き方sendkeys">キーの書き方（SendKeys）</a></li><li><a href="#9-ウィンドウ名の合わせ方">ウィンドウ名の合わせ方</a></li><li><a href="#10-クリックと読み取り画面認識の4つの方法">クリックと読み取り（画面認識の4つの方法）</a></li><li><a href="#11-メール">メール</a></li><li><a href="#12-マクロの呼び出し部品化">マクロの呼び出し（部品化）</a></li></ol>
+<p><strong>動かす・管理する</strong></p>
+<ol start="13"><li><a href="#13-実行">実行</a></li><li><a href="#14-スケジュール-予定">スケジュール（⏰ 予定）</a></li><li><a href="#15-安全装置">安全装置</a></li><li><a href="#16-保存されるファイル">保存されるファイル</a></li><li><a href="#17-マクロの共有書出取込">マクロの共有（書出・取込）</a></li><li><a href="#18-環境チェック">環境チェック</a></li><li><a href="#19-キーボードショートカット">キーボードショートカット</a></li><li><a href="#20-マクロファイルの形式">マクロファイルの形式</a></li></ol>
+<hr>
+<h2 id="1-動作環境と置き場所">1. 動作環境と置き場所</h2>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>内容</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 / 11</td></tr><tr><td>必須</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong>（言語モードが FullLanguage であること）。ほかのソフトのインストールは不要です</td></tr><tr><td>Excel / Outlook</td><td>EXCEL_READ・EXCEL_WRITE は Excel、MAIL の Outlook 送信は Outlook が入っている PC で使えます</td></tr><tr><td>ファイル</td><td><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code> の5つを <strong>同じフォルダ</strong> に置きます（JSON は UTF-8 で保存。<a href="#page-setup/ファイルを置く">準備</a>）</td></tr><tr><td>置き場所</td><td><strong>書き込みできるフォルダ</strong>に置いてください（例: <code>C:\RPA作業\</code> やドキュメント）。マクロやログはこのフォルダに保存されます</td></tr></tbody></table></div>
+<p>起動したら、まず <strong>［🩺 環境チェック］</strong> を押して、その端末で使える機能を確かめましょう（<a href="#18-環境チェック">18章</a>）。</p>
+<hr>
+<h2 id="2-画面の見かた">2. 画面の見かた</h2>
+<pre><code>┌ 💾本番ファイルに保存  保存状態  ⏰予定  🩺環境チェック  📖説明書  🔠文字の大きさ[▼]  次の予定 ┐
+│ マクロ [選択▼] ＋新規 ✎名前変更 ⧉複製 🗑削除 📚テンプレート 📤書出 📥取込              │
+│        対象ウィンドウ [      ] 🔍一覧                                                   │
+│ CSV    [パス        ] 📂参照 📥読込 □1行目は見出し [文字コード▼]                        │
+├───────────────────────────┬─────────────────────────────┤
+│ 追加 入力       ［…］      ┃ 編集 ↩ ↪ [履歴▼] ▲ ▼ ✎編集 ✕削除 ⧉複製     │
+│      待つ・確かめる［…］   ┃      ⊘無効化 ▼全展開 ▶全折りたたみ ⏺記録  │
+│      クリック・読み取り［…］┃ ────────────────────────── │
+│      アプリ・画面［…］     ┃                                          │
+│      流れ       ［…］      ┃  マクロのブロック一覧                     │
+│      変数・データ［…］     ┃  （縦いっぱいに表示）                     │
+│      整理       ［…］      ┃                                          │
+│ ▶実行 ⏸一時停止 ⏹停止 開始行 終了行 間隔 ┃                          │
+│ □アラーム 🔔 □毎ステップ前面化 □完了音    ┃                          │
+│ 📊変数 ↓実行結果CSV ↓エラー行CSV 進み具合 ┃                          │
+│ ログ                    │ 変数パネル     ┃                          │
+└───────────────────────────┴─────────────────────────────┘</code></pre>
+<ul><li><strong>左右の境目</strong>（薄い紫の線）はドラッグで動かせます。ウィンドウの大きさを変えると、右のブロック一覧が伸び縮みします。</li><li><strong>ウィンドウの位置・大きさ・左右の境目の位置</strong> は、閉じるときにこの PC に覚えておき、次に開いたときに元に戻ります（最大化していたときも）。そのとき使っていたモニターを外したときは、画面の真ん中に開きます。</li><li><strong>［🔠 文字の大きさ］</strong> で、画面の文字とボタンの大きさを 90%〜200% から選べます。文字が小さくて読みにくいときに大きくします。次に起動したときから変わります（選んだときに「いま起動し直す」も選べます）。この PC だけの設定です。</li><li><strong>［📖 説明書］</strong> で、チュートリアル・操作マニュアル・テンプレート解説・Q&amp;A をブラウザで開けます。<strong>F1</strong> を押すと、選んでいるステップのコマンドの説明が開きます。ステップの編集画面の［📖 このコマンドの説明］、テンプレート選択の［📖 解説を読む］、予定・環境チェック・パスワード登録の画面の［📖 説明］からも、その画面の説明へ直接飛べます。<ul><li>説明書は、GitHub の <code>dist</code> フォルダにある <code>fujikyun_docs_samples.zip</code> を、ふじキュンのフォルダに展開しておくと、ネットにつながっていなくても開けます（<code>docs</code> フォルダか <code>fujikyun_docs_samples\docs</code> フォルダを探します）。見つからないときは、GitHub で読むかどうかを聞きます。</li></ul></li><li><strong>保存状態</strong>: 「● 未保存の変更あり」のときは、編集内容が一時ファイルにだけ保存されています。［💾 本番ファイルに保存］（Ctrl+S）で確定します。</li><li><strong>追加</strong>: コマンドのボタンが7つの分類ごとに1行ずつ並んでいます（左側が狭いときは、分類の中で折り返します）。ボタンにマウスを乗せると、コマンド名（KEY など）と説明が出ます。</li><li><strong>ブロック</strong>: 1つのブロックが1つの命令（コマンド）です。左端とコマンド名の色で分類が分かります。</li></ul>
+<div class="table-wrap"><table><thead><tr><th>色</th><th>分類</th><th>コマンド</th></tr></thead><tbody><tr><td>青</td><td>入力</td><td>KEY・TEXT・CSV・COPY</td></tr><tr><td>黄土</td><td>待つ・確かめる</td><td>WAIT・WAIT_FOR・WINDOW_CHECK・CONFIRM</td></tr><tr><td>緑青</td><td>クリック・読み取り</td><td>CLICK_NAME・CLICK_TEXT・CLICK_IMG・CLICK_POS・READ_TEXT</td></tr><tr><td>紫</td><td>アプリ・画面</td><td>SWITCH・RUN・SCREENSHOT・MAIL</td></tr><tr><td>橙</td><td>流れ</td><td>LOOP_START・BREAK・CONTINUE・IF_START・ELSE・TRY_START・CALL_MACRO・RETURN</td></tr><tr><td>藍</td><td>変数・データ</td><td>SET_VAR・STR_OP・ASK・RECORD・EXCEL_READ・EXCEL_WRITE</td></tr><tr><td>茶・緑</td><td>整理</td><td>GROUP_START（グループ）・COMMENT（コメント）</td></tr></tbody></table></div>
+<hr>
+<h2 id="3-基本の考え方csvの1行1回">3. 基本の考え方：CSVの1行＝1回</h2>
+<p>ふじキュンは <strong>マクロ（手順）を、CSVの行の数だけくり返します</strong>。</p>
+<pre><code>CSV                        マクロ
+氏名,電話番号               ① SWITCH 入力画面へ
+見本 太郎,000-0000-0001  →  ② CSV 1列目を貼付
+試験 花子,000-0000-0002  →  ③ KEY  Tab
+練習 一郎,000-0000-0003  →  ④ CSV 2列目を貼付
+                            ⑤ KEY  Enter</code></pre>
+<ul><li>「1行目は見出し」にチェックがあると、1行目は見出しとして扱い、2行目からくり返します（初期値はチェックあり）。</li><li>CSV を読み込まずに実行すると、マクロを <strong>1回だけ</strong> 実行します（CSV コマンドは空欄扱い）。</li><li>文字コードは自動判定（UTF-8 → だめなら Shift_JIS）です。Excel で「CSV（コンマ区切り）」で保存したファイルもそのまま読めます。</li><li><code>&quot;</code> は Excel と同じく、値の <strong>先頭</strong> にあるときだけ囲み文字として扱います（<code>12&quot;モニタ</code> のような値はそのまま文字として読みます）。<code>&quot;</code> の閉じ忘れや、列の数がほかと違う行があると、読み込み時にログで知らせます。</li><li>途中の <strong>空の行</strong> は行番号を数えたまま残し、実行のときは飛ばします（<code>{{ROW}}</code> や Excel の行がずれません）。</li><li><strong>Excel のブック（.xlsx・.xlsm・.xls）もそのまま読み込めます</strong>。CSV の欄でブックを選ぶと、<strong>1枚目のシート</strong> を、セルに見えているとおり（日付や3桁区切りもそのまま）に読みます。CSV に保存し直す手間はいりません。読み込みには Excel が入っている PC が必要です。ブックは読み取り専用で開き、ブックのマクロは動かしません。</li></ul>
+<hr>
+<h2 id="4-マクロの作成と編集">4. マクロの作成と編集</h2>
+<h3 id="作り方は4通り">作り方は4通り</h3>
+<ol><li><strong>［📚 テンプレート］から作る</strong>（おすすめ）: お手本を選んで［✨ 作る］。見本CSVも自動で読み込まれます。<ul><li><strong>［🔍 探す］</strong> に「PDF」「コピー」「メール」のようなことばを入れると、名前・説明・使い道にそのことばを含むものだけが出ます。スペースで区切ると、全部を含むものにしぼれます（例: <code>Excel PDF</code>）。分類の横の数字は、その分類のテンプレートの数です。</li></ul></li><li><strong>［＋ 新規］で空のマクロから作る</strong>: 「追加」の行のボタンでコマンドを足していきます。</li><li><strong>［⏺ 記録］で操作を記録する</strong>: ふだんの操作をコマンドに変換します（下の「画面操作の記録」）。</li><li><strong>［📥 取込］で同僚が書き出したマクロを取り込む</strong>（<a href="#17-マクロの共有書出取込">17章</a>）。</li></ol>
+<h3 id="ブロックの操作">ブロックの操作</h3>
+<div class="table-wrap"><table><thead><tr><th>したいこと</th><th>操作</th></tr></thead><tbody><tr><td>選ぶ</td><td>1回クリック（水色になります）。次に追加するコマンドは <strong>選んだブロックの後ろ</strong> に入ります</td></tr><tr><td>編集する</td><td>ダブルクリック、［✎ 編集］、または Enter</td></tr><tr><td>削除する</td><td>［✕ 削除］、または Delete。グループ・繰り返しなどのブロックは「中身ごと削除」か「枠だけ解除」を選べます</td></tr><tr><td>並べ替える</td><td>ドラッグ＆ドロップ（青い線の位置に入ります）、または ▲▼（Alt+↑↓）</td></tr><tr><td>複製する</td><td>⧉ 複製（Ctrl+D）。ブロックなら中身ごと複製します</td></tr><tr><td>一時的に止める</td><td>⊘ 無効化（Ctrl+/）。灰色で「無効」と表示され、実行時は飛ばされます。もう一度押すと元に戻ります</td></tr><tr><td>元に戻す</td><td>↩ 元に戻す（Ctrl+Z）／ ↪ やり直し（Ctrl+Y）。履歴▼から好きな時点にも戻れます（最大30件）</td></tr></tbody></table></div>
+<h3 id="始まりと終わりがあるブロック">始まりと終わりがあるブロック</h3>
+<p>「グループ」「繰り返し」「もし〜なら」「エラー時の処理」は、どれも <strong>始まりと終わり（ここまで）がセット</strong> のブロックです。</p>
+<ul><li>追加するとセットで入り、中のブロックは字下げされます。左の ▼/▶ で折りたためます。</li><li>ブロックの最初の行を無効化（⊘）すると、<strong>ブロックまるごと飛ばします</strong>。</li><li>終わりの行だけを始まりより上に動かすなど、ブロックが壊れる操作はできません。形が壊れたマクロは実行しません。</li><li>「そうでなければ（ELSE）」は「もし〜なら」の中、「エラーのとき（CATCH）」は「エラー時の処理」の中に、それぞれ1つだけ置けます。</li></ul>
+<h3 id="グループの実行タイミング">グループの実行タイミング</h3>
+<p>グループには <strong>実行タイミング</strong> を設定できます。</p>
+<ul><li>毎行（ふつう）</li><li><strong>最初の1行だけ</strong>: アプリの起動、ログイン、画面を開く、ASK で値を聞くなどの「準備」に</li><li><strong>最後の1行だけ</strong>: 保存、閉じる、報告メールなどの「後片付け」に（最後の行がスキップされても実行します）</li></ul>
+<h3 id="画面操作の記録-記録">画面操作の記録（⏺ 記録）</h3>
+<ol><li>記録した操作を入れたい場所のすぐ上のブロックを選びます（何も選ばなければ最後に入ります）。</li><li>編集の行の <strong>［⏺ 記録］</strong> を押します。ボタンが <strong>［⏹ 記録終了（○件）］</strong> に変わります。</li><li>ふだんどおりに操作します。ふじキュンの画面での操作は記録しません。</li><li>終わったら <strong>［⏹ 記録終了］</strong> を押すと、「⏺ 記録した操作」グループとしてマクロに入ります。</li></ol>
+<div class="table-wrap"><table><thead><tr><th>操作</th><th>記録されるコマンド</th></tr></thead><tbody><tr><td>ウィンドウの切り替え</td><td>SWITCH（タイトルの「 - 」より後ろ、例: <code>メモ帳</code> <code>Excel</code>）</td></tr><tr><td>名前のあるボタンのクリック</td><td>CLICK_NAME（位置が変わっても動く）</td></tr><tr><td>名前のある入力欄をクリックして文字を入力</td><td>FIELD_SET（欄に入力（名前で）。位置が変わっても動く）</td></tr><tr><td>それ以外のクリック</td><td>CLICK_POS（座標。ダブルクリック・右クリックも区別）</td></tr><tr><td>Tab・Enter・矢印・F1〜F12・Ctrl+C など</td><td>KEY（同じキーの連続は <code>{TAB 3}</code> のようにまとめる）</td></tr><tr><td>半角の文字入力</td><td>TEXT</td></tr><tr><td>日本語入力（IME がオン）</td><td>「ここで日本語を入力していた」というコメント（TEXT か CSV に置き換えます）</td></tr><tr><td>操作の間があいたとき（1.2秒以上）</td><td>WAIT</td></tr></tbody></table></div>
+<p>記録はあくまで <strong>たたき台</strong> です。記録したあと、入力した文字を TEXT や CSV（差し込み）に置き換え、座標クリックを CLICK_NAME・CLICK_TEXT・CLICK_IMG に置き換えると、ずっと安定します。最初の記録だけ、準備（小さな C# のコンパイル）に数秒かかります。</p>
+<h3 id="部品を指して名前を入れる-部品を指す">部品を指して名前を入れる（🎯 部品を指す）</h3>
+<p>「欄に入力（名前で）」「欄の値を読む（名前で）」「表を読み取ってCSVに保存」「名前でクリック」の編集画面には、次の2つのボタンがあります。名前を調べて打ち込む必要はありません。</p>
+<div class="table-wrap"><table><thead><tr><th>ボタン</th><th>動き</th></tr></thead><tbody><tr><td><strong>［🎯 部品を指す（3秒）］</strong></td><td>押してから3秒以内に、相手の画面の入力欄・ボタン・表の上にマウスを置きます。その部品の名前（名前がなければすぐ左の見出し、それもなければ ID）が入り、部品が <strong>赤い枠</strong> で光ります</td></tr><tr><td><strong>［🔍 見つかるか試す］</strong></td><td>いま入っている名前で、<strong>実行のときと同じ探し方</strong> をして、見つかった部品を赤い枠で示します。対象ウィンドウ（マクロの設定）の中を探します。見つからないときは名前・見出しを見直します</td></tr></tbody></table></div>
+<p>赤い枠が別の部品を囲んだときは、名前を書き換えるか、「何番目か」を変えて、もう一度［🔍 見つかるか試す］で確かめます。</p>
+<h3 id="作りながら試す止める所1ステップずつここから">作りながら試す（止める所・1ステップずつ・ここから）</h3>
+<p>ほかの RPA ツールと同じように、作りかけのマクロを <strong>少しずつ確かめながら</strong> 作れます。</p>
+<div class="table-wrap"><table><thead><tr><th>したいこと</th><th>操作</th></tr></thead><tbody><tr><td>ここで止めたい</td><td>ステップを選んで <strong>［🔴 止める所］</strong>（F9）。行の番号の左に <strong>赤い点</strong> が付き、実行するとそのステップの <strong>前</strong> で止まります。もう一度押すと外れます</td></tr><tr><td>1つずつ進めたい</td><td><strong>［⏯ 1ステップずつ］</strong>（F10）で実行すると、毎ステップの前で止まります。止まっているあいだに <strong>［⏭ 次へ］</strong>（F10）で次の1つを実行、<strong>［▶ 再開］</strong>（F5）で最後まで続けます</td></tr><tr><td>途中から試したい</td><td>ステップを選んで <strong>［▶ ここから］</strong>（F6）。前のステップを飛ばして、選んだステップから実行します（CSV の2行目からは、ふつうに最初から）</td></tr><tr><td>1つだけ試したい</td><td>ステップ（ブロックなら中身ごと）を選んで <strong>［▶ これだけ］</strong>。そのステップだけを、CSV の開始行の1行ぶん実行して止まります</td></tr></tbody></table></div>
+<ul><li>止まっているあいだは、ふじキュンの画面が前に出ます。<strong>［📊 変数］</strong> で変数や CSV の値を確かめられます。［⏭ 次へ］や［▶ 再開］を押すと、対象ウィンドウに戻って続きを実行します。</li><li>止める所は、マクロのファイルに一緒に保存されます。⏰ 予定（スケジュール）で動くときは止まりません。</li><li>コメントやブロックの終わりの目印には止める所を付けられません（1ステップずつのときも飛ばして進みます）。</li></ul>
+<hr>
+<h2 id="5-コマンド一覧">5. コマンド一覧</h2>
+<p>編集ダイアログでは項目ごとに入力できるので、値の書式を覚える必要はありません（ファイルでの形は <a href="#20-マクロファイルの形式">20章</a>）。「差し込み可」の項目では <code>{{氏名}}</code> などが使えます（<a href="#6-差し込み">6章</a>）。</p>
+<h3 id="入力">入力</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>KEY</strong> ⌨ キー送信</td><td>送るキー（例 <code>{TAB}</code>）</td><td>キーボード操作を送ります。書き方は <a href="#8-キーの書き方sendkeys">8章</a></td></tr><tr><td><strong>TEXT</strong> 📝 文字列貼付</td><td>文字列（差し込み可）</td><td>クリップボード経由で貼り付けます（Ctrl+V）。日本語入力がONでも化けません</td></tr><tr><td><strong>CSV</strong> 📄 CSV列を貼付</td><td>列番号（1始まり）</td><td>いま処理中の行の、指定した列の値を貼り付けます。空欄なら何もしません</td></tr><tr><td><strong>COPY</strong> 📋 コピーして変数へ</td><td>変数名</td><td>いま選ばれている文字を Ctrl+C でコピーして変数に入れます。あとで <code>{{$変数名}}</code> として使え、<strong>実行結果CSV にも同じ名前の列</strong> で残ります。コピーした文字がクリップボードに載るのを待ち（最大3秒）、載ったらすぐ読むので、前に WAIT はいりません。3秒たっても載らないときは空っぽになり、ログに ⚠ が出ます。待っているあいだに一時停止したときは、再開してからコピーし直します</td></tr><tr><td><strong>FIELD_SET</strong> 🧩 欄に入力（名前で）</td><td>欄の名前・見出し・ID、入れる文字（差し込み可）、何番目か、入れ方</td><td>入力欄を <strong>名前で探して</strong> 文字を入れます。座標やTABの回数を合わせなくてよく、画面の配置が変わっても動きます（<a href="#欄に入力欄の値を読む名前でのコツ">10章</a>）</td></tr><tr><td><strong>SECRET</strong> 🔑 パスワードを入力</td><td>登録名、入力するもの（パスワード／ユーザー名）</td><td>Windows の資格情報マネージャーに登録したパスワード（ユーザー名）を、いまの入力欄に打ち込みます。値はマクロ・CSV・ログ・実行結果に残りません（<a href="#パスワードの扱いsecret">パスワードの扱い</a>）</td></tr></tbody></table></div>
+<blockquote><p>💡 TEXT・CSV は「貼り付け」なので、入力欄にもともと文字があると後ろに追加されます。上書きしたいときは直前に <code>KEY ^a</code>（全選択）を入れます。COPY の前にも <code>KEY ^a</code> を入れると確実です。</p></blockquote>
+<h3 id="待つ確かめる">待つ・確かめる</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>WAIT</strong> ⏳ 待機</td><td>ミリ秒（1000＝1秒）</td><td>指定時間待ちます</td></tr><tr><td><strong>WAIT_FOR</strong> 👀 ウィンドウ出現待ち</td><td>タイトル（差し込み可）・押すキー・タイムアウト秒</td><td>指定タイトルのウィンドウが出るまで1秒ごとに見張り、出たらキーを押して次へ。時間切れならアラームを鳴らして停止します</td></tr><tr><td><strong>WINDOW_CHECK</strong> ⚠ ウィンドウ検知</td><td>タイトル（差し込み可）・押すキー・モード</td><td>そのウィンドウが <strong>いま</strong> 出ているかを確認。出ていたらキーを押して、モードに従います。出ていなければ何もせず次へ</td></tr><tr><td><strong>CONFIRM</strong> ✋ 確認ポイント</td><td>メッセージ（差し込み可）</td><td>ロボットを止めてメッセージを表示し、人の判断を待ちます</td></tr></tbody></table></div>
+<p>WINDOW_CHECK のモード:</p>
+<div class="table-wrap"><table><thead><tr><th>モード</th><th>動き</th><th>使いどころ</th></tr></thead><tbody><tr><td><code>STOP</code></td><td>アラームを鳴らして緊急停止（「エラー時の処理」でも受け止めません）</td><td>想定外のエラー</td></tr><tr><td><code>SKIP</code></td><td>この行を打ち切り、エラー行として記録して次の行へ</td><td>「該当なし」など、飛ばせばよいもの</td></tr><tr><td><code>CONTINUE</code></td><td>キーを押してそのまま続行</td><td>ときどき出るお知らせ・上書き確認などを閉じる</td></tr></tbody></table></div>
+<p>CONFIRM のボタン:</p>
+<ul><li><strong>▶ 続行</strong>: 対象ウィンドウに戻って続きを実行</li><li><strong>⏭ この行をスキップ</strong>: この行を打ち切って次の行へ</li><li><strong>⏹ 停止</strong>: 実行をやめる（Esc でも停止。確認ポイントの表示中はふじキュンが前面にあるので、そのまま Esc で止まります）</li></ul>
+<p>確認ポイントの表示中に、対象の画面をクリックしてカーソルを置いてから［続行］することもできます（テンプレートではこの方法で「最初の入力欄」を合わせています）。</p>
+<h3 id="クリック読み取り">クリック・読み取り</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>CLICK_NAME</strong> 👆 名前でクリック</td><td>ボタン等の表示名</td><td>名前でボタンを探して押します（第一推奨）</td></tr><tr><td><strong>CLICK_TEXT</strong> 🔎 文字でクリック（OCR）</td><td>探す文字（差し込み可）・範囲・何番目</td><td>画面の文字を文字認識で探して、その真ん中をクリックします</td></tr><tr><td><strong>CLICK_IMG</strong> 🖼 画像でクリック</td><td>画像ファイル・しきい値</td><td>画面から画像と同じ模様を探してクリックします</td></tr><tr><td><strong>CLICK_POS</strong> 🎯 座標でクリック</td><td>X・Y・クリックの種類（左／ダブル／右）</td><td>画面の座標をクリックします</td></tr><tr><td><strong>READ_TEXT</strong> 🔤 文字を読み取る（OCR）</td><td>範囲・変数名</td><td>範囲の文字を文字認識で読んで変数に入れます</td></tr><tr><td><strong>FIELD_GET</strong> 🔎 欄の値を読む（名前で）</td><td>欄の名前・見出し・ID、何番目か、変数名</td><td>入力欄・表示欄を名前で探して、中の文字を変数に入れます。クリックやコピーをしないので速く確実です。実行結果CSVにも同じ名前の列で残ります</td></tr><tr><td><strong>TABLE_READ</strong> 📋 表を読み取ってCSVに保存</td><td>表の名前（空ならいちばん大きい表）、保存するCSVのパス（差し込み可）、行数を入れる変数名</td><td>画面の一覧表を丸ごと読み取って CSV に保存します。照会結果の一覧を写す作業がいらなくなります</td></tr></tbody></table></div>
+<p>使い分けとコツは <a href="#10-クリックと読み取り画面認識の4つの方法">10章</a>。</p>
+<h3 id="アプリ画面">アプリ・画面</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>SWITCH</strong> 🪟 ウィンドウ切替</td><td>ウィンドウ名（差し込み可）</td><td>そのウィンドウを前面にして、以降の操作先にします</td></tr><tr><td><strong>RUN</strong> 🚀 アプリ起動</td><td>コマンド（差し込み可）</td><td>アプリやファイルを開きます。Windows のコマンドも実行できます（例: <code>cmd /c mkdir &quot;C:\RPA作業\{{1}}&quot;</code>）。スペースを含むパスは <code>&quot;</code> で囲みます。安全のため、差し込んだ値に <code>&quot;</code> <code>&amp;</code> `</td><td><code> </code>&lt;<code> </code>&gt;<code> </code>^<code> </code>%<code> 改行 が入っているときは、その行を実行せずにエラー行として記録します。コマンドが PowerShell（</code>powershell<code> </code>pwsh<code>）を呼ぶときは、さらに </code>'<code> </code><code> </code> `<code> </code>$<code> </code>;<code> </code>(<code> </code>)<code> </code>{<code> </code>}` も同じ扱いです</td></tr><tr><td><strong>SCREENSHOT</strong> 📸 画面を撮影して保存</td><td>ファイル名（差し込み可）・範囲</td><td>画面を PNG で保存します。範囲は「前面のウィンドウ」か「画面全体（全モニター）」。保存先は <code>evidence\日付\</code> で、ファイル名の後ろに時刻が付きます</td></tr><tr><td><strong>MAIL</strong> ✉ メールを作る・送る</td><td>送り方・宛先・件名・本文・添付 など</td><td>Outlook かメールアプリ（mailto）でメールを作ります（<a href="#11-メール">11章</a>）</td></tr></tbody></table></div>
+<h3 id="流れ">流れ</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>動き</th></tr></thead><tbody><tr><td><strong>LOOP_START</strong> 🔁 繰り返し</td><td>決めた回数、または条件を満たすあいだ、中身をくり返します（〜 LOOP_END「繰り返しここまで」）</td></tr><tr><td><strong>BREAK</strong> ⤴ 繰り返しを抜ける</td><td>いちばん内側の繰り返しを途中で終わります</td></tr><tr><td><strong>CONTINUE</strong> ↪ 次の繰り返しへ</td><td>残りを飛ばして次の回に進みます</td></tr><tr><td><strong>IF_START</strong> ❓ もし〜なら</td><td>条件が合うときだけ中身を実行します（〜 IF_END「もし〜ならここまで」）</td></tr><tr><td><strong>ELSE</strong> ↔ そうでなければ</td><td>「もし〜なら」の条件が合わないときの手順を書きます</td></tr><tr><td><strong>TRY_START</strong> 🧯 エラー時の処理</td><td>中でエラーが起きても止めずに、CATCH「エラーのとき」から下を実行します（〜 TRY_END）</td></tr><tr><td><strong>RETRY_START</strong> 🔂 うまくいくまでやり直す</td><td>中でエラーが起きたら、少し待って中身を最初からやり直します。決めた回数やり直してもだめならエラーとして止まります（〜 RETRY_END）</td></tr><tr><td><strong>CALL_MACRO</strong> 📞 マクロを呼び出す</td><td>ほかのマクロを部品として実行し、終わったら戻ってきます（<a href="#12-マクロの呼び出し部品化">12章</a>）</td></tr><tr><td><strong>RETURN</strong> ↩ 呼び出し元に戻る</td><td>呼び出されたマクロの途中で戻ります</td></tr></tbody></table></div>
+<p>使い方は <a href="#7-変数繰り返し分岐">7章</a>。</p>
+<h3 id="変数データ">変数・データ</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>動き</th></tr></thead><tbody><tr><td><strong>SET_VAR</strong> 📦 変数に値を入れる</td><td>値をそのまま、または計算して変数に入れます</td></tr><tr><td><strong>STR_OP</strong> ✂ 文字を加工する</td><td>置換・正規表現・切り出し・全角半角・ゼロ埋め・和暦・日付の計算などをして変数に入れます</td></tr><tr><td><strong>ASK</strong> ✍ 値を入力してもらう</td><td>実行中に入力欄を出して、入力された値を変数に入れます</td></tr><tr><td><strong>RECORD</strong> 🧾 結果に記録する</td><td>値を実行結果CSVの列として残します</td></tr><tr><td><strong>EXCEL_READ</strong> 📗 Excelのセルを読む</td><td>Excelの画面を開かずに、ブックのセルの値を変数に入れます</td></tr><tr><td><strong>EXCEL_WRITE</strong> 🖊 Excelのセルに書く</td><td>Excelの画面を開かずに、セルに書き込んで保存します。<strong>書き込むブックは閉じておいてください</strong></td></tr></tbody></table></div>
+<p>使い方は <a href="#7-変数繰り返し分岐">7章</a>。</p>
+<h3 id="整理">整理</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>GROUP_START</strong> 📁 グループ</td><td>グループ名・実行タイミング</td><td>手順をまとめます（〜 GROUP_END）。<a href="#グループの実行タイミング">4章</a></td></tr><tr><td><strong>COMMENT</strong> 💬 コメント</td><td>メモ</td><td>実行時は何もしません。手順の説明を書いておきましょう（緑の斜体で表示）</td></tr></tbody></table></div>
+<hr>
+<h2 id="6-差し込み">6. 差し込み</h2>
+<p>「差し込み可」の項目の中で <code>{{ }}</code> を使うと、実行時に値が入ります。編集ダイアログの［＋ 差し込みを追加 ▼］からも選べます。</p>
+<div class="table-wrap"><table><thead><tr><th>書き方</th><th>入る値</th><th>例</th></tr></thead><tbody><tr><td><code>{{1}}</code> <code>{{2}}</code> …</td><td>CSV の1列目、2列目…</td><td><code>見本 太郎</code></td></tr><tr><td><code>{{氏名}}</code></td><td>CSV の見出しが「氏名」の列</td><td><code>見本 太郎</code></td></tr><tr><td><code>{{$合計}}</code></td><td>変数「合計」の値（COPY・SET_VAR などで入れた値。<a href="#7-変数繰り返し分岐">7章</a>）</td><td><code>1500</code></td></tr><tr><td><code>{{ROW}}</code></td><td>CSV の行番号（データの1行目＝1）</td><td><code>3</code></td></tr><tr><td><code>{{ROW+1}}</code> <code>{{ROW-2}}</code></td><td>行番号に足し引き</td><td>Excel のセル番地 <code>A{{ROW+1}}</code> → <code>A4</code></td></tr><tr><td><code>{{TODAY}}</code></td><td>今日</td><td><code>2026/09/30</code></td></tr><tr><td><code>{{TODAY_JP}}</code></td><td>今日</td><td><code>2026年9月30日</code></td></tr><tr><td><code>{{WAREKI}}</code></td><td>今日（和暦）</td><td><code>令和8年9月30日</code></td></tr><tr><td><code>{{WAREKI_YEAR}}</code></td><td>和暦の年</td><td><code>令和8年</code></td></tr><tr><td><code>{{YYYYMMDD}}</code></td><td>今日</td><td><code>20260930</code></td></tr><tr><td><code>{{NOW}}</code></td><td>時刻</td><td><code>14:05</code></td></tr><tr><td><code>{{TIMESTAMP}}</code></td><td>日時（ファイル名向け）</td><td><code>20260930_140512</code></td></tr><tr><td><code>{{YEAR}}</code> <code>{{MONTH}}</code> <code>{{DAY}}</code></td><td>年・月・日</td><td><code>2026</code> <code>9</code> <code>30</code></td></tr></tbody></table></div>
+<ul><li>見出し名は <strong>完全一致</strong> です（前後の空白は無視）。分からない差し込みはそのまま残り、ログに警告が出ます。</li><li>CSV の見出しと同じ名前なら、<strong>見出しが優先</strong> されます（例: 見出しが「DAY」の列があれば <code>{{DAY}}</code> はその列の値）。数字だけの見出しは <code>{{列番号}}</code> で指定してください（<code>{{2026}}</code> は「2026列目」と読まれます）。</li><li>差し込んだ値にカンマや <code>&quot;</code> が入っていても、ほかの設定とまざることはありません。</li><li>和暦は明治・大正・昭和・平成・令和に対応しています（各元号の初日で切り替え。例: 1926年12月24日は大正15年、25日は昭和元年）。元年は「元年」と表示します。</li></ul>
+<hr>
+<h2 id="7-変数繰り返し分岐">7. 変数・繰り返し・分岐</h2>
+<p>ほかの RPA ツールと同じように、<strong>変数</strong>・<strong>繰り返し（for / while）</strong>・<strong>もし〜なら（if / else）</strong>・<strong>エラー時の処理（try / catch）</strong> が使えます。プログラミングを知らなくても、ブロックを積み木のように並べて使えます。</p>
+<h3 id="変数">変数</h3>
+<ul><li>変数は「名前の付いた箱」です。<strong>SET_VAR</strong>・<strong>STR_OP</strong>・<strong>ASK</strong>・<strong>EXCEL_READ</strong>・<strong>COPY</strong>・<strong>READ_TEXT</strong> で値が入り、繰り返しの回数も変数に入ります。</li><li>入れた値は、差し込みと同じ書き方の <strong><code>{{$名前}}</code></strong> でどこでも使えます（例: <code>{{$合計}}</code>）。</li><li>変数の値は、1回の実行のあいだ <strong>行をまたいで残ります</strong>。行ごとに最初から数えたいときは、マクロの最初で値を入れ直します。</li><li>まだ値が入っていない変数は、空っぽとして扱います。</li><li>実行中の値は、実行の操作の <strong>［📊 変数］</strong> パネルでリアルタイムに確認できます（変数・繰り返しの回数・この行のCSVの値）。</li></ul>
+<p><strong>SET_VAR の「計算して入れる」</strong> では <code>+ - * / %</code> とかっこが使えます。全角数字やカンマ付きの数（<code>１，２００</code>）もそのまま計算できます。例: <code>{{単価}}*{{数量}}</code>、<code>{{$合計}}+{{金額}}</code></p>
+<blockquote><p>💡 正確に計算できるのは <strong>15けたまで</strong> です。それより大きい数は、まちがった答えを出さないように計算をエラーにします。小数は10けたまでで四捨五入します。</p></blockquote>
+<h3 id="文字を加工するstr_op">文字を加工する（STR_OP）</h3>
+<p>元の文字（差し込み可）を加工して、結果を変数に入れます。</p>
+<div class="table-wrap"><table><thead><tr><th>加工のしかた</th><th>設定A</th><th>設定B</th><th>例</th></tr></thead><tbody><tr><td>置換</td><td>探す文字</td><td>置きかえる文字</td><td><code>a-b</code> → A=<code>-</code> B=<code>/</code> → <code>a/b</code></td></tr><tr><td>正規表現で置換</td><td>パターン</td><td>置きかえる文字（<code>$1</code> 可）</td><td>空白をそろえる A=<code>[ 　]+</code> B=<code>　</code></td></tr><tr><td>正規表現で取り出す</td><td>パターン</td><td>かっこの番号（空なら全体）</td><td>電話番号 A=<code>0\d{1,4}-\d{1,4}-\d{4}</code></td></tr><tr><td>切り出し</td><td>何文字目から</td><td>何文字（空なら最後まで）</td><td><code>ABCDEFG</code> A=3 B=2 → <code>CD</code></td></tr><tr><td>区切って取り出す</td><td>区切り文字（空ならカンマ）</td><td>何番目</td><td><code>山田,太郎</code> A=<code>,</code> B=2 → <code>太郎</code></td></tr><tr><td>前後の空白を消す</td><td></td><td></td><td>全角の空白も消えます</td></tr><tr><td>全角→半角 / 半角→全角</td><td></td><td></td><td><code>１２３ＡＢＣ</code> ↔ <code>123ABC</code></td></tr><tr><td>ゼロ埋め</td><td>桁数</td><td>埋める文字（空なら0）</td><td><code>123</code> A=7 → <code>0000123</code></td></tr><tr><td>日付を和暦に</td><td></td><td></td><td><code>2026/10/01</code> → <code>令和8年10月1日</code></td></tr><tr><td>日付にA日を足す</td><td>日数（マイナス可）</td><td></td><td><code>2026/10/01</code> A=14 → <code>2026/10/15</code></td></tr><tr><td>3桁区切り / カンマを消す</td><td></td><td></td><td><code>1234567</code> ↔ <code>1,234,567</code></td></tr><tr><td>文字数を数える</td><td></td><td></td><td><code>あいう</code> → <code>3</code></td></tr></tbody></table></div>
+<p>日付は <code>2026/10/01</code>・<code>2026-10-1</code>・<code>20261001</code>・<code>令和8年10月1日</code>（明治〜令和）・全角数字 のどれでも読めます。存在しない日付（2月30日など）はエラーになります。</p>
+<h3 id="条件もしなら条件のあいだの繰り返しで使う">条件（もし〜なら・条件のあいだの繰り返しで使う）</h3>
+<div class="table-wrap"><table><thead><tr><th>くらべ方</th><th>意味</th></tr></thead><tbody><tr><td>と等しい / と違う</td><td>同じかどうか（両方が数なら数としてくらべます。16けた以上の番号は文字としてくらべます）</td></tr><tr><td>を含む / を含まない</td><td>文字が入っているか</td></tr><tr><td>が空っぽ / が空っぽでない</td><td>値が空か（くらべる相手は使いません）</td></tr><tr><td>より大きい / 以上 / より小さい / 以下</td><td>数の大小（全角・カンマ付きもOK）</td></tr><tr><td>が正規表現に一致する</td><td>くらべる相手に正規表現を書きます</td></tr><tr><td>というウィンドウがある / ない</td><td>調べる値にウィンドウのタイトル（<a href="#9-ウィンドウ名の合わせ方">9章</a>と同じ探し方）</td></tr><tr><td>というファイルがある / ない</td><td>調べる値にファイルのパス</td></tr></tbody></table></div>
+<h3 id="繰り返しloop_start">繰り返し（LOOP_START）</h3>
+<ul><li><strong>決めた回数くり返す（for）</strong>: 回数を数字か差し込み（<code>{{ページ数}}</code> など）で決めます。</li><li><strong>条件を満たすあいだくり返す（while）</strong>: 毎回、最初に条件を調べて、満たしているあいだ中身をくり返します。</li><li>何回目かは <code>{{$回数}}</code>（変数名は変えられます）で使えます。入れ子の繰り返しでは、それぞれ別の名前にします。</li><li><strong>BREAK（繰り返しを抜ける）</strong> で途中で終わり、<strong>CONTINUE（次の繰り返しへ）</strong> で残りを飛ばして次の回に進みます。たいてい「もし〜なら」の中に入れて使います。</li><li>終わらない繰り返しを防ぐため、<strong>上限回数</strong>（最初は1000回）を超えるとエラーで止まります。</li></ul>
+<h3 id="もしならif_start">もし〜なら（IF_START）</h3>
+<ul><li>条件が合うときだけ中身を実行します（if）。</li><li><strong>ELSE（そうでなければ）</strong> を中に1つ入れると、合わないときの手順を書けます。「もし〜なら」のブロック（またはその中の行）を選んでから追加します。</li><li><strong>WINDOW_CHECK</strong> は「画面が出たら」動くコマンド、<strong>もし〜なら</strong> は「値で分ける」コマンドです。もし〜なら の条件「というウィンドウがある」を使うと、画面が出たときの手順を何行でも書けます。</li></ul>
+<h3 id="エラー時の処理try_start">エラー時の処理（TRY_START）</h3>
+<ul><li>中でエラー（ウィンドウが見つからない・クリックできない・時間切れ など）が起きても止まらずに、<strong>CATCH（エラーのとき）</strong> から下を実行します（try / catch）。</li><li>エラーの内容は <code>{{$エラー内容}}</code> で使えます。実行結果CSVの備考にも「受け止めたエラー」として残ります。</li><li><strong>WINDOW_CHECK の STOP</strong>（緊急停止）と <strong>⏹ 停止・Esc</strong> は受け止めません。本当に止めたい異常はちゃんと止まります。</li></ul>
+<h3 id="うまくいくまでやり直すretry_start">うまくいくまでやり直す（RETRY_START）</h3>
+<ul><li>中でエラーが起きると、<strong>決めた時間待ってから、中身を最初からやり直します</strong>（UiPath の Retry Scope と同じ考え方です）。</li><li>やり直す回数（最初の1回は数えません）と、やり直す前に待つ時間を決めます。何回目のやり直しかは <code>{{$やり直し回数}}</code> で使えます。</li><li>決めた回数やり直してもだめなら、いつものエラーとして止まります。外側に「エラー時の処理」があれば、そちらの「エラーのとき」へ進みます。</li><li>画面の反応が遅いシステムで、ときどき失敗する所（検索して結果を読む など）を囲むのに向いています。WINDOW_CHECK の STOP（緊急停止）と ⏹ 停止はやり直しません。</li></ul>
+<h3 id="askrecordexcel">ASK・RECORD・Excel</h3>
+<ul><li><strong>ASK</strong> は「最初の1行だけ」グループに入れると、実行のはじめに1回だけ聞けます。</li><li><strong>RECORD</strong> の値と COPY の値は、実行結果CSVの列になります。</li><li>Excel のコマンドは Excel が入っている PC で使えます（［🩺 環境チェック］で確認できます）。ブックは実行のあいだ裏で開いたままになり、実行が終わると閉じます。シートは名前か番号（1＝1枚目）、セル番地には <code>B{{ROW+1}}</code> のような差し込みが使えます。</li></ul>
+<hr>
+<h2 id="8-キーの書き方sendkeys">8. キーの書き方（SendKeys）</h2>
+<p>KEY コマンドや、WAIT_FOR・WINDOW_CHECK の「押すキー」は、Windows の SendKeys の書き方です。</p>
+<div class="table-wrap"><table><thead><tr><th>書き方</th><th>キー</th><th>書き方</th><th>キー</th></tr></thead><tbody><tr><td><code>{TAB}</code></td><td>Tab</td><td><code>+{TAB}</code></td><td>Shift+Tab</td></tr><tr><td><code>{ENTER}</code></td><td>Enter</td><td><code>{ESC}</code></td><td>Esc</td></tr><tr><td><code>{SPACE}</code></td><td>スペース</td><td><code>{BS}</code></td><td>BackSpace</td></tr><tr><td><code>{DELETE}</code></td><td>Delete</td><td><code>{UP}</code> <code>{DOWN}</code> <code>{LEFT}</code> <code>{RIGHT}</code></td><td>矢印</td></tr><tr><td><code>{HOME}</code> <code>{END}</code></td><td>Home / End</td><td><code>{PGUP}</code> <code>{PGDN}</code></td><td>PageUp / PageDown</td></tr><tr><td><code>{F1}</code>〜<code>{F12}</code></td><td>ファンクションキー</td><td><code>{TAB 3}</code></td><td>Tab を3回（回数指定）</td></tr><tr><td><code>^a</code></td><td>Ctrl+A</td><td><code>^{HOME}</code></td><td>Ctrl+Home</td></tr><tr><td><code>%{F4}</code></td><td>Alt+F4</td><td><code>%y</code></td><td>Alt+Y（「はい(Y)」ボタンなど）</td></tr></tbody></table></div>
+<ul><li>記号の意味: <code>^</code> = Ctrl、<code>+</code> = Shift、<code>%</code> = Alt</li><li><code>+</code> <code>^</code> <code>%</code> <code>~</code> <code>(</code> <code>)</code> <code>{</code> <code>}</code> <code>[</code> <code>]</code> を文字として送るときは <code>{+}</code> のように <code>{ }</code> で囲みます。</li><li>文字を入力したいときは KEY ではなく <strong>TEXT</strong> を使ってください（日本語入力の影響を受けません）。</li></ul>
+<hr>
+<h2 id="9-ウィンドウ名の合わせ方">9. ウィンドウ名の合わせ方</h2>
+<p>対象ウィンドウ・SWITCH・WAIT_FOR・WINDOW_CHECK・条件「というウィンドウがある」のタイトルは、ウィンドウのタイトルバーの文字を次の順で探します。</p>
+<ol><li>完全に一致するもの</li><li><strong>先頭</strong> が一致するもの</li><li><strong>末尾</strong> が一致するもの</li></ol>
+<p>例: Excel のタイトル「台帳.xlsx - Excel」は、<code>台帳.xlsx</code>（先頭）でも <code>Excel</code>（末尾）でも見つかります。途中の文字だけ（<code>xlsx</code>）では見つかりません。</p>
+<p>［🔍 一覧］を押すと、いま開いているウィンドウのタイトル一覧から選べます。</p>
+<p><strong>対象ウィンドウ</strong> を設定すると、各行の最初にそのウィンドウを前面にします。空欄の場合は、実行開始から3秒待つので、その間に入力先をクリックするか、マクロの中で RUN・SWITCH してください。</p>
+<hr>
+<h2 id="10-クリックと読み取り画面認識の4つの方法">10. クリックと読み取り（画面認識の4つの方法）</h2>
+<p><strong>入力欄に文字を入れる・欄の値を読むときは、まず「欄に入力（名前で）」「欄の値を読む（名前で）」を試してください</strong>（下の「欄に入力・欄の値を読む（名前で）のコツ」）。クリックしてから TAB で移動する方法より、ずっと確実です。</p>
+<p>ボタンを押す方法は4つあります。上から順に試すのがおすすめです。</p>
+<div class="table-wrap"><table><thead><tr><th>方法</th><th>強み</th><th>弱み</th></tr></thead><tbody><tr><td><strong>CLICK_NAME</strong> 名前で</td><td>画面の位置や大きさが変わっても動く。いちばん確実</td><td>名前を持たない部品（独自描画のボタン、Citrix/RDP の中）には効かない</td></tr><tr><td><strong>CLICK_TEXT</strong> 文字で（OCR）</td><td>ボタンに文字が見えていれば押せる。位置が変わっても大丈夫</td><td>文字認識のぶん数秒かかる。似た文字を読み違えることがある</td></tr><tr><td><strong>CLICK_IMG</strong> 画像で</td><td>Citrix/RDP の中など、中身が見えない画面でも使える</td><td>色やテーマが変わると見つからない。数秒かかる</td></tr><tr><td><strong>CLICK_POS</strong> 座標で</td><td>どんな画面でも使える</td><td>ウィンドウの位置・大きさ・画面の拡大率が変わるとずれる</td></tr></tbody></table></div>
+<h3 id="click_name-のコツ">CLICK_NAME のコツ</h3>
+<ul><li>ボタンに表示されている文字（「登録」「OK」など）を <strong>完全一致</strong> で指定します。</li><li>対象ウィンドウ（または SWITCH したウィンドウ）とフォーカスのあるウィンドウの中を探します。</li></ul>
+<h3 id="欄に入力欄の値を読む名前でのコツ">欄に入力・欄の値を読む（名前で）のコツ</h3>
+<ul><li>欄は次の順に探します。<strong>① 欄そのものの名前か ID が同じもの → ② 見出し（「宛名番号：」のような文字）がその名前で、そのすぐ右（なければすぐ下）にある欄</strong>。見出しの後ろの「：」「*」や前後の空白は無視します。</li><li>探す場所は、いまフォーカスのあるウィンドウと、対象ウィンドウ（または SWITCH したウィンドウ）です。</li><li>同じ名前の欄がいくつもあるときは「何番目か」で選びます（画面の並びの順）。</li><li>入れ方は「おまかせ」がおすすめです。欄に直接値を入れ、入れられない欄はその欄を選んで貼り付けます。Web の画面などで、直接入れても画面に反映されないときは「欄を選んで貼り付ける」にします。</li><li>欄が見つからないときはエラーで止まります。［🎯 部品を指す］と［🔍 見つかるか試す］（<a href="#部品を指して名前を入れる-部品を指す">4章</a>）で名前を確かめてください。Citrix・リモートデスクトップの中や、独自に描いている画面の欄は、名前で探せないことがあります。そのときは CLICK_TEXT や CLICK_POS で欄を選んでから TEXT で入力します。</li></ul>
+<h3 id="表を読み取るtable_readのコツ">表を読み取る（TABLE_READ）のコツ</h3>
+<ul><li>画面の一覧表（表・グリッド・リスト）を、見出しの行と一緒に CSV に保存します。表の名前を空にすると、いちばん大きい表を読みます。</li><li>保存先のパスが相対パス（例 <code>一覧_{{YYYYMMDD}}.csv</code>）なら、ふじキュンのフォルダに保存します。保存した CSV は、そのまま別のマクロのデータとして読み込めます。</li><li>保存するファイルは <strong>.csv だけ</strong> です。保存先に差し込んだ値（CSV の値や画面の文字）に <code>..</code>・<code>:</code>・先頭の <code>\</code>・改行が入っていると、ほかの場所のファイルを上書きしないように、保存せずに止まります（<code>2026\一覧</code> のようなフォルダ分けは使えます）。</li><li>画面に表示されている行だけを読む表もあります（長い一覧は、スクロールしないと中身ができない作りのものがあります）。全件そろっているか、行数（変数）と画面の件数を見比べてください。最大5000行まで読みます。</li><li><code>=</code> などで始まるセルは、Excel で開いたときに式として動かないように、先頭に <code>'</code> を付けて保存します。</li></ul>
+<h3 id="click_textread_text-のコツ文字認識">CLICK_TEXT・READ_TEXT のコツ（文字認識）</h3>
+<ul><li>Windows に入っている文字認識（OCR）を使います。外部ソフトやネット接続は不要です。日本語を読むには、Windows に日本語の文字認識が入っている必要があります（［🩺 環境チェック］で確認できます）。</li><li>範囲は「前面のウィンドウ」「画面全体」「範囲を指定」から選べます。［📍 範囲を取得］で左上と右下にマウスを置くと範囲が入ります。範囲を小さくするほど正確で速くなります。</li><li>CLICK_TEXT は、同じ文字が複数あるときは「何番目（上から）」で選びます。見つからないときは1秒おきに3回まで探します。探す文字は2文字以上がおすすめです。</li><li>小さい文字は自動で拡大してから読み取ります。読み取りは完璧ではありません（<code>0</code> と <code>O</code>、<code>1</code> と <code>l</code> など）。大事な値は確認ポイントで確かめてください。</li><li>READ_TEXT で読んだ全文から値だけを取り出すには、STR_OP の「正規表現で取り出す」を使います。</li></ul>
+<h3 id="click_img-のコツ">CLICK_IMG のコツ</h3>
+<ul><li>編集画面の［📷 5秒後のマウス周辺を切り取り］を押し、5秒以内に対象の画面を前に出して、ボタンの真ん中にマウスを置きます。<code>rpa_images</code> フォルダに PNG が保存されます。</li><li>最初の画像クリックだけ、準備（小さな C# のコンパイル）に数秒かかります。</li><li>切り取る範囲は <strong>ボタンの特徴的な部分だけ</strong>（文字＋枠の一部など）が見つかりやすいです。背景が大きく入ると失敗しやすくなります。</li><li>しきい値 0.9 は「90%以上のピクセルが一致したらクリック」の意味です。見つからないときは 0.85 などに下げます。低くしすぎると別の場所を押す恐れがあります。</li><li>見つからないときは1秒おきに3回まで探し、それでもだめならアラームを鳴らして止まります。</li><li>画像のパスが相対パス（例 <code>rpa_images\img_….png</code>）なら、ふじキュンのフォルダ（<code>fujikyun.bat</code> のあるフォルダ）を基準にします。フォルダごとコピーすれば別の PC でも使えます。</li></ul>
+<h3 id="click_pos-のコツ">CLICK_POS のコツ</h3>
+<ul><li>編集画面の［📍 3秒後のマウス位置を取得］を押し、3秒以内に目的の場所へマウスを置くと座標が入ります。</li><li>対象ウィンドウは <strong>最大化</strong> して使うとずれにくくなります。</li></ul>
+<hr>
+<h2 id="11-メール">11. メール</h2>
+<p><strong>MAIL</strong>（✉ メールを作る・送る）の送り方は2つです。</p>
+<div class="table-wrap"><table><thead><tr><th>送り方</th><th>内容</th></tr></thead><tbody><tr><td>Outlook</td><td>下書きに保存（おすすめ）／作成画面を表示（送信は人が押す）／すぐに送信。添付もできます</td></tr><tr><td>メールアプリを開くだけ（mailto）</td><td>いつものメールアプリで作成画面を開きます。添付はできません</td></tr></tbody></table></div>
+<p>宛先・CC・件名・本文・添付には差し込みが使えます（例: 添付 <code>C:\RPA作業\送付\{{氏名}}.pdf</code>）。宛先や添付が複数のときは <code>;</code> で区切ります。添付ファイルが見つからないときは、メールを作らずにエラーにします。<strong>まずは「下書き」で中身を確かめてから</strong> 送信にしてください。</p>
+<hr>
+<h2 id="12-マクロの呼び出し部品化">12. マクロの呼び出し（部品化）</h2>
+<ul><li><strong>CALL_MACRO</strong>（📞 マクロを呼び出す）で、ほかのマクロを部品（サブルーチン）として実行し、終わったら次の行に戻ってきます。</li><li>ログイン・画面を開く・保存して閉じる など、いくつものマクロで使う手順を1つの「部品マクロ」にしておくと、直すときも1か所で済みます。</li><li>変数（<code>{{$名前}}</code>）と CSV の行は共通なので、値の受け渡しは変数でします。</li><li>部品マクロの途中で <strong>RETURN</strong>（↩ 呼び出し元に戻る）を使うと、そこで戻ります。いちばん外側のマクロで使うと、その行の残りを飛ばして次の行に進みます。</li><li>部品マクロの中でエラーが起きたとき、部品の中に「エラー時の処理」がなければ、呼び出した側の「エラー時の処理」が受け止めます。</li><li>呼び出しは10段まで（自分自身を呼び続ける間違いを防ぐため）。呼び出し先はマクロの名前を変えても切れません。</li></ul>
+<hr>
+<h2 id="13-実行">13. 実行</h2>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>説明</th></tr></thead><tbody><tr><td>▶ 実行</td><td>選択中のマクロを、CSV の開始行〜終了行について実行します</td></tr><tr><td>開始行・終了行</td><td>データ行の番号（見出しを除いて1から）。全角数字でもOK。数字以外が入っているときは実行しません（終了行は空欄なら最後まで）。<strong>試すときは両方1にして1件だけ</strong></td></tr><tr><td>間隔</td><td>ステップとステップの間の待ち時間（ミリ秒）。画面が追いつかないときは増やします</td></tr><tr><td>⏸ 一時停止</td><td>次のステップの前で止まります。［▶ 再開］で対象ウィンドウに戻ってから続きを実行します</td></tr><tr><td>⏹ 停止</td><td>すぐ止めます。ふじキュンの画面で <strong>Esc</strong> を押しても止まります。ロボットが入力中で別の画面が前にあるときは、<strong>Esc を約1秒長押し</strong> すると、どの画面からでも止まります。名前・文字・画像でのクリックは別の処理で探すので、探している最中でも止められます</td></tr><tr><td>□ アラーム ／ 🔔</td><td>異常停止したときにアラームを鳴らします。🔔 でテスト再生できます</td></tr><tr><td>□ 毎ステップ前面化</td><td>入力の前に毎回、対象ウィンドウを前面にします。途中で別の画面が割り込む環境で ON にします</td></tr><tr><td>□ 完了音</td><td>全行が終わったら音で知らせます</td></tr><tr><td>📊 変数</td><td>実行中の変数・繰り返しの回数・この行のCSVの値を、ログの右に表示します（もう一度押すと隠れます）</td></tr></tbody></table></div>
+<p>実行中のブロックは黄色で表示されます。実行中はマクロを編集できず、ふじキュンを閉じることもできません（⏹ 停止してから閉じます）。</p>
+<h3 id="実行結果csv">実行結果CSV</h3>
+<p>［↓ 実行結果CSV］を押すと <code>fujikyun_result.csv</code> を保存します。</p>
+<ul><li>元のCSVの列 ＋ COPY・RECORD で記録した値 ＋ SCREENSHOT の保存先 ＋ <strong>実行結果</strong>（完了／スキップ／エラー／中断）＋ 備考 ＋ 元データ行No ＋ 開始日時</li><li>Excel で開いて「実行結果」でフィルターすると、やり直しが必要な行がすぐ分かります。</li></ul>
+<h3 id="エラー行csv">エラー行CSV</h3>
+<p>［↓ エラー行をCSV保存］を押すと <code>fujikyun_error_list.csv</code> を保存します。元データと同じ列の並びなので、<strong>直してそのまま読み込めば、エラーになった行だけ再実行</strong> できます。</p>
+<ul><li>エラー行CSV（と実行結果CSV）には「元データ行No」列があります。「1行目は見出し」を ON にしてこの列があるCSVを実行すると、<code>{{ROW}}</code> やログの行番号は <strong>元のCSVの行番号</strong> になるので、<code>A{{ROW+1}}</code> のようなセル番地もずれません。</li><li>WINDOW_CHECK の SKIP 以外のエラー（WINDOW_CHECK の STOP、タイムアウト、ウィンドウが見つからない、クリック失敗など）は <strong>実行そのものが止まる</strong>ので、その後ろの行はまだ処理されていません（「エラー時の処理」の中で起きたものを除く）。エラー行を直したら、元のCSVで <strong>開始行</strong> をその次の行にして続きを実行してください。</li></ul>
+<h3 id="エラーで止まったときの画面">エラーで止まったときの画面</h3>
+<p>実行がエラーで止まると、<strong>その瞬間の画面全体を自動で保存</strong> します（<code>evidence\日付\エラー_行○_時刻.png</code>）。保存先はログに出て、実行結果CSVの「エラー時の画面」の列にも残ります。止まった原因を、あとから画面で確かめられます。</p>
+<hr>
+<h2 id="14-スケジュール-予定">14. スケジュール（⏰ 予定）</h2>
+<p>いちばん上の段の <strong>［⏰ 予定］</strong> で、決まった時刻にマクロを自動で実行できます。次の予定はそのボタンの右に表示されます。</p>
+<ul><li><strong>くり返し</strong>: 毎日／平日（月〜金）／指定した日に1回</li><li><strong>CSV</strong>: 指定すると、その CSV を読み込んで全行を実行します。空欄なら1回だけ実行します。</li><li><strong>ふじキュンを開いているとき</strong>: ふじキュンが自分で時刻を見て実行します（予定の時刻から10分以内に始めます。過ぎていたらその日は実行しません）。</li><li><strong>［🗓 Windowsに登録］</strong>: Windows のタスクスケジューラに登録すると、ふじキュンを閉じていても、時刻にふじキュンを起動して実行します。タスクの名前は <code>FujikyunRPA_PS_</code> で始まり、「<code>fujikyun.ps1</code> を <code>-AutoRun &lt;予定のID&gt;</code> で起動する」内容です。「完了したら閉じる」にすると、最後まで完了したときだけ閉じます（エラーのときは画面を残します）。予定を削除するか［登録を解除］すると、タスクも消えます。</li><li>予定の一覧は <code>fujikyun_settings.json</code> に保存されます。</li></ul>
+<h3 id="時刻以外のきっかけキーファイルウィンドウ">時刻以外のきっかけ（キー・ファイル・ウィンドウ）</h3>
+<p>予定の「きっかけ」で、時刻のほかに次の3つを選べます。どれも <strong>ふじキュンを開いているあいだだけ</strong> 見張ります（Windows への登録はできません）。</p>
+<div class="table-wrap"><table><thead><tr><th>きっかけ</th><th>動き</th><th>マクロで使える値</th></tr></thead><tbody><tr><td>⌨ キーを押したとき</td><td>どの画面を使っていても、決めたキー（例 <code>Ctrl+Shift+1</code>）を押すとマクロを実行します。英字・数字は Ctrl か Alt と一緒に、F1〜F12 は単独でも使えます</td><td>—</td></tr><tr><td>📂 フォルダにファイルが届いたとき</td><td>見張るフォルダに、ファイル名のパターン（例 <code>*.csv</code>）に合う <strong>新しいファイル</strong> が来たら実行します（3秒ごとに見て、コピーが終わってから動きます）。「届いたファイルをそのままデータにして実行する」にすると、届いた CSV・Excel を読み込んで全行を実行します</td><td><code>{{$きっかけのファイル}}</code>（届いたファイルのパス）</td></tr><tr><td>🪟 ウィンドウが開いたとき</td><td>タイトルに決めた文字を含むウィンドウが <strong>開いたとき</strong> に実行します（開いたままのあいだはくり返しません）</td><td><code>{{$きっかけのウィンドウ}}</code></td></tr></tbody></table></div>
+<ul><li>ふじキュンの画面でダイアログを開いているあいだや、別のマクロを実行中のときは、終わるまで待ちます（キーは、そのとき押した分は数えません）。</li><li>見張りを始めたときにもうあったファイルや、もう開いていたウィンドウでは動きません。</li><li>予定で動くときは、確認や質問のダイアログで止まらないように、CSV が読めないなどの問題があれば実行しません。</li></ul>
+<blockquote><p>⚠ ロボットは画面を操作するので、実行する時刻に <strong>PCの電源が入っていて、ログインしたまま、画面ロックされていない</strong> 必要があります。Windows に登録したタスクも、ログインしているときだけ動きます。</p></blockquote>
+<hr>
+<h2 id="15-安全装置">15. 安全装置</h2>
+<div class="table-wrap"><table><thead><tr><th>しくみ</th><th>内容</th></tr></thead><tbody><tr><td>ウィンドウ見失い防止</td><td>対象ウィンドウが見つからないときは1秒おきに最大3回探し、だめならアラーム＋停止</td></tr><tr><td>自分への誤入力防止</td><td>入力先がふじキュン自身になりそうなときは、対象ウィンドウに戻すか、戻せなければ停止</td></tr><tr><td>アラーム</td><td>異常停止・タイムアウト時に、Windows のアラーム音（<code>Alarm01.wav</code>）を約12秒鳴らします。鳴らせないときは Windows の警告音にします。［🔔］でテストできます</td></tr><tr><td>確認ポイント</td><td>CONFIRM で人の確認をはさめます。登録・送信などの前に入れるのがおすすめです</td></tr><tr><td>Esc で停止</td><td>ふじキュンの画面で Esc を押すと止まります。ほかの画面が前にあるときは <strong>Esc を約1秒長押し</strong>（マクロの KEY {ESC} は一瞬なので反応しません）</td></tr><tr><td>終わらない繰り返しの防止</td><td>繰り返しは上限回数、マクロの呼び出しは10段まで</td></tr><tr><td>自動保存</td><td>編集のたびに一時ファイルへ保存。次回起動時に復元できます</td></tr><tr><td>エラー時の画面</td><td>エラーで止まった瞬間の画面全体を <code>evidence\</code> に自動で保存</td></tr><tr><td>パスワードを書かない</td><td>SECRET（🔑 パスワードを入力）は Windows の資格情報マネージャーから読むので、パスワードがマクロ・CSV・ログ・実行結果に残りません</td></tr></tbody></table></div>
+<h3 id="パスワードの扱いsecret">パスワードの扱い（SECRET）</h3>
+<ol><li>「パスワードを入力」のステップを追加し、<strong>登録名</strong>（例 <code>基幹系</code>）を決めます。</li><li><strong>［🔑 登録・変更］</strong> を押して、ユーザー名とパスワードを入れます。</li><li>同じ画面で <strong>入れてよい画面</strong> を決めます。<strong>［🎯 画面を指す（3秒）］</strong> を押して、3秒以内にログインする画面をクリックすると、その画面のタイトルとプログラム（.exe の場所）が入ります。タイトルは、毎回変わらない一部だけに手で直せます。画面を指さないと保存できません。Windows の <strong>資格情報マネージャー</strong> に、<code>FujikyunRPA:登録名</code> という名前で保存されます。</li><li>実行すると、いまの入力欄にパスワード（またはユーザー名）を打ち込みます。ログには「入力した」とだけ出て、値は出ません。</li></ol>
+<ul><li><strong>登録した画面にしか入力しません</strong>。前にある画面のタイトルに登録した文字が入っていて、しかも登録したプログラム（同じ場所の .exe）の画面のときだけ打ち込みます。</li><li><strong>パスワードは、パスワードの欄（入れた文字が ● になる欄）にしか入力しません</strong>。前のステップでパスワードの欄を選んでおきます（例: 「欄に入力（名前で）」で欄を選ぶ）。ユーザー名はふつうの欄にも入れられます。</li><li>条件に合わないときは、何も打ち込まずに止まります。「エラー時の処理」でも受け止めません。取り込んだマクロが、メモ帳やふつうの欄にパスワードを打ち込んで読み取る、といった使い方を防ぐためです。</li><li>登録は、<strong>その PC に、そのユーザーでサインインしたときだけ</strong> 読めます。別の PC や別の人が使うときは、その人が自分で登録します（マクロを書き出しても、パスワードは一緒に渡りません）。</li><li>パスワードを変えたら、もう一度［🔑 登録・変更］で登録し直します。登録を消すときも同じ画面の［登録を消す］を使います。Windows の「資格情報マネージャー」（コントロール パネル）からも確認・削除できます。</li><li>入力はキーを1つずつ送る方法なので、日本語入力（IME）はオフにしておいてください。</li></ul>
+<hr>
+<h2 id="16-保存されるファイル">16. 保存されるファイル</h2>
+<p>すべて <code>fujikyun.bat</code> と同じフォルダに作られます。</p>
+<div class="table-wrap"><table><thead><tr><th>ファイル／フォルダ</th><th>内容</th></tr></thead><tbody><tr><td><code>fujikyun_macros.json</code></td><td>本番のマクロファイル（［💾 本番ファイルに保存］で更新）。保存はいったん別ファイルに書いて読み直してから差し替えるので、途中で失敗しても壊れません</td></tr><tr><td><code>fujikyun_macros_backup.json</code></td><td>1つ前に保存した版。［📥 取込］で戻せます</td></tr><tr><td><code>fujikyun_macros_broken_日時.json</code></td><td>起動時に本番ファイルを読み込めなかったときの控え。このときは本番ファイルへの保存の前に確認が出ます</td></tr><tr><td><code>fujikyun_macros_temp.json</code></td><td>編集中の自動保存。本番保存すると消えます。起動時にあれば復元するか聞かれます</td></tr><tr><td><code>fujikyun_macros_temp_discarded_日時.json</code></td><td>復元しなかった一時ファイルの控え（毎回別の名前で残ります）</td></tr><tr><td><code>fujikyun_settings.json</code></td><td>予定（スケジュール）と、この PC での見た目（文字の大きさ・ウィンドウの位置と大きさ・左右の境目の位置）</td></tr><tr><td><code>fujikyun_error_list.csv</code></td><td>エラー行CSV</td></tr><tr><td><code>fujikyun_result.csv</code></td><td>実行結果CSV</td></tr><tr><td><code>samples\</code></td><td>テンプレートの見本CSV</td></tr><tr><td><code>evidence\日付\</code></td><td>SCREENSHOT の画像と、エラーで止まったときの画面</td></tr><tr><td><code>rpa_images\</code></td><td>CLICK_IMG 用に切り取った画像</td></tr><tr><td><code>macro_export\</code></td><td>書き出したマクロ</td></tr></tbody></table></div>
+<p>CSV は Excel で開きやすいように UTF-8（BOM付き）で保存します。</p>
+<hr>
+<h2 id="17-マクロの共有書出取込">17. マクロの共有（書出・取込）</h2>
+<ul><li><strong>［📤 書出］</strong>: 選択中のマクロを <code>macro_export\マクロ名.json</code> に保存します。同じ名前のファイルがあるときは、上書きせずに <code>マクロ名 (2).json</code> のように番号を付けます。</li><li><strong>［📥 取込］</strong>: 書き出した JSON を選ぶと、マクロが追加されます（今あるマクロは消えません）。</li></ul>
+<p>CLICK_IMG の画像を使っているマクロを渡すときは、<code>rpa_images</code> フォルダも一緒に渡してください。CALL_MACRO で部品マクロを呼んでいるときは、部品マクロも書き出して渡してください。</p>
+<hr>
+<h2 id="18-環境チェック">18. 環境チェック</h2>
+<p>［🩺 環境チェック］を押すと、その端末で使える機能を調べて一覧にします。</p>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>NG のときに使えない機能</th></tr></thead><tbody><tr><td>PowerShell</td><td>（版の表示）</td></tr><tr><td>PowerShellの言語モード</td><td>FullLanguage 以外（組織の AppLocker / WDAC の設定）では、多くの機能が動きません</td></tr><tr><td>作業フォルダへの書き込み</td><td>マクロの保存、各種CSV・画像の保存</td></tr><tr><td>クリップボード</td><td>TEXT・CSV・COPY</td></tr><tr><td>アラーム・完了音のファイル</td><td>アラーム・完了音（鳴らせないときは Windows の警告音）</td></tr><tr><td>Excel</td><td>EXCEL_READ・EXCEL_WRITE</td></tr><tr><td>Outlook</td><td>MAIL の Outlook 送信（mailto は使えます）</td></tr><tr><td>名前でクリック（UIAutomation）</td><td>CLICK_NAME・FIELD_SET・FIELD_GET・TABLE_READ・［🎯 部品を指す］</td></tr><tr><td>C# のその場コンパイル</td><td>CLICK_IMG・記録</td></tr><tr><td>文字認識（OCR）</td><td>CLICK_TEXT・READ_TEXT（使える言語も表示します。日本語がなければ Windows の設定で追加します）</td></tr><tr><td>Windowsのタスク スケジューラ</td><td>⏰ 予定の Windows 登録（ふじキュンを開いているあいだの予定は動きます）</td></tr><tr><td>画面の大きさ（拡大率）・ウィンドウ一覧</td><td>（情報の表示）</td></tr></tbody></table></div>
+<p>NG のときは、一覧の下にどうすればよいかのヒントが出ます。結果はログにも残るので、問い合わせのときに便利です。</p>
+<hr>
+<h2 id="19-キーボードショートカット">19. キーボードショートカット</h2>
+<div class="table-wrap"><table><thead><tr><th>キー</th><th>動き</th></tr></thead><tbody><tr><td>F1</td><td>選んだステップのコマンドの説明を開く（何も選んでいなければ操作マニュアル）</td></tr><tr><td>Ctrl+S</td><td>本番ファイルに保存</td></tr><tr><td>F5</td><td>実行（止まっているときは再開）</td></tr><tr><td>F6</td><td>選んだステップから実行（▶ ここから）</td></tr><tr><td>F9</td><td>選んだステップの止める所を付ける／外す</td></tr><tr><td>F10</td><td>1ステップずつ実行（止まっているときは次の1ステップ）</td></tr><tr><td>Ctrl+Z / Ctrl+Y</td><td>元に戻す / やり直し</td></tr><tr><td>Ctrl+D</td><td>選択ブロックを複製</td></tr><tr><td>Ctrl+/</td><td>選択ブロックを無効化／有効化</td></tr><tr><td>Delete</td><td>選択ブロックを削除</td></tr><tr><td>Enter</td><td>選択ブロックを編集</td></tr><tr><td>↑ / ↓</td><td>選択を上下に移動</td></tr><tr><td>Alt+↑ / Alt+↓</td><td>選択ブロックを上下に移動</td></tr><tr><td>Esc</td><td>ダイアログを閉じる（確認ポイントなら停止）／実行を停止（実行中・ふじキュンの画面で、ダイアログが開いていないとき）／選択を解除</td></tr><tr><td>Esc を約1秒長押し</td><td>実行を停止（実行中・どの画面からでも）</td></tr></tbody></table></div>
+<hr>
+<h2 id="20-マクロファイルの形式">20. マクロファイルの形式</h2>
+<p><code>fujikyun_macros.json</code>（と書き出したマクロ）は、次の形の JSON です。ふつうは編集画面だけで作れるので、読む必要はありません。</p>
+<pre><code>{
+  &quot;version&quot;: 27,
+  &quot;macros&quot;: [
+    {
+      &quot;id&quot;: &quot;a1b2c3d4&quot;,
+      &quot;name&quot;: &quot;見本&quot;,
+      &quot;targetWindow&quot;: &quot;メモ帳&quot;,
+      &quot;steps&quot;: [
+        { &quot;cmd&quot;: &quot;CSV&quot;, &quot;val&quot;: &quot;1&quot;, &quot;label&quot;: &quot;CSV 1列目「氏名」を貼付&quot; },
+        { &quot;cmd&quot;: &quot;WINDOW_CHECK&quot;, &quot;val&quot;: &quot;{\&quot;title\&quot;:\&quot;エラー\&quot;,\&quot;key\&quot;:\&quot;{ENTER}\&quot;,\&quot;mode\&quot;:\&quot;SKIP\&quot;}&quot;, &quot;label&quot;: &quot;…&quot; },
+        { &quot;cmd&quot;: &quot;GROUP_START&quot;, &quot;val&quot;: &quot;保存&quot;, &quot;label&quot;: &quot;保存&quot;, &quot;when&quot;: &quot;last&quot; }
+      ]
+    }
+  ]
+}</code></pre>
+<ul><li><code>val</code> は、<strong>設定が1つのコマンドはその値そのもの</strong>（KEY・TEXT・CSV・COPY・WAIT・CONFIRM・CLICK_NAME・SWITCH・RUN・GROUP_START・COMMENT など）、<strong>設定が2つ以上のコマンドは JSON</strong>（WAIT_FOR・WINDOW_CHECK・CLICK_POS・CLICK_IMG・SCREENSHOT・CLICK_TEXT・READ_TEXT・MAIL・流れ・変数のコマンド）です。カンマ区切りは使わないので、タイトルやパスにカンマが入っていても大丈夫です。</li><li><code>when</code>（グループの実行タイミング: <code>first</code> / <code>last</code>）と <code>disabled</code>（無効化）、<code>breakpoint</code>（止める所）は、必要なときだけ付きます。</li><li><code>version</code> はデータの版です。この版（27）より新しい版で作られたファイルは、上書きする前に確認が出ます。古い版（26 以前）のコマンド名・値の形には対応していません。</li></ul>
+</section>
+<section class="page" id="page-templates" data-title="テンプレート解説">
 <h1 id="テンプレート解説">テンプレート解説</h1>
 <blockquote><p>このファイルは <code>build/Build-FujiTemplateDoc.ps1</code> で <code>fujikyun_templates.json</code> から自動生成しています。直接編集せず、JSON を直してから再生成してください。</p></blockquote>
 <p>ふじキュン♡のおしごとロボットには <strong>381 種類</strong> のテンプレート（お手本マクロ）が入っています。画面上部の <strong>［📚 テンプレート］</strong> から選んで <strong>［✨ 作る］</strong> を押すと、マクロが追加され、見本CSVが <code>samples</code> フォルダに用意されて自動で読み込まれます。</p>
@@ -5483,7 +5790,179 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
   update();
 })();
 </script>
+</section>
+<section class="page" id="page-faq" data-title="Q&amp;A（よくある質問）">
+<h1 id="qaよくある質問">Q&amp;A（よくある質問）</h1>
+<p>困ったときは、まず <strong>［🩺 環境チェック］</strong> を押してみてください。どの機能がその端末で使えるかが分かります。</p>
+<ul><li><a href="#起動環境">起動・環境</a></li><li><a href="#音アラーム">音・アラーム</a></li><li><a href="#入力がうまくいかない">入力がうまくいかない</a></li><li><a href="#ウィンドウクリック">ウィンドウ・クリック</a></li><li><a href="#csv差し込み">CSV・差し込み</a></li><li><a href="#実行結果">実行・結果</a></li><li><a href="#保存共有">保存・共有</a></li><li><a href="#使い方のアイデア">使い方のアイデア</a></li><li><a href="#変数繰り返し分岐">変数・繰り返し・分岐</a></li><li><a href="#記録スケジュール文字認識メール">記録・スケジュール・文字認識・メール</a></li></ul>
+<hr>
+<h2 id="起動環境">起動・環境</h2>
+<h3 id="q-fujikyunbat-をダブルクリックしても画面が出ないすぐ消える">Q. <code>fujikyun.bat</code> をダブルクリックしても画面が出ない／すぐ消える</h3>
+<ul><li><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code> の5つが <strong>同じフォルダ</strong> にあるか確認してください。</li><li>RAW 表示からメモ帳に貼り付けて作った場合は、ファイル名の拡張子（<code>.txt</code> が付いていないか）と、<strong>JSON を UTF-8 で保存したか</strong> を確認してください。</li><li>組織の設定で PowerShell の実行そのものが止められていることがあります。その場合は情報システム担当の方に、Windows PowerShell 5.1 でスクリプトを実行できるか確認してください（<code>fujikyun.bat</code> はその1回の起動にだけ <code>-ExecutionPolicy Bypass</code> を付けています。グループポリシーで決められている場合はポリシーが優先されます）。</li></ul>
+<h3 id="q-起動できなかったキュンと出る">Q. 「起動できなかったキュン…」と出る</h3>
+<p>メッセージの内容を確認してください。よくある原因は次のとおりです。</p>
+<div class="table-wrap"><table><thead><tr><th>メッセージの内容</th><th>どうする</th></tr></thead><tbody><tr><td><code>is not the expected UTF-8 file</code> など、JSON（<code>fujikyun_ja.json</code> など）が読めない</td><td>JSON を <strong>UTF-8</strong> で保存し直します（Shift_JIS で保存すると読めません）</td></tr><tr><td>ファイルが見つからない</td><td>5つのファイルが同じフォルダにあるか確認します</td></tr></tbody></table></div>
+<h3 id="q-ボタンなどが-guischedule-のような英字の名前で表示される">Q. ボタンなどが <code>gui.schedule</code> のような英字の名前で表示される</h3>
+<p><code>fujikyun_ja.json</code> が古いままです。<code>fujikyun.ps1</code> と同じ時点の <code>fujikyun_ja.json</code> に置き換えてください（起動時にもお知らせが出ます）。</p>
+<h3 id="q-起動に時間がかかる">Q. 起動に時間がかかる</h3>
+<p>ログの「⏱ 起動にかかった時間」に内訳が出ます。PowerShell 自体の起動に数秒かかる端末があります。画像でクリック・記録は、最初に使うときだけ準備に数秒かかります。</p>
+<h3 id="q-一時ファイルへの自動保存に失敗と出る">Q. 「一時ファイルへの自動保存に失敗」と出る</h3>
+<p>ふじキュンを置いたフォルダに書き込めません。デスクトップ、ドキュメント、<code>C:\RPA作業\</code> など、自分が書き込めるフォルダに移してください。</p>
+<h3 id="q-powershellの言語モードが-fulllanguage-以外になっている">Q. 「PowerShellの言語モード」が FullLanguage 以外になっている</h3>
+<p>組織の AppLocker / WDAC の設定で、PowerShell が制限モードで動いています。ふじキュンは FullLanguage でないと動かない機能が多いので、情報システム担当の方に確認してください。</p>
+<h3 id="q-環境チェックでcのその場コンパイルが-ng-になる">Q. 環境チェックで「C#のその場コンパイル」が NG になる</h3>
+<p>画像でクリック（CLICK_IMG）と記録（⏺）が使えません。それ以外の機能は使えます。ボタンは CLICK_NAME（名前）や CLICK_TEXT（文字）で押せることが多いです。</p>
+<hr>
+<h3 id="q-文字が小さくて読みにくい">Q. 文字が小さくて読みにくい</h3>
+<p>画面の上の <strong>［🔠 文字の大きさ］</strong> で、115%・130%・150% などを選びます。ふじキュンを起動し直すと、文字とボタンが大きくなります。この PC だけの設定です（<code>fujikyun_settings.json</code> に保存されます）。</p>
+<h3 id="q-アプリの中から説明書を読みたい">Q. アプリの中から説明書を読みたい</h3>
+<p><strong>［📖 説明書］</strong> から開けます。F1 キーで、選んでいるステップのコマンドの説明が開きます。「説明書が見つからない」と出るときは、GitHub の <code>dist</code> フォルダにある <code>fujikyun_docs_samples.zip</code> を、ふじキュンのフォルダに展開してください。</p>
+<h2 id="音アラーム">音・アラーム</h2>
+<h3 id="q-アラームが鳴らない">Q. アラームが鳴らない</h3>
+<ul><li>パソコンの音量やミュートを確認してください。</li><li>実行の操作の <strong>［□ アラーム音］</strong> のチェックが外れていると、異常停止時に鳴りません（🔔 のテストは常に鳴ります）。</li><li>アラーム音のファイル <code>C:\Windows\Media\Alarm01.wav</code> があるか、環境チェックで確認できます。ファイルが無いときは Windows の警告音で知らせ、ログに理由が出ます。</li></ul>
+<hr>
+<h2 id="入力がうまくいかない">入力がうまくいかない</h2>
+<h3 id="q-文字が入力されない別の場所に入る">Q. 文字が入力されない／別の場所に入る</h3>
+<ul><li>入力先の欄に <strong>カーソルが入っているか</strong> 確認してください。ロボットは「いまカーソルがある場所」に貼り付けます。</li><li>画面が表示される前に入力している可能性があります。前に <strong>WAIT</strong>（例 1000）を入れるか、「間隔」を増やしてください。</li><li>途中で別のウィンドウが前に出る環境では、実行の操作の <strong>［□ 毎ステップ前面化］</strong> を ON にします。</li></ul>
+<h3 id="q-前の文字が残ったまま後ろに追加される">Q. 前の文字が残ったまま、後ろに追加される</h3>
+<p>TEXT・CSV は「貼り付け」なので、元の文字の後ろに入ります。直前に <strong><code>KEY ^a</code></strong>（全選択）を入れると上書きになります。</p>
+<h3 id="q-key-で文字を送るとひらがなや変な文字になる">Q. KEY で文字を送ると、ひらがなや変な文字になる</h3>
+<p>日本語入力（IME）が ON だと、KEY で送った英字が変換されてしまいます。<strong>文字の入力は TEXT を使ってください</strong>（クリップボード経由なので IME の影響を受けません）。</p>
+<h3 id="q-やを-key-で送りたい">Q. 「+」や「%」を KEY で送りたい</h3>
+<p>SendKeys では <code>+</code>（Shift）<code>^</code>（Ctrl）<code>%</code>（Alt）などは特別な意味があります。<code>{+}</code> <code>{%}</code> のように <code>{ }</code> で囲みます。文字として入力したいだけなら TEXT を使うのが簡単です。</p>
+<h3 id="q-excel-に貼り付けると日付や数字の形が変わる">Q. Excel に貼り付けると日付や数字の形が変わる</h3>
+<p>Excel が自動で書式を変えています。先に Excel 側で、貼り付ける列のセルの書式を「文字列」にしておいてください（先頭の 0 が消える番号なども同じです）。</p>
+<hr>
+<h2 id="ウィンドウクリック">ウィンドウ・クリック</h2>
+<h3 id="q-対象ウィンドウが見つからないで止まる">Q. 「対象ウィンドウが見つからない」で止まる</h3>
+<ul><li>タイトルは <strong>完全一致 → 先頭一致 → 末尾一致</strong> で探します。途中の文字だけでは見つかりません。</li><li>［🔍 一覧］で実際のタイトルを確認し、変わらない先頭部分か末尾部分を指定してください。</li><li>例: 「台帳.xlsx - Excel」→ <code>Excel</code>（末尾）または <code>台帳.xlsx</code>（先頭）</li></ul>
+<h3 id="q-管理者として実行されているからふじキュンの入力が届かないと出て止まる">Q. 「管理者として実行されているから、ふじキュンの入力が届かない」と出て止まる</h3>
+<ul><li><strong>仕組み:</strong> Windows は、管理者として動いているアプリの画面へ、ふつうに動いているアプリからのキー入力・貼り付けを通しません。しかもエラーにならず、入力が黙って消えます。そのまま進むと「入れたつもりで入っていない」ことになるので、ふじキュンは画面を前に出したとき（SWITCH・対象ウィンドウ・WAIT_FOR・キーを送る WINDOW_CHECK）にこれを調べて、その場で止めます。</li><li><strong>対処:</strong> ふじキュンも管理者として起動します（起動用の <code>.bat</code> を右クリック →「管理者として実行」）。両方が管理者なら入力が届きます。</li><li>相手のアプリをふつうに起動し直せるなら、それでも構いません。</li></ul>
+<h3 id="q-click_name-で見つからなかったと出る">Q. CLICK_NAME で「見つからなかった」と出る</h3>
+<ul><li>画面のボタンの文字と <strong>完全に同じ</strong> か確認してください（全角・半角、スペースも区別します）。</li><li>独自の描画をしている画面や、Citrix・リモートデスクトップの中では名前が取れません。<strong>CLICK_TEXT</strong>（文字で）・<strong>CLICK_IMG</strong>（画像で）・<strong>CLICK_POS</strong>（座標で）を使ってください。</li></ul>
+<h3 id="q-click_name-で押下invokeに対応していないオブジェクトと出る">Q. CLICK_NAME で「押下(Invoke)に対応していないオブジェクト」と出る</h3>
+<p>名前は見つかりましたが、押せない部品です（入力欄やラベルなど）。ボタンのほか、チェックボックス・選択肢・展開できる項目は押せます。入力欄にカーソルを置きたいときは、Tab での移動か CLICK_POS を使います。</p>
+<h3 id="q-click_pos-の位置がずれる">Q. CLICK_POS の位置がずれる</h3>
+<ul><li>ウィンドウの位置・大きさが変わると座標がずれます。対象ウィンドウを <strong>最大化</strong> して、その状態で座標を取り直してください。</li><li>ディスプレイの拡大率（125%など）を変えた場合も取り直してください。</li></ul>
+<h3 id="q-click_img-が見つけてくれない">Q. CLICK_IMG が見つけてくれない</h3>
+<ul><li>しきい値を 0.9 → 0.85 → 0.8 と少しずつ下げてみてください。</li><li>見本画像に背景が多く入っていると失敗しやすいです。ボタンの特徴的な部分だけを小さめに切り取り直してください。</li><li>Windows のテーマ・色・拡大率が、画像を切り取ったときと同じか確認してください。</li></ul>
+<hr>
+<h2 id="csv差し込み">CSV・差し込み</h2>
+<h3 id="q-csv-が文字化けする">Q. CSV が文字化けする</h3>
+<p>文字コードを［文字コード自動判定］から <strong>Shift_JIS</strong> や <strong>UTF-8</strong> に切り替えてみてください。</p>
+<h3 id="q-氏名-がそのまま入力される">Q. <code>{{氏名}}</code> がそのまま入力される</h3>
+<p>CSV の見出しと文字が違います（スペース、全角・半角の違いなど）。ログに「差し込み {{…}} が何か分からなかった」と出ます。［＋ 差し込みを追加 ▼］から選ぶと確実です。見出しが無いCSVなら <code>{{1}}</code> のように列番号で指定します。</p>
+<h3 id="q-csvを使わずに同じ作業を何回かくり返したい">Q. CSVを使わずに同じ作業を何回かくり返したい</h3>
+<p>「CSVの行数＝回数」として使えます。1列だけのCSV（例: 見出し「回」、1〜10の10行）を作って読み込めば10回くり返します（テンプレート「一定間隔で画面を記録」を参照）。CSV を読み込まずに実行すると1回だけ実行します。</p>
+<h3 id="q-最初の1回だけまたは最後だけ実行したい手順がある">Q. 最初の1回だけ（または最後だけ）実行したい手順がある</h3>
+<p><strong>グループ</strong> を作り、実行タイミングを「最初の1行だけ」または「最後の1行だけ」にします。アプリの起動やログインは「最初だけ」、保存や終了は「最後だけ」にすると便利です。</p>
+<hr>
+<h2 id="実行結果">実行・結果</h2>
+<h3 id="q-実行を止めたい">Q. 実行を止めたい</h3>
+<p>実行中はロボットが入力先の画面を前に出しているので、次のどれかで止めます。</p>
+<ul><li><strong>Esc を約1秒長押し</strong>（どの画面が前にあっても止まります）</li><li>ふじキュンの画面をクリックしてから <strong>Esc</strong> か［⏹ 停止］</li><li>確認ポイントの表示中は、そのまま［⏹ 停止］か Esc</li></ul>
+<p>マクロの中の KEY <code>{ESC}</code> は一瞬押すだけなので、長押し停止には反応しません。</p>
+<h3 id="q-途中から再開したい">Q. 途中から再開したい</h3>
+<p>［↓ 実行結果CSV］で、どの行まで「完了」になったかを確認し、<strong>開始行</strong> をその次の行番号にして実行します。</p>
+<p>1行の途中（たとえば10番目のステップ）から試したいときは、そのステップを選んで <strong>［▶ ここから］</strong>（F6）を押します。</p>
+<h3 id="q-作りかけのマクロを少しずつ確かめながら動かしたい">Q. 作りかけのマクロを、少しずつ確かめながら動かしたい</h3>
+<ul><li>止めたいステップを選んで <strong>［🔴 止める所］</strong>（F9）を押すと、実行がそのステップの前で止まります。</li><li><strong>［⏯ 1ステップずつ］</strong>（F10）なら、毎ステップの前で止まります。［⏭ 次へ］で1つずつ進み、［▶ 再開］で最後まで続けます。止まっているあいだは［📊 変数］で値を確かめられます。</li><li><strong>［▶ これだけ］</strong> は、選んだステップ（ブロックなら中身ごと）だけを1行ぶん実行します。</li></ul>
+<h3 id="q-エラーで止まったときどんな画面だったか知りたい">Q. エラーで止まったとき、どんな画面だったか知りたい</h3>
+<p>エラーで止まった瞬間の画面全体を、<code>evidence\日付\エラー_行○_時刻.png</code> に自動で保存しています。保存先はログと実行結果CSVの「エラー時の画面」の列に出ます。</p>
+<h3 id="q-エラーになった行だけやり直したい">Q. エラーになった行だけやり直したい</h3>
+<p>［↓ エラー行をCSV保存］→ <code>fujikyun_error_list.csv</code> を Excel で直す → そのファイルを CSV 欄で読み込んで実行します。</p>
+<ul><li>このCSVには「元データ行No」列があるので、「1行目は見出し」が ON なら <code>{{ROW}}</code> は元のCSVの行番号になります（Excel のセル番地などもずれません）。</li><li>WINDOW_CHECK の SKIP 以外のエラー（WINDOW_CHECK の STOP、タイムアウト、ウィンドウが見つからない、クリック失敗など）は <strong>実行そのものが止まる</strong>ので、その後ろの行は処理されていません。元のCSVで <strong>開始行</strong> を続きの行にして実行してください。</li></ul>
+<h3 id="q-実行結果csv-とエラー行csv-の違いは">Q. 実行結果CSV とエラー行CSV の違いは？</h3>
+<div class="table-wrap"><table><thead><tr><th></th><th>実行結果CSV</th><th>エラー行CSV</th></tr></thead><tbody><tr><td>入る行</td><td>処理したすべての行</td><td>エラー・SKIP の行だけ</td></tr><tr><td>追加される列</td><td>COPY・RECORD の値、証跡ファイル、実行結果、備考など</td><td>元データ行No、エラー内容、発生日時</td></tr><tr><td>主な用途</td><td>結果の確認・台帳づくり</td><td>直して再実行</td></tr></tbody></table></div>
+<p>どちらも ▶実行 を押すたびにリセットされます。必要なら実行のたびに保存してください。</p>
+<hr>
+<h2 id="保存共有">保存・共有</h2>
+<h3 id="q-起動すると前回の編集中データが見つかったと出る">Q. 起動すると「前回の編集中データが見つかった」と出る</h3>
+<p>前回、本番ファイルに保存せずに終了しました。［はい］で続きから編集できます。［いいえ］なら本番ファイルを読み込み、一時ファイルは <code>fujikyun_macros_temp_discarded_日時.json</code> に控えとして残ります（退避できなかったときは、上書きされないように一時ファイルの内容を開きます）。</p>
+<h3 id="q-起動すると本番ファイルを読み込めなかったと出る">Q. 起動すると「本番ファイルを読み込めなかった」と出る</h3>
+<p><code>fujikyun_macros.json</code> が壊れているか、ほかの人やソフトが開いていて読めませんでした。元のファイルは <code>fujikyun_macros_broken_日時.json</code> に控えを取ってあり、本番ファイルもそのまま残っています。いったんふじキュンを閉じて開き直すか、1つ前の版 <code>fujikyun_macros_backup.json</code> を［📥 取込］で戻してください。この状態で本番ファイルに保存しようとすると、上書きしてよいか確認が出ます。</p>
+<h3 id="q-run-でコマンドで特別な意味を持つ文字が入っていたと出て行が飛ばされた">Q. RUN で「コマンドで特別な意味を持つ文字が入っていた」と出て、行が飛ばされた</h3>
+<p>RUN の差し込みに <code>&quot;</code> <code>&amp;</code> <code>|</code> <code>&lt;</code> <code>&gt;</code> <code>^</code> <code>%</code> や改行が入っていると、データがコマンドとして実行されてしまう危険があるので、その行は実行しません。PowerShell を呼ぶ RUN（PDF にする・ZIP にするなどのテンプレート）では、<code>'</code> `<code> </code> `<code> </code>$<code> </code>;<code> </code>(<code> </code>)<code> </code>{<code> </code>}<code> も同じ扱いです（</code>資料(1).xlsx<code> や </code>O'Brien.xlsx<code> のような名前も止まり、ログとエラー行CSVに名前の変え方が出ます）。ファイルやフォルダの名前を変えて（例: </code>資料(1).xlsx<code> → </code>資料_1.xlsx`）、CSV の名前も同じに直してから、エラー行CSVで再実行してください。</p>
+<h3 id="q-マクロを同僚に渡したい">Q. マクロを同僚に渡したい</h3>
+<p>［📤 書出］で <code>macro_export\マクロ名.json</code>（同じ名前があれば <code>マクロ名 (2).json</code>）ができるので、それを渡して相手に［📥 取込］してもらいます。CLICK_IMG を使っている場合は <code>rpa_images</code> フォルダも一緒に渡してください。</p>
+<h3 id="q-別のパソコンに引っ越したい">Q. 別のパソコンに引っ越したい</h3>
+<p>ふじキュンのフォルダごとコピーすれば、マクロ・画像・見本CSVがそのまま使えます。画像のパスを相対パス（<code>rpa_images\…</code>）にしておくと、フォルダの場所が変わっても動きます。</p>
+<hr>
+<h2 id="使い方のアイデア">使い方のアイデア</h2>
+<h3 id="q-入力以外にどんなことができる">Q. 入力以外にどんなことができる？</h3>
+<ul><li><strong>照会＋証跡</strong>: 番号を順番に照会して画面を保存（監査・点検用）</li><li><strong>値の収集</strong>: たくさんの Excel から同じセルの値を集めて一覧化</li><li><strong>チェック</strong>: 「該当なし」を SKIP させて、結果CSVで未登録の一覧を作る</li><li><strong>検算</strong>: 電卓で計算し直して、台帳の金額と見比べる</li><li><strong>ファイル整理</strong>: RUN から Windows のコマンドを呼んで、フォルダ作成・ファイル名変更を一括で</li><li><strong>定型文の量産</strong>: 差し込みで、お知らせ文・メール下書き・Word 文書を人数分</li></ul>
+<p>くわしくは <a href="#page-templates">テンプレート解説</a> の「応用・発見のヒント」を見てください。</p>
+<h3 id="q-安全に使うコツは">Q. 安全に使うコツは？</h3>
+<ol><li>最初は <strong>照会（見るだけ）</strong> のマクロから始める</li><li>必ず <strong>1件だけ</strong>（開始行＝終了行）で試す</li><li>登録・送信の前に <strong>確認ポイント（CONFIRM）</strong> を入れる</li><li><strong>SCREENSHOT</strong> で証跡を残す</li><li>止め方（<strong>Esc を約1秒長押し</strong>、またはふじキュンの画面で Esc／⏹）を覚えておく</li></ol>
+<hr>
+<h2 id="変数繰り返し分岐">変数・繰り返し・分岐</h2>
+<h3 id="q-繰り返しが終わらない上限の回に達したで止まった">Q. 繰り返しが終わらない／「上限の○回に達した」で止まった</h3>
+<p>「条件のあいだくり返す」の条件が、いつまでも満たされたままになっています。条件に使っている変数が、繰り返しの中で変わっているか確認してください（［📊 変数］パネルで見られます）。回数が分かっている場合は「決めた回数くり返す」を使うと安全です。</p>
+<h3 id="q-変数の値がおかしい何が入っているか知りたい">Q. 変数の値がおかしい／何が入っているか知りたい</h3>
+<p>実行の操作の <strong>［📊 変数］</strong> を押すと、実行中の変数・繰り返しの回数・この行のCSVの値がリアルタイムで表示されます（COPY で入れた値も変数として出ます）。一時停止（⏸）しながら確認すると分かりやすいです。</p>
+<h3 id="q-名前-が空っぽになる">Q. <code>{{$名前}}</code> が空っぽになる</h3>
+<p>その変数にまだ値が入っていません（入れるコマンドより前で使っている、変数名のつづりが違う など）。［＋ 差し込みを追加 ▼］から選ぶと、マクロの中で使っている変数名が一覧に出ます。</p>
+<h3 id="q-excelのセルを読む書くで失敗する">Q. Excelのセルを読む・書くで失敗する</h3>
+<ul><li>Excel が入っているか［🩺 環境チェック］で確認してください。</li><li>書き込むブックは閉じておいてください（ほかで開いていると「書き込めない」エラーになります）。</li><li>シートは名前か番号（1＝1枚目）で、セル番地は <code>A1</code> の形で指定します。</li></ul>
+<h3 id="q-エラー時の処理を入れたのに止まった">Q. エラー時の処理を入れたのに止まった</h3>
+<p>WINDOW_CHECK（ウィンドウ検知）の STOP（緊急停止）と、⏹ 停止・Esc による停止は、わざと止める操作なので受け止めません。また「エラーのとき」の中で起きたエラーは、外側のエラー時の処理（なければ停止）に回ります。</p>
+<hr>
+<h2 id="記録スケジュール文字認識メール">記録・スケジュール・文字認識・メール</h2>
+<h3 id="q-記録した操作を再生すると文字が入らない違う場所をクリックする">Q. 記録した操作を再生すると、文字が入らない／違う場所をクリックする</h3>
+<p>記録はたたき台です。日本語の入力は記録できないので、記録された「日本語を入力していた」コメントの場所に TEXT か CSV を入れてください。座標クリック（CLICK_POS）はウィンドウの位置や大きさが変わるとずれるので、CLICK_NAME（名前）・CLICK_TEXT（文字）・CLICK_IMG（画像）に置き換えると安定します。入力欄への入力は、FIELD_SET（欄に入力（名前で））にすると、クリックもTABもいらなくなります。</p>
+<h3 id="q-欄に入力名前でで欄が見つからなかったと出る">Q. 「欄に入力（名前で）」で「欄が見つからなかった」と出る</h3>
+<ul><li>編集画面の <strong>［🔍 見つかるか試す］</strong> で、実行と同じ探し方を試せます。見つからないときは <strong>［🎯 部品を指す］</strong> で欄を指して、名前を入れ直してください。</li><li>マクロの <strong>対象ウィンドウ</strong> が合っているか確かめてください（その中と、いま前にあるウィンドウを探します）。</li><li>同じ名前の欄がいくつもあるときは「何番目か」を変えます。</li><li>Citrix・リモートデスクトップの中や、独自に描いている画面の欄は、名前で探せないことがあります。そのときは CLICK_TEXT や CLICK_POS で欄を選んでから TEXT で入力してください。</li></ul>
+<h3 id="q-パスワードをマクロやcsvに書かずにログインしたい">Q. パスワードをマクロやCSVに書かずにログインしたい</h3>
+<p><strong>SECRET（🔑 パスワードを入力）</strong> を使います。編集画面の［🔑 登録・変更］でユーザー名とパスワードを登録すると、Windows の資格情報マネージャーに保存され、実行のときに入力欄へ打ち込みます。値はログや実行結果に残りません。登録はその PC・そのユーザーだけのものなので、ほかの人が使うときは、その人が自分で登録します。</p>
+<h3 id="q-ファイルが届いたらキーを押したら画面が開いたら自動で動かしたい">Q. ファイルが届いたら（キーを押したら・画面が開いたら）自動で動かしたい</h3>
+<p>［⏰ 予定］の <strong>きっかけ</strong> で「キーを押したとき」「フォルダにファイルが届いたとき」「ウィンドウが開いたとき」を選べます。どれも、ふじキュンを開いているあいだだけ見張ります。届いたファイルのパスは <code>{{$きっかけのファイル}}</code> で使え、「届いたファイルをそのままデータにして実行する」にすると、届いた CSV・Excel の全行を実行します。</p>
+<h3 id="q-excel-のブックをcsv-に保存し直さずにデータにしたい">Q. Excel のブックを、CSV に保存し直さずにデータにしたい</h3>
+<p>CSV の欄でブック（.xlsx など）を選んで読み込みます。1枚目のシートを、セルに見えているとおりに読みます。Excel が入っている PC で使えます。</p>
+<h3 id="q-予定の時刻になっても実行されない">Q. 予定の時刻になっても実行されない</h3>
+<ul><li>［⏰ 予定］で「✅ 有効」になっているか確認してください。</li><li>ふじキュンを開いていないときは、［🗓 Windowsに登録］していないと動きません。</li><li>ふじキュンが自分で実行するのは、予定の時刻から10分以内だけです。それより後にふじキュンを開いても、その日は実行しません。</li><li>ダイアログ（編集画面など）が開いていると、閉じるまで待ちます。</li><li>PCがスリープ・ログオフ・画面ロック中だと動きません。</li></ul>
+<h3 id="q-windowsに登録で失敗する">Q. ［🗓 Windowsに登録］で失敗する</h3>
+<p>組織のポリシーでタスクスケジューラへの登録が止められていることがあります。ログに出たメッセージと、［🩺 環境チェック］の「Windowsのタスク スケジューラ」の行を確認してください。登録できない場合も、ふじキュンを開いておけば予定どおりに実行できます。</p>
+<h3 id="q-文字認識ocrで読み取れない違う文字になる">Q. 文字認識（OCR）で読み取れない・違う文字になる</h3>
+<ul><li>［🩺 環境チェック］で「文字認識」が OK か確認してください（日本語の文字認識が必要です）。</li><li>範囲を「範囲を指定」にして、読みたい部分だけを小さく囲むと正確になります。</li><li>文字が小さすぎる・背景と色が近い画面は苦手です。画面の拡大率を上げると改善することがあります。</li></ul>
+<h3 id="q-メールが送れない">Q. メールが送れない</h3>
+<ul><li>Outlook: ［🩺 環境チェック］で Outlook があるか確認してください。すぐ送信にすると、Outlook のセキュリティの確認が出ることがあります。</li><li>mailto: 既定のメールアプリが設定されていないと開きません。</li></ul>
+</section>
 <footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>
 </main>
+<script>
+(function () {
+  var pages = [].slice.call(document.querySelectorAll("section.page"));
+  if (!pages.length) { return; }
+  var navs = [].slice.call(document.querySelectorAll("header nav a"));
+  var home = document.getElementById("page-" + document.body.getAttribute("data-page")) || pages[0];
+  var shown = null;
+  function find(sec, id) { return sec.querySelector('[id="' + id.replace(/["\\]/g, "\\$&") + '"]'); }
+  function show(sec) {
+    pages.forEach(function (s) { s.hidden = s !== sec; });
+    navs.forEach(function (a) { a.className = a.getAttribute("href") === "#" + sec.id ? "current" : ""; });
+    document.title = sec.getAttribute("data-title") + " - ふじキュン♡のおしごとロボット";
+    shown = sec;
+  }
+  function go() {
+    var h = location.hash.slice(1), sec = null, target = null, m, moved;
+    try { h = decodeURIComponent(h); } catch (e) { }
+    m = /^page-([\w-]+)(?:\/(.*))?$/.exec(h);
+    if (m) {
+      sec = document.getElementById("page-" + m[1]);
+      if (sec && m[2]) { target = find(sec, m[2]); }
+    } else if (h) {
+      sec = shown || home;
+      target = find(sec, h);
+      if (!target) { pages.some(function (s) { target = find(s, h); if (target) { sec = s; } return !!target; }); }
+    }
+    if (!sec) { sec = shown || home; }
+    moved = sec !== shown;
+    show(sec);
+    if (target) { target.scrollIntoView(); } else if (moved) { window.scrollTo(0, 0); }
+  }
+  window.addEventListener("hashchange", go);
+  go();
+})();
+</script>
 </body>
 </html>
