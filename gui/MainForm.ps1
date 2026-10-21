@@ -274,11 +274,7 @@ function New-FujiTopPanel {
     $browse.Add_Click({ Invoke-FujiUi { Select-FujiCsvFileUi } })
     $load = New-FujiButton -Text (Get-FujiText 'gui.csvLoad')
     $load.Add_Click({ Invoke-FujiUi { Import-FujiCsvUi } })
-    $header = New-Object -TypeName System.Windows.Forms.CheckBox
-    $header.Text = Get-FujiText 'gui.csvHeader'
-    $header.AutoSize = $true
-    $header.Checked = $true
-    $header.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 6), (Get-FujiScaled 2), 0
+    $header = New-FujiCheck -Text (Get-FujiText 'gui.csvHeader') -Checked $true
     $header.Add_CheckedChanged({ Invoke-FujiUi { Set-FujiCsvHeaderUi } })
     $script:Ui.CsvHeader = $header
     $encLabels = @()

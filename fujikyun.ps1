@@ -4344,7 +4344,8 @@ function Get-FujiText {
     if ($null -eq $node) { return $Key }
     if ($node -is [System.Array]) { return , $node }
     if ($node -is [System.Management.Automation.PSCustomObject]) { return $node }
-    if ($FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
+    # not "if ($FormatArgs)": an array holding only 0 or '' is false, and {0} stayed in the text
+    if ($null -ne $FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
     return [string]$node
 }
 
@@ -5819,11 +5820,7 @@ function New-FujiTopPanel {
     $browse.Add_Click({ Invoke-FujiUi { Select-FujiCsvFileUi } })
     $load = New-FujiButton -Text (Get-FujiText 'gui.csvLoad')
     $load.Add_Click({ Invoke-FujiUi { Import-FujiCsvUi } })
-    $header = New-Object -TypeName System.Windows.Forms.CheckBox
-    $header.Text = Get-FujiText 'gui.csvHeader'
-    $header.AutoSize = $true
-    $header.Checked = $true
-    $header.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 6), (Get-FujiScaled 2), 0
+    $header = New-FujiCheck -Text (Get-FujiText 'gui.csvHeader') -Checked $true
     $header.Add_CheckedChanged({ Invoke-FujiUi { Set-FujiCsvHeaderUi } })
     $script:Ui.CsvHeader = $header
     $encLabels = @()
@@ -7135,6 +7132,9 @@ function New-FujiCheck {
     $c = New-Object -TypeName System.Windows.Forms.CheckBox
     $c.Text = $Text
     $c.AutoSize = $true
+    # drawn by Windows: measuring the Windows Forms drawn box made labels with an emoji measured
+    # afterwards too narrow (their text was cut off, e.g. the image hint of the step dialog)
+    $c.FlatStyle = [System.Windows.Forms.FlatStyle]::System
     $c.Checked = $Checked
     $c.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 6), (Get-FujiScaled 2), 0
     if ($Tip) { $script:Ui.ToolTip.SetToolTip($c, $Tip) }
