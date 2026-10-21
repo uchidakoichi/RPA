@@ -1114,21 +1114,26 @@ try {
 }
 
 # manuals opened from the window: every place the app points to exists in the built pages
+# (index.html holds every page as a section; the other files forward to theirs)
+$docHtml = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') 'index.html'))
 $docIds = @{}
 foreach ($pg in $script:FujiDocPages) {
-    $html = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
+    $section = [regex]::Match($docHtml, '<section class="page" id="page-' + $pg + '"[\s\S]*?</section>').Value
+    Assert-True ($section -ne '') ('index.html has the page ' + $pg)
+    $forward = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
+    if ($pg -ne 'index') { Assert-True ($forward.Contains('index.html#page-' + $pg)) ($pg + '.html forwards to its page in index.html') }
     $docIds[$pg] = @{}
-    foreach ($m in [regex]::Matches($html, 'id="([^"]+)"')) { $docIds[$pg][[System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)] = $true }
+    foreach ($m in [regex]::Matches($section, 'id="([^"]+)"')) { $docIds[$pg][[System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)] = $true }
 }
 $badDoc = New-Object -TypeName 'System.Collections.Generic.List[string]'
 foreach ($c in Get-FujiCommandName) { $a = Get-FujiCommandDocAnchor -Cmd $c; if (-not $docIds['manual'].ContainsKey($a)) { $badDoc.Add($c + ' -> ' + $a) } }
-Assert-True ($badDoc.Count -eq 0) ('every command explained at a place in manual.html: ' + ($badDoc -join ', '))
+Assert-True ($badDoc.Count -eq 0) ('every command explained at a place in the manual page: ' + ($badDoc -join ', '))
 Assert-True ($docIds['manual'].ContainsKey((Get-FujiText 'gui.docCommandAnchor'))) 'the command list anchor exists'
 foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'))) {
     Assert-True ($docIds[$pair[0]].ContainsKey((Get-FujiText ('gui.docAnchors.' + $pair[1])))) ('dialog help anchor exists: ' + $pair[1])
 }
 $missingTpl = @(foreach ($t in $templates['templates']) { if (-not $docIds['templates'].ContainsKey([string]$t['id'])) { $t['id'] } })
-Assert-Equal 0 $missingTpl.Count ('every template has its anchor in templates.html: ' + ($missingTpl -join ', '))
+Assert-Equal 0 $missingTpl.Count ('every template has its anchor in the templates page: ' + ($missingTpl -join ', '))
 $docRoot = Join-Path 'R' 'app'
 $found = Find-FujiDocFile -Directory $docRoot -Page 'manual' -FileExists { param($p) $p -eq (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') }
 Assert-Equal (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') $found 'manual found in the extracted zip folder'
