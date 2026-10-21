@@ -44,7 +44,8 @@ function Get-FujiText {
     if ($null -eq $node) { return $Key }
     if ($node -is [System.Array]) { return , $node }
     if ($node -is [System.Management.Automation.PSCustomObject]) { return $node }
-    if ($FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
+    # not "if ($FormatArgs)": an array holding only 0 or '' is false, and {0} stayed in the text
+    if ($null -ne $FormatArgs -and $FormatArgs.Count -gt 0) { return ([string]$node -f $FormatArgs) }
     return [string]$node
 }
 

@@ -56,6 +56,10 @@ function Get-Expected {
     return @{ IsError = ($null -ne (Get-Golden $Item 'error')); Value = (Get-Golden $Item 'value') }
 }
 
+# ----------------------------------------------------------------- text
+Assert-True ((Get-FujiText 'gui.exportResults' 0) -notlike '*{0}*') 'text: 0 is put in place of {0}'
+Assert-True ((Get-FujiText 'gui.exportResults' '') -notlike '*{0}*') 'text: an empty value is put in place of {0}'
+
 # ----------------------------------------------------------------- golden: CSV
 foreach ($case in $golden.csv) {
     $r = ConvertFrom-FujiCsv -Text $case.text

@@ -86,6 +86,9 @@ function New-FujiCheck {
     $c = New-Object -TypeName System.Windows.Forms.CheckBox
     $c.Text = $Text
     $c.AutoSize = $true
+    # drawn by Windows: measuring the Windows Forms drawn box made labels with an emoji measured
+    # afterwards too narrow (their text was cut off, e.g. the image hint of the step dialog)
+    $c.FlatStyle = [System.Windows.Forms.FlatStyle]::System
     $c.Checked = $Checked
     $c.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 6), (Get-FujiScaled 6), (Get-FujiScaled 2), 0
     if ($Tip) { $script:Ui.ToolTip.SetToolTip($c, $Tip) }
