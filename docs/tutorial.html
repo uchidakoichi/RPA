@@ -91,8 +91,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 </section>
 <section class="page" id="page-tutorial" data-title="チュートリアル：はじめてのロボットづくり">
 <h1 id="チュートリアルはじめてのロボットづくり">チュートリアル：はじめてのロボットづくり</h1>
-<p>RPA が初めての方向けに、5つのレッスンで少しずつ使い方を覚えます。レッスン1〜3は <strong>メモ帳と電卓だけ</strong> で試せるので、職場のシステムに触らずに安心して練習できます。</p>
-<div class="table-wrap"><table><thead><tr><th>レッスン</th><th>内容</th><th>時間の目安</th></tr></thead><tbody><tr><td><a href="#レッスン0準備">0. 準備</a></td><td>置き場所・起動・環境チェック</td><td>5分</td></tr><tr><td><a href="#レッスン1お手本を動かす">1. お手本を動かす</a></td><td>テンプレートを実行して流れを見る</td><td>10分</td></tr><tr><td><a href="#レッスン2自分で組み立てる">2. 自分で組み立てる</a></td><td>空のマクロから作る・差し込みを使う</td><td>20分</td></tr><tr><td><a href="#レッスン3値を読み取る">3. 値を読み取る</a></td><td>COPY と実行結果CSV</td><td>15分</td></tr><tr><td><a href="#レッスン4職場のシステムに向ける">4. 職場のシステムに向ける</a></td><td>対象ウィンドウ・確認ポイント・1件テスト</td><td>30分</td></tr><tr><td><a href="#レッスン5止まらないロボットにする">5. 止まらないロボットにする</a></td><td>WINDOW_CHECK・WAIT_FOR・エラー行の再実行</td><td>20分</td></tr><tr><td><a href="#レッスン6変数繰り返し分岐を使う">6. 変数・繰り返し・分岐を使う</a></td><td>変数・文字の加工・もし〜なら・エラー時の処理</td><td>20分</td></tr></tbody></table></div>
+<p>RPA が初めての方向けに、レッスンを順に進めながら少しずつ使い方を覚えます。レッスン1〜4は <strong>メモ帳と電卓だけ</strong> で試せるので、職場のシステムに触らずに安心して練習できます。</p>
+<div class="table-wrap"><table><thead><tr><th>レッスン</th><th>内容</th><th>時間の目安</th></tr></thead><tbody><tr><td><a href="#レッスン0準備">0. 準備</a></td><td>置き場所・起動・環境チェック</td><td>5分</td></tr><tr><td><a href="#レッスン1お手本を動かす">1. お手本を動かす</a></td><td>テンプレートを実行して流れを見る</td><td>10分</td></tr><tr><td><a href="#レッスン2自分で組み立てる">2. 自分で組み立てる</a></td><td>空のマクロから作る・差し込みを使う</td><td>20分</td></tr><tr><td><a href="#レッスン3操作を記録して作る">3. 操作を記録して作る</a></td><td>⏺ 記録でたたき台を作り、差し込みに置き換えて仕上げる</td><td>20分</td></tr><tr><td><a href="#レッスン4値を読み取る">4. 値を読み取る</a></td><td>COPY と実行結果CSV</td><td>15分</td></tr><tr><td><a href="#レッスン5職場のシステムに向ける">5. 職場のシステムに向ける</a></td><td>対象ウィンドウ・確認ポイント・1件テスト</td><td>30分</td></tr><tr><td><a href="#レッスン6止まらないロボットにする">6. 止まらないロボットにする</a></td><td>WINDOW_CHECK・WAIT_FOR・エラー行の再実行</td><td>20分</td></tr><tr><td><a href="#レッスン7変数繰り返し分岐を使う">7. 変数・繰り返し・分岐を使う</a></td><td>変数・文字の加工・もし〜なら・エラー時の処理</td><td>20分</td></tr></tbody></table></div>
 <hr>
 <h2 id="レッスン0準備">レッスン0：準備</h2>
 <ol><li>書き込みできるフォルダ（例: <code>C:\RPA作業\</code>）を1つ作り、次の5つのファイルを置きます（<a href="#page-setup/ファイルを置く">準備</a>）。<ul><li><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code></li></ul></li><li><code>fujikyun.bat</code> をダブルクリックで起動します。</li><li>いちばん上の段の <strong>［🩺 環境チェック］</strong> を押します。<ul><li>すべて <strong>OK</strong> なら準備完了です。</li><li><strong>NG</strong> があっても大丈夫。どの機能が使えないかが表示されるので、<a href="#page-faq">Q&amp;A</a> を参考にしてください。</li></ul></li></ol>
@@ -115,19 +115,34 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p><strong>ポイント</strong></p>
 <ul><li><code>{{列名}}</code> は CSV の見出しと <strong>完全に同じ文字</strong> にします。</li><li>入力は <strong>TEXT（貼り付け）</strong> が基本です。KEY は Tab や Enter などの「操作キー」に使います。</li></ul>
 <hr>
-<h2 id="レッスン3値を読み取る">レッスン3：値を読み取る</h2>
+<h2 id="レッスン3操作を記録して作る">レッスン3：操作を記録して作る</h2>
+<p><strong>ゴール:</strong> ふだんの操作を1回だけ記録してたたき台にし、CSVの全行で動くマクロに仕上げる。</p>
+<p>レッスン2では、コマンドを1つずつ選んで組み立てました。<strong>［⏺ 記録］</strong> を使うと、1件分の操作をやって見せるだけで、手順がブロックとして入ります。ここでは、メモ帳に名簿の1人分を手で入力して記録し、CSVの5人分を入力するマクロに仕上げます。</p>
+<h3 id="準備する">準備する</h3>
+<ol><li>メモ帳を開いておきます（スタートメニューから「メモ帳」）。</li><li><strong>［＋ 新規］</strong> で「記録で名簿入力」という名前のマクロを作ります。</li><li>CSV欄の［📂 参照］で <code>samples\01_basic_meibo.csv</code> を選びます（見出し: 氏名・フリガナ・電話番号）。</li></ol>
+<h3 id="記録する">記録する</h3>
+<ol><li>編集の行の <strong>［⏺ 記録］</strong> を押します。ボタンが <strong>［⏹ 記録終了（○件）］</strong> に変わります（最初の1回だけ、準備に数秒かかります）。</li><li>メモ帳をクリックして前に出し、1人分を手で入力します。<ol><li>日本語入力をオンにして <code>見本 太郎</code> と入力し、確定します。</li><li>日本語入力をオフにして、<strong>Tab</strong> を押します。</li><li><code>000-0000-0001</code> と入力して、<strong>Enter</strong> を押します。</li></ol></li><li>ふじキュンの画面に戻って <strong>［⏹ 記録終了］</strong> を押します。「⏺ 記録した操作（日時）」グループとしてマクロに入ります。</li></ol>
+<p>記録されたブロックは、だいたい次のようになります（手の動かし方によって、クリックや待機の数は変わります）。</p>
+<div class="table-wrap"><table><thead><tr><th>ブロック</th><th>意味</th></tr></thead><tbody><tr><td>🪟 SWITCH メモ帳</td><td>メモ帳が前に出た</td></tr><tr><td>🎯 CLICK_POS（座標でクリック）</td><td>メモ帳の中をクリックした</td></tr><tr><td>💬 コメント「ここで日本語を入力（変換）していたよ…」</td><td>日本語入力がオンのあいだの入力。<strong>文字そのものは記録されません</strong></td></tr><tr><td>⌨ KEY <code>{TAB}</code></td><td>Tab を押した</td></tr><tr><td>📝 TEXT <code>000-0000-0001</code></td><td>半角の文字を入力した</td></tr><tr><td>⌨ KEY <code>{ENTER}</code></td><td>Enter を押した</td></tr><tr><td>⏳ WAIT</td><td>操作の間が1.2秒以上あいた</td></tr></tbody></table></div>
+<p>ここで実行すると、<strong>毎回同じ人（記録したときの電話番号）</strong> が入力されるだけです。ここからが仕上げです。</p>
+<h3 id="整えて仕上げる">整えて仕上げる</h3>
+<ol><li><strong>日本語のコメントを差し込みに置き換えます。</strong><ol><li>コメントのブロックを選んで、「追加」の行から <strong>［📝 文字列貼付］</strong>（TEXT）を足します（選んだブロックのすぐ後ろに入ります）。</li><li>［＋ 差し込みを追加 ▼］から <code>{{氏名}}</code> を選んで［OK］。</li><li>コメントのブロックを選んで <strong>Delete</strong> で消します。</li></ol></li><li><strong>記録した文字を差し込みに置き換えます。</strong> TEXT <code>000-0000-0001</code> をダブルクリックし、中身を <code>{{電話番号}}</code> に変えます。</li><li><strong>座標クリックを消します。</strong> CLICK_POS は、メモ帳の位置や大きさが変わるとずれます。SWITCH でメモ帳が前に出れば入力できるので、ここでは Delete で消します。</li><li><strong>余分な待機を消します。</strong> 考えながら操作したときの WAIT は、要らなければ消します（ステップの間には、実行の操作の「間隔」の待ちが入ります）。</li><li><strong>グループに名前を付けます。</strong> グループの始まりをダブルクリックし、名前を「1人分を入力」にします。</li><li><strong>メモ帳の起動を足します。</strong> <strong>［📁 グループ］</strong> を追加して、名前を「準備」、実行タイミングを <strong>「最初の1行だけ」</strong> にし、ドラッグでいちばん上に動かします。その中に <strong>［🚀 アプリ起動］</strong>（RUN）<code>notepad.exe</code> と <strong>［⏳ 待機］</strong>（WAIT）<code>2000</code> を入れます（レッスン2の手順4と同じです）。</li><li>開いていたメモ帳は閉じ（保存しない）、<strong>開始行 1・終了行 1</strong> にして［▶ 実行］。1人分が入ることを確かめます。</li><li>終了行を空欄（最後まで）にして実行し、5人分が入ったら <strong>［💾 本番ファイルに保存］</strong>（Ctrl+S）で保存します。</li></ol>
+<p><strong>ポイント</strong></p>
+<ul><li>記録は <strong>たたき台</strong> です。「入力した文字 → 差し込み（<code>{{列名}}</code>）」「座標クリック → 消す、または CLICK_NAME・CLICK_TEXT・CLICK_IMG」に置き換えると、どの行でも同じように動く、安定したマクロになります。</li><li>日本語入力がオンのときの文字は記録されません。記録されたコメントの場所に TEXT か CSV を入れます。</li><li>名前のあるボタンを押すと CLICK_NAME、名前のある入力欄をクリックして文字を入れると <strong>🧩 欄に入力（名前で）</strong> として記録されます。職場のシステムでは、そのまま位置が変わっても動くブロックになることがあります。</li><li>記録されるものの一覧は <a href="#page-manual/画面操作の記録-記録">操作マニュアルの「画面操作の記録」</a> にあります。</li></ul>
+<hr>
+<h2 id="レッスン4値を読み取る">レッスン4：値を読み取る</h2>
 <p><strong>ゴール:</strong> 画面の値をコピーして記録し、結果をCSVで受け取る。</p>
 <ol><li><strong>［📚 テンプレート］→「発見！便利ワザ」→「電卓で検算して結果を記録」</strong> を作ります。</li><li>［▶ 実行］すると、電卓で「単価×数量」を計算し、答えを <strong>COPY「電卓の答え」</strong> で変数に入れて記録します。</li><li>終わったら <strong>［↓ 実行結果CSV］</strong> を押して、<code>fujikyun_result.csv</code> を Excel で開きます。</li><li>「台帳の金額」と「電卓の答え」を見比べてください。<strong>1件だけ合わない行</strong> があるはずです。</li></ol>
 <p><strong>ここで覚えること</strong></p>
 <ul><li>COPY で入れた値は、実行結果CSV の <strong>列</strong> になります。</li><li>COPY は値を <strong>変数</strong> に入れるので、あとの TEXT で <code>{{$電卓の答え}}</code> と書けば、別の画面に貼り付けられます（例:「Excelの表を読みながら別の画面へ転記」テンプレート）。</li></ul>
 <hr>
-<h2 id="レッスン4職場のシステムに向ける">レッスン4：職場のシステムに向ける</h2>
+<h2 id="レッスン5職場のシステムに向ける">レッスン5：職場のシステムに向ける</h2>
 <p><strong>ゴール:</strong> 本物の画面で、安全に1件だけ動かす。</p>
 <p>ここからは職場のシステム（文書起案・財務会計・グループウェア・福祉システムなど）を使います。まずは <strong>照会（見るだけ）</strong> のテンプレートから始めましょう。</p>
 <ol><li><strong>［📚 テンプレート］</strong> から、使うシステムに近いものを選びます。<strong>［🔍 探す］</strong> にシステム名ややりたいこと（例: <code>照会</code>、<code>撮影</code>）を入れると早く見つかります。<ul><li>初めてなら「文書番号で検索して決裁状況の画面を保存」「受給者の照会画面を連続で撮影」など <strong>初級の照会系</strong> がおすすめです。</li></ul></li><li><strong>対象ウィンドウ</strong> を合わせます。<ol><li>使うシステムの画面を開いておきます。</li><li>対象ウィンドウの右の <strong>［🔍 一覧］</strong> を押し、システムのタイトルを選びます。</li><li>タイトルに日付や件名など毎回変わる部分があれば、変わらない <strong>先頭部分か末尾部分だけ</strong> を残します（<a href="#page-manual/9-ウィンドウ名の合わせ方">マニュアル9章</a>）。</li></ol></li><li><strong>ボタン名</strong> を合わせます。CLICK_NAME「登録」などは、画面に表示されている文字と完全に同じにします。</li><li><strong>カーソルの位置</strong> を合わせます。<ul><li>テンプレートによっては、最初に <strong>✋ 確認ポイント</strong> で「入力欄をクリックしてから続行してね」と聞いてきます。画面の入力欄をクリックしてから［▶ 続行］を押します。</li><li>慣れたら、無効になっている（薄い）CLICK_POS を開いて［📍 3秒後のマウス位置を取得］で座標を入れ、<strong>⊘ 無効化</strong> ボタンで有効にし、確認ポイントの方を無効化します。これで完全自動になります。</li><li>入力欄に名前や見出しがある画面なら、もっと確実な方法があります。CLICK_POS と TAB の代わりに <strong>🧩 欄に入力（名前で）</strong> を追加し、編集画面の <strong>［🎯 部品を指す］</strong> で入力欄を指します。欄の名前が自動で入り、赤い枠で示されます。［🔍 見つかるか試す］で見つかることを確かめたら、座標もTABの回数も合わせる必要はありません。</li></ul></li><li>CSV を自分のデータに差し替えます（見本CSVを Excel で開いて書き換え、CSV形式で保存）。</li><li><strong>開始行 1・終了行 1</strong> で実行し、画面の動きを最後まで見守ります。<ul><li>最初は <strong>［⏯ 1ステップずつ］</strong>（F10）で実行すると安心です。毎ステップの前で止まるので、［⏭ 次へ］で1つずつ進めながら、画面の動きを確かめられます。気になるステップだけ止めたいときは、そのステップを選んで <strong>［🔴 止める所］</strong>（F9）を付けます。</li><li>途中のステップを直したら、そのステップを選んで <strong>［▶ ここから］</strong>（F6）や <strong>［▶ これだけ］</strong> で、直した所だけを試せます。</li></ul></li><li>問題がなければ終了行を増やして、少しずつ件数を増やします。</li></ol>
 <blockquote><p>⚠ 登録・送信・決裁など <strong>取り消しにくい操作の前には、確認ポイント（CONFIRM）を入れておきましょう</strong>。十分に試して安心できたら、確認ポイントを無効化して連続実行にします。</p></blockquote>
 <hr>
-<h2 id="レッスン5止まらないロボットにする">レッスン5：止まらないロボットにする</h2>
+<h2 id="レッスン6止まらないロボットにする">レッスン6：止まらないロボットにする</h2>
 <p><strong>ゴール:</strong> よくある「途中で止まる」を防ぐ。</p>
 <div class="table-wrap"><table><thead><tr><th>症状</th><th>対策</th></tr></thead><tbody><tr><td>画面が出る前に入力してしまう</td><td>WAIT を増やす。別ウィンドウが開くなら <strong>WAIT_FOR</strong>（出るまで待つ）に変える</td></tr><tr><td>ときどき「お知らせ」が出て止まる</td><td><strong>WINDOW_CHECK</strong>（モード CONTINUE）で「出ていたら閉じて続行」</td></tr><tr><td>「該当なし」の行で止まる</td><td><strong>WINDOW_CHECK</strong>（モード SKIP）で「その行は飛ばして記録」</td></tr><tr><td>想定外のエラー画面</td><td><strong>WINDOW_CHECK</strong>（モード STOP）で「アラームを鳴らして停止」</td></tr><tr><td>入力欄に前の文字が残る</td><td>貼り付けの前に <strong>KEY <code>^a</code></strong>（全選択）を入れる。<strong>🧩 欄に入力（名前で）</strong> なら中身を入れ替えるので要らない</td></tr><tr><td>ときどき失敗するが、やり直すとうまくいく</td><td>その部分を <strong>🔂 うまくいくまでやり直す</strong> で囲む（回数と待ち時間を決められる）</td></tr><tr><td>ログインのパスワードをマクロに書きたくない</td><td><strong>🔑 パスワードを入力</strong> で、Windows の資格情報マネージャーに登録したものを打ち込む</td></tr></tbody></table></div>
 <p><strong>エラーになった行だけやり直す</strong></p>
@@ -135,7 +150,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p><strong>証跡を残す</strong></p>
 <ul><li>登録のあとに <strong>SCREENSHOT</strong> を入れると、画面が <code>evidence\日付\</code> に保存されます。ファイル名に <code>{{ROW}}</code> や <code>{{氏名}}</code> を入れておくと、あとで探しやすくなります。</li><li>エラーで止まったときは、その瞬間の画面が自動で <code>evidence\日付\エラー_行○_時刻.png</code> に保存されます。</li></ul>
 <hr>
-<h2 id="レッスン6変数繰り返し分岐を使う">レッスン6：変数・繰り返し・分岐を使う</h2>
+<h2 id="レッスン7変数繰り返し分岐を使う">レッスン7：変数・繰り返し・分岐を使う</h2>
 <p><strong>ゴール:</strong> 値を加工したり、条件で分けたり、エラーでも止めずに続けたりする。</p>
 <ol><li><strong>［📚 テンプレート］→「変数・繰り返し・分岐」</strong> を開きます。メモ帳だけで試せるものが入っています。</li><li><strong>「全角・半角や桁数がバラバラな番号をそろえてから入力」</strong> を作って実行し、実行の操作の <strong>［📊 変数］</strong> を押して、<code>$番号7桁</code> や <code>$電話</code> が行ごとに変わる様子を見てみましょう。</li><li><strong>「金額で分岐：10万円以上だけ人が確認してから入力」</strong> を実行すると、高額の行だけ確認ポイントで止まります。❓もし〜なら と ↔そうでなければ の位置を見てください。</li><li><strong>「エラーが出ても止めずに記録して次の行へ」</strong> を実行すると、2行目はわざとエラーになりますが、止まらずに3行目まで進みます。［↓ 実行結果CSV］の「結果」列を見てみましょう。</li></ol>
 <p><strong>ポイント</strong></p>
