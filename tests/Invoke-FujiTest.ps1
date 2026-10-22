@@ -114,6 +114,38 @@ try {
     if ($null -ne $lock) { $lock.ReleaseMutex(); $lock.Dispose() }
 }
 
+# ----------------------------------------------------------------- alerts (how the app calls a person)
+$al = Get-FujiAlertSetting -Settings ([ordered]@{}) -Kind 'error'
+Assert-True ($al.style -eq 'full' -and $al.color -eq '#D32F2F' -and $al.repeat -and $al.minutes -eq 3 -and $al.file -eq 'Alarm01.wav' -and -not $al.Contains('sound')) 'alert: error defaults'
+$al = Get-FujiAlertSetting -Settings $null -Kind 'confirm'
+Assert-True ($al.style -eq 'border' -and -not $al.sound -and $al.file -eq 'Ring02.wav') 'alert: confirm defaults'
+$alSet = [ordered]@{ alerts = [ordered]@{ confirm = [ordered]@{ style = 'none'; color = '#00aa00'; flash = $false; sound = $true; file = 'ring05.WAV'; repeat = $true; minutes = 10 } } }
+$al = Get-FujiAlertSetting -Settings $alSet -Kind 'confirm'
+Assert-True ($al.style -eq 'none' -and $al.color -eq '#00AA00' -and -not $al.flash -and $al.sound -and $al.file -eq 'Ring05.wav' -and $al.repeat -and $al.minutes -eq 10) 'alert: saved values read'
+$alSet = [ordered]@{ alerts = [ordered]@{ error = [ordered]@{ style = 'big'; color = 'red'; flash = 'yes'; file = '..\x.wav'; minutes = 7 } } }
+$al = Get-FujiAlertSetting -Settings $alSet -Kind 'error'
+Assert-True ($al.style -eq 'full' -and $al.color -eq '#D32F2F' -and $al.flash -eq $true -and $al.file -eq 'Alarm01.wav' -and $al.minutes -eq 3) 'alert: wrong values fall back to the defaults'
+$alSet = [ordered]@{ ui = [ordered]@{} }
+Set-FujiAlertSetting -Settings $alSet -Kind 'confirm' -Value ([ordered]@{ style = 'full'; color = '#123456'; flash = $true; sound = $true; file = 'Alarm03.wav'; repeat = $false; minutes = 5; extra = 1 })
+Assert-True ($alSet.alerts.confirm.style -eq 'full' -and -not $alSet.alerts.confirm.Contains('extra')) 'alert: saved without unknown keys'
+Assert-Equal 'Alarm03.wav' (Get-FujiAlertSetting -Settings $alSet -Kind 'confirm').file 'alert: saved and read back'
+$work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_alert_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $work)
+try {
+    Save-FujiSetting -Directory $work -Settings $alSet
+    Assert-Equal 'full' (Get-FujiAlertSetting -Settings (Read-FujiSetting -Directory $work) -Kind 'confirm').style 'alert: kept in the settings file'
+} finally {
+    Remove-Item -LiteralPath $work -Recurse -Force
+}
+Assert-Equal '#FFFFFF' (Get-FujiAlertTextColor -Color '#D32F2F') 'alert: white text on red'
+Assert-Equal '#000000' (Get-FujiAlertTextColor -Color '#F9A825') 'alert: black text on yellow'
+Assert-Equal '#891F1F' (Get-FujiAlertShade -Color '#D32F2F') 'alert: flashes to a darker shade'
+$t0 = [datetime]'2026-10-22 14:05:00'
+Assert-Equal (Get-FujiText 'alert.elapsedNew') (Format-FujiElapsed -Since $t0 -Now $t0.AddSeconds(59)) 'alert: under a minute'
+Assert-True ((Format-FujiElapsed -Since $t0 -Now $t0.AddMinutes(12)) -match '^12\D') 'alert: minutes'
+Assert-True ((Format-FujiElapsed -Since $t0 -Now $t0.AddMinutes(65)) -match '^1\D+5\D') 'alert: hours and minutes'
+Assert-Equal 20 $script:FujiAlertSounds.Count 'alert: twenty sounds to choose'
+
 # ----------------------------------------------------------------- golden: CSV
 foreach ($case in $golden.csv) {
     $r = ConvertFrom-FujiCsv -Text $case.text

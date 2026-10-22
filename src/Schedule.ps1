@@ -27,6 +27,8 @@ function Read-FujiSetting {
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('ui') -and $s['ui'] -is [System.Collections.IDictionary]) {
         foreach ($k in $s['ui'].Keys) { $settings.ui[[string]$k] = $s['ui'][$k] }
     }
+    # how the app calls a person (Alert.ps1 checks each value when it is used)
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('alerts') -and $s['alerts'] -is [System.Collections.IDictionary]) { $settings['alerts'] = $s['alerts'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
             if ($x -isnot [System.Collections.IDictionary] -or -not $x.Contains('id') -or -not $x['id']) { continue }

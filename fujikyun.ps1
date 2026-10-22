@@ -28,7 +28,86 @@ $script:StartWatch = [System.Diagnostics.Stopwatch]::StartNew()
 $script:StartMarks = New-Object -TypeName 'System.Collections.Generic.List[double]'
 $textReady = $false
 try {
-    # ===== src/Commands.ps1 =====
+    # ===== src/Alert.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  How the app calls a person (saved per PC in fujikyun_settings.json, "alerts"):
+#    error    a run stopped with an error
+#    confirm  a run waits for a person (CONFIRM, ASK)
+#  style 'full' (the whole screen) | 'border' (a frame round each screen) | 'none'; color '#RRGGBB';
+#  flash (slow, once a second); sound (confirm only: the error sound is the run bar's alarm box);
+#  file (one of the Windows sounds in FujiAlertSounds, in %SystemRoot%\Media);
+#  repeat (the sound again every 'minutes' until someone answers)
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiAlertKinds = @('error', 'confirm')
+$script:FujiAlertStyles = @('full', 'border', 'none')
+$script:FujiAlertMinutes = @(1, 2, 3, 5, 10, 15, 30)
+# loud ones that last a few seconds: Alarm01-10 and Ring01-10 of Windows
+$script:FujiAlertSounds = @((1..10 | ForEach-Object { 'Alarm{0:00}.wav' -f $_ }) + (1..10 | ForEach-Object { 'Ring{0:00}.wav' -f $_ }))
+$script:FujiAlertDefaults = @{
+    error   = [ordered]@{ style = 'full'; color = '#D32F2F'; flash = $true; file = 'Alarm01.wav'; repeat = $true; minutes = 3 }
+    confirm = [ordered]@{ style = 'border'; color = '#F9A825'; flash = $true; sound = $false; file = 'Ring02.wav'; repeat = $false; minutes = 3 }
+}
+
+# The setting of one kind, every value checked (a hand-edited file falls back to the default value)
+function Get-FujiAlertSetting {
+    param([System.Collections.IDictionary]$Settings, [Parameter(Mandatory)][ValidateSet('error', 'confirm')][string]$Kind)
+    $d = $script:FujiAlertDefaults[$Kind]
+    $r = [ordered]@{}
+    foreach ($k in $d.Keys) { $r[$k] = $d[$k] }
+    $s = $null
+    if ($null -ne $Settings -and $Settings.Contains('alerts') -and $Settings['alerts'] -is [System.Collections.IDictionary] -and
+        $Settings['alerts'].Contains($Kind) -and $Settings['alerts'][$Kind] -is [System.Collections.IDictionary]) { $s = $Settings['alerts'][$Kind] }
+    if ($null -eq $s) { return $r }
+    if ($s.Contains('style') -and $script:FujiAlertStyles -contains [string]$s['style']) { $r.style = [string]$s['style'] }
+    if ($s.Contains('color') -and [string]$s['color'] -match '^#[0-9A-Fa-f]{6}$') { $r.color = ([string]$s['color']).ToUpperInvariant() }
+    foreach ($k in @('flash', 'sound', 'repeat')) { if ($r.Contains($k) -and $s.Contains($k) -and $s[$k] -is [bool]) { $r[$k] = $s[$k] } }
+    if ($s.Contains('file')) { foreach ($x in $script:FujiAlertSounds) { if ($x -eq [string]$s['file']) { $r.file = $x } } }
+    if ($s.Contains('minutes') -and $s['minutes'] -is [ValueType] -and $script:FujiAlertMinutes -contains [int]$s['minutes']) { $r.minutes = [int]$s['minutes'] }
+    return $r
+}
+
+function Set-FujiAlertSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [Parameter(Mandatory)][ValidateSet('error', 'confirm')][string]$Kind,
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Value)
+    if (-not $Settings.Contains('alerts') -or $Settings['alerts'] -isnot [System.Collections.IDictionary]) { $Settings['alerts'] = [ordered]@{} }
+    $v = [ordered]@{}
+    foreach ($k in $script:FujiAlertDefaults[$Kind].Keys) { $v[$k] = $Value[$k] }
+    $Settings['alerts'][$Kind] = $v
+}
+
+# Black or white, whichever reads better on the colour (WCAG relative luminance)
+function Get-FujiAlertTextColor {
+    param([Parameter(Mandatory)][string]$Color)
+    $lum = 0.0
+    $weights = @(0.2126, 0.7152, 0.0722)
+    for ($i = 0; $i -lt 3; $i++) {
+        $c = [Convert]::ToInt32($Color.Substring(1 + 2 * $i, 2), 16) / 255.0
+        if ($c -le 0.03928) { $c = $c / 12.92 } else { $c = [Math]::Pow(($c + 0.055) / 1.055, 2.4) }
+        $lum += $weights[$i] * $c
+    }
+    # the luminance where black and white have the same contrast
+    if ($lum -gt 0.179) { return '#000000' }
+    return '#FFFFFF'
+}
+
+# The darker colour the alert flashes to (the same hue at 65 %)
+function Get-FujiAlertShade {
+    param([Parameter(Mandatory)][string]$Color)
+    $parts = for ($i = 0; $i -lt 3; $i++) { [int][Math]::Round([Convert]::ToInt32($Color.Substring(1 + 2 * $i, 2), 16) * 0.65) }
+    return ('#{0:X2}{1:X2}{2:X2}' -f $parts[0], $parts[1], $parts[2])
+}
+
+# "12 minutes" since Since, for the alert and the log
+function Format-FujiElapsed {
+    param([datetime]$Since, [datetime]$Now)
+    $mins = [int][Math]::Floor(($Now - $Since).TotalMinutes)
+    if ($mins -lt 1) { return (Get-FujiText 'alert.elapsedNew') }
+    if ($mins -lt 60) { return (Get-FujiText 'alert.elapsedMinutes' $mins) }
+    return (Get-FujiText 'alert.elapsedHours' ([Math]::Floor($mins / 60)) ($mins % 60))
+}
+
+# ===== src/Commands.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Commands
 #  fujikyun_commands.json holds each command's display data (title, icon, help, input fields,
@@ -2649,7 +2728,7 @@ function Add-FujiRecordedStep {
 #    FileExists {Path} -> bool   Now {} -> datetime
 #    Confirm {Caption, Message} -> 'continue'|'skip'|'stop'
 #    Ask {Caption, Message, Default} -> @{ Choice = 'continue'|'skip'|'stop'; Value }
-#    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {}   Notify {}   EndRun {}
+#    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {Message}   Notify {}   EndRun {}
 #    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
@@ -3233,8 +3312,9 @@ function Stop-FujiRunWithError {
     }
     Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultError') -Note $Result.Message
     Complete-FujiRun -Run $Run -Status 'error'
-    & $Run.Io.Alarm
+    # the window first, then the alarm over it (on the screen it may cover everything)
     & $Run.Io.FocusSelf
+    & $Run.Io.Alarm $Result.Message
 }
 
 # The whole screen at the moment a run stops with an error, kept with the other evidence
@@ -4107,6 +4187,8 @@ function Read-FujiSetting {
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('ui') -and $s['ui'] -is [System.Collections.IDictionary]) {
         foreach ($k in $s['ui'].Keys) { $settings.ui[[string]$k] = $s['ui'][$k] }
     }
+    # how the app calls a person (Alert.ps1 checks each value when it is used)
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('alerts') -and $s['alerts'] -is [System.Collections.IDictionary]) { $settings['alerts'] = $s['alerts'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
             if ($x -isnot [System.Collections.IDictionary] -or -not $x.Contains('id') -or -not $x['id']) { continue }
@@ -4402,7 +4484,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 6
+$script:FujiTextVersion = 7
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -4771,7 +4853,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.22'
+$script:FujiAppVersion = '2026.10.23'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -4969,6 +5051,365 @@ function Get-FujiOcrRect {
 function Get-FujiOcrScale {
     param([int]$Width, [int]$Height, [int]$MaxDimension)
     return [Math]::Min(2.0, $MaxDimension / [double]([Math]::Max(1, [Math]::Max($Width, $Height))))
+}
+
+# ===== gui/Alert.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Calling a person to the PC: the whole screen (or a frame round it) in a colour, flashing slowly,
+#  with the sound again every few minutes until someone answers (settings: src/Alert.ps1).
+#  Shown when a run stops with an error, and behind CONFIRM / ASK while they wait.
+# ---------------------------------------------------------------------------------------------
+
+# @{ Kind; Style; Forms; Labels (@{ Label; Prefix } with the elapsed time); Since; Flash; Color; Shade; Dark; Timer; SoundTimer; Closing; Test }
+$script:Alert = $null
+
+function Test-FujiAlertOpen {
+    return ($null -ne $script:Alert -and $script:Alert.Forms.Count -gt 0)
+}
+
+# Lines: what to show under the title. Config: settings to use instead of the saved ones (the test button).
+function Show-FujiAlert {
+    param([ValidateSet('error', 'confirm')][string]$Kind, [string]$Title, [string[]]$Lines = @(), [System.Collections.IDictionary]$Config = $null, [switch]$Test)
+    Close-FujiAlert
+    $cfg = $Config
+    if ($null -eq $cfg) { $cfg = Get-FujiAlertSetting -Settings $script:Settings -Kind $Kind }
+    $a = @{
+        Kind = $Kind; Style = [string]$cfg.style; Forms = (New-Object -TypeName 'System.Collections.Generic.List[object]')
+        Labels = (New-Object -TypeName 'System.Collections.Generic.List[object]'); Since = (Get-Date); Flash = [bool]$cfg.flash
+        Color = [string]$cfg.color; Shade = (Get-FujiAlertShade -Color ([string]$cfg.color)); Dark = $false; Timer = $null; SoundTimer = $null; Closing = $false; Test = [bool]$Test
+    }
+    $script:Alert = $a
+    foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
+        if ($a.Style -eq 'full') { New-FujiAlertFull -Alert $a -Screen $screen -Title $Title -Lines $Lines }
+        if ($a.Style -eq 'border') { New-FujiAlertBorder -Alert $a -Screen $screen -Title $Title }
+    }
+    foreach ($f in $a.Forms) { $f.Show() }
+    if ($a.Forms.Count -gt 0) {
+        Update-FujiAlertLook
+        $a.Forms[0].Activate()
+        $a.Timer = New-Object -TypeName System.Windows.Forms.Timer
+        $a.Timer.Interval = 1000
+        $a.Timer.Add_Tick({ Invoke-FujiUi { if ($null -ne $script:Alert) { $script:Alert.Dark = $script:Alert.Flash -and -not $script:Alert.Dark; Update-FujiAlertLook } } })
+        $a.Timer.Start()
+        Write-FujiUiLog -Message (Get-FujiText ('alert.shown' + $a.Style)) -Level 'warn'
+    }
+    # the error sound follows the run bar's alarm box; the confirm sound is its own setting
+    $sound = ($Kind -eq 'confirm' -and [bool]$cfg.sound) -or ($Kind -eq 'error' -and $script:Ui.AlarmCheck.Checked)
+    if ($sound) {
+        Invoke-FujiAlarm -Force -File ([string]$cfg.file)
+        # again until someone answers: only with something on the screen to answer
+        if ([bool]$cfg.repeat -and $a.Forms.Count -gt 0) {
+            $a.SoundTimer = New-Object -TypeName System.Windows.Forms.Timer
+            $a.SoundTimer.Interval = [int]$cfg.minutes * 60000
+            $a.SoundTimer.Tag = [string]$cfg.file
+            $a.SoundTimer.Add_Tick({ $file = [string]$this.Tag; Invoke-FujiUi { if ($null -ne $script:Alert) { Invoke-FujiAlarm -Force -File $file } } })
+            $a.SoundTimer.Start()
+        }
+    }
+}
+
+# Acknowledged: someone answered it (written to the log with how long it waited)
+function Close-FujiAlert {
+    param([switch]$Acknowledged)
+    $a = $script:Alert
+    if ($null -eq $a) { return }
+    $script:Alert = $null
+    $a.Closing = $true
+    foreach ($t in @($a.Timer, $a.SoundTimer)) { if ($null -ne $t) { $t.Stop(); $t.Dispose() } }
+    if ($null -ne $script:RunCtl.Player) { $script:RunCtl.Player.Stop() }
+    foreach ($f in $a.Forms) { if (-not $f.IsDisposed) { $f.Close(); $f.Dispose() } }
+    if ($Acknowledged -and -not $a.Test -and $a.Forms.Count -gt 0) {
+        Write-FujiUiLog -Message (Get-FujiText 'alert.acknowledged' $a.Since.ToString('HH:mm') (Format-FujiElapsed -Since $a.Since -Now (Get-Date))) -Level 'ok'
+    }
+}
+
+# Colours and the elapsed time, once a second
+function Update-FujiAlertLook {
+    $a = $script:Alert
+    if ($null -eq $a) { return }
+    $back = $a.Color
+    if ($a.Dark) { $back = $a.Shade }
+    $c = Get-FujiColor $back
+    $fore = Get-FujiColor (Get-FujiAlertTextColor -Color $back)
+    foreach ($f in $a.Forms) { $f.BackColor = $c; $f.ForeColor = $fore }
+    $since = Get-FujiText 'alert.since' $a.Since.ToString('HH:mm') (Format-FujiElapsed -Since $a.Since -Now (Get-Date))
+    foreach ($l in $a.Labels) { $l.Label.Text = $l.Prefix + $since }
+}
+
+function New-FujiAlertForm {
+    param([hashtable]$Alert, [System.Drawing.Rectangle]$Bounds)
+    $f = New-Object -TypeName System.Windows.Forms.Form
+    $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $f.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $f.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
+    $f.Bounds = $Bounds
+    $f.TopMost = $true
+    $f.ShowInTaskbar = $false
+    $f.KeyPreview = $true
+    $f.Text = Get-FujiText 'gui.title'
+    $f.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { Invoke-FujiUi { Close-FujiAlert -Acknowledged } } })
+    # Alt+F4 also answers it (after this close, so the form is not closed inside its own closing)
+    $f.Add_FormClosing({
+            if ($null -eq $script:Alert -or $script:Alert.Closing) { return }
+            $_.Cancel = $true
+            [void]$script:Ui.Form.BeginInvoke([System.Action] { Invoke-FujiUi { Close-FujiAlert -Acknowledged } })
+        })
+    $Alert.Forms.Add($f)
+    return $f
+}
+
+# A font about Share of the screen height tall
+function New-FujiAlertFont {
+    param([System.Windows.Forms.Screen]$Screen, [double]$Share, [double]$MinPoints, [switch]$Bold)
+    $dpi = 96.0 * $script:Ui.Scale / $script:Ui.Zoom
+    $points = [Math]::Max($MinPoints * $script:Ui.Zoom, $Screen.Bounds.Height * $Share * 72.0 / $dpi)
+    $style = [System.Drawing.FontStyle]::Regular
+    if ($Bold) { $style = [System.Drawing.FontStyle]::Bold }
+    return (New-Object -TypeName System.Drawing.Font -ArgumentList $script:Ui.Font.FontFamily, ([float]$points), $style)
+}
+
+function New-FujiAlertLabel {
+    param([string]$Text, $Font, [int]$MaxWidth)
+    $l = New-Object -TypeName System.Windows.Forms.Label
+    $l.Text = $Text
+    $l.Font = $Font
+    $l.AutoSize = $true
+    $l.UseMnemonic = $false
+    $l.MaximumSize = New-Object -TypeName System.Drawing.Size -ArgumentList $MaxWidth, 0
+    $l.Anchor = [System.Windows.Forms.AnchorStyles]::None
+    $l.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $l.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
+    return $l
+}
+
+# The whole screen: the title, the lines, the time it has waited and the answer button
+function New-FujiAlertFull {
+    param([hashtable]$Alert, [System.Windows.Forms.Screen]$Screen, [string]$Title, [string[]]$Lines)
+    $f = New-FujiAlertForm -Alert $Alert -Bounds $Screen.Bounds
+    $width = [int]($Screen.Bounds.Width * 0.85)
+    $t = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $t.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $t.ColumnCount = 1
+    Add-FujiFullColumn -Table $t
+    $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $rows.Add((New-FujiAlertLabel -Text $Title -Font (New-FujiAlertFont -Screen $Screen -Share 0.065 -MinPoints 24 -Bold) -MaxWidth $width))
+    $lineFont = New-FujiAlertFont -Screen $Screen -Share 0.032 -MinPoints 14
+    foreach ($line in $Lines) { if ($line) { $rows.Add((New-FujiAlertLabel -Text $line -Font $lineFont -MaxWidth $width)) } }
+    $since = New-FujiAlertLabel -Text '' -Font (New-FujiAlertFont -Screen $Screen -Share 0.032 -MinPoints 14 -Bold) -MaxWidth $width
+    $Alert.Labels.Add(@{ Label = $since; Prefix = '' })
+    $rows.Add($since)
+    $ok = New-Object -TypeName System.Windows.Forms.Button
+    $ok.Text = Get-FujiText 'alert.ok'
+    $ok.Font = New-FujiAlertFont -Screen $Screen -Share 0.03 -MinPoints 14 -Bold
+    $ok.AutoSize = $true
+    $ok.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+    $ok.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 24), (Get-FujiScaled 8), (Get-FujiScaled 24), (Get-FujiScaled 8)
+    $ok.Margin = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 24)
+    $ok.Anchor = [System.Windows.Forms.AnchorStyles]::None
+    $ok.UseVisualStyleBackColor = $false
+    $ok.BackColor = [System.Drawing.Color]::White
+    $ok.ForeColor = [System.Drawing.Color]::Black
+    $ok.UseMnemonic = $false
+    $ok.Add_Click({ Invoke-FujiUi { Close-FujiAlert -Acknowledged } })
+    $rows.Add($ok)
+    # empty rows above and below share the room, so the text stands in the middle
+    $t.RowCount = $rows.Count + 2
+    [void]$t.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 50))
+    foreach ($r in $rows) { [void]$t.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::AutoSize))) }
+    [void]$t.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList ([System.Windows.Forms.SizeType]::Percent), 50))
+    for ($i = 0; $i -lt $rows.Count; $i++) { $t.Controls.Add($rows[$i], 0, $i + 1) }
+    [void]$f.Controls.Add($t)
+    $f.AcceptButton = $ok
+}
+
+# A frame round the screen: a band at the top with the title (a click answers it) and thin sides
+function New-FujiAlertBorder {
+    param([hashtable]$Alert, [System.Windows.Forms.Screen]$Screen, [string]$Title)
+    $b = $Screen.Bounds
+    $font = New-FujiAlertFont -Screen $Screen -Share 0.022 -MinPoints 12 -Bold
+    $band = [int][Math]::Ceiling($font.GetHeight() * 2)
+    $side = [Math]::Max((Get-FujiScaled 12), [int]($b.Height * 0.012))
+    $top = New-FujiAlertForm -Alert $Alert -Bounds (New-Object -TypeName System.Drawing.Rectangle -ArgumentList $b.X, $b.Y, $b.Width, $band)
+    $l = New-Object -TypeName System.Windows.Forms.Label
+    $l.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $l.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $l.Font = $font
+    $l.UseMnemonic = $false
+    $l.AutoEllipsis = $true
+    $l.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $l.Add_Click({ Invoke-FujiUi { Close-FujiAlert -Acknowledged } })
+    [void]$top.Controls.Add($l)
+    $Alert.Labels.Add(@{ Label = $l; Prefix = ($Title + (Get-FujiText 'alert.bandClick') + '  ') })
+    foreach ($r in @(
+            @($b.X, ($b.Y + $band), $side, ($b.Height - $band)),
+            @(($b.Right - $side), ($b.Y + $band), $side, ($b.Height - $band)),
+            @(($b.X + $side), ($b.Bottom - $side), ($b.Width - 2 * $side), $side))) {
+        $f = New-FujiAlertForm -Alert $Alert -Bounds (New-Object -TypeName System.Drawing.Rectangle -ArgumentList $r[0], $r[1], $r[2], $r[3])
+        $f.Add_Click({ Invoke-FujiUi { Close-FujiAlert -Acknowledged } })
+    }
+}
+
+# ----------------------------------------------------------------- from a run
+# Error stop: what stopped, where, and since when
+function Show-FujiRunAlert {
+    param([string]$Message)
+    $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $lines.Add((Get-FujiText 'alert.macro' (Get-FujiCurrentMacro $script:Ed).name))
+    $run = $script:Run
+    if ($null -ne $run -and $run.Rows.Count -gt 1) { $lines.Add((Get-FujiText 'alert.row' ($run.RowPos + 1) $run.Rows.Count)) }
+    $lines.Add((Format-FujiShort $Message 200))
+    Show-FujiAlert -Kind 'error' -Title (Get-FujiText 'alert.errorTitle') -Lines $lines.ToArray()
+}
+
+# ----------------------------------------------------------------- settings dialog
+# "Alarm 1", "Ring 3" ...
+function Get-FujiAlertSoundName {
+    param([string]$File)
+    $m = [regex]::Match($File, '^(Alarm|Ring)(\d\d)\.wav$')
+    if (-not $m.Success) { return $File }
+    return (Get-FujiText ('alert.sound' + $m.Groups[1].Value) ([int]$m.Groups[2].Value))
+}
+
+function Show-FujiAlertSettingDialog {
+    $width = Get-FujiScaled 560
+    $f = New-FujiDialogForm -Title (Get-FujiText 'alert.dialogTitle') -Width $width -Height (Get-FujiScaled 300)
+    $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $f.AutoSize = $true
+    $f.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+    $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $layout.AutoSize = $true
+    $layout.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+    $layout.ColumnCount = 1
+    $layout.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 10)
+    $layout.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList $width, 0
+    $script:Ui.AlertEdit = @{}
+    foreach ($kind in $script:FujiAlertKinds) {
+        $cfg = Get-FujiAlertSetting -Settings $script:Settings -Kind $kind
+        $ed = @{ Kind = $kind; Color = $cfg.color }
+        $script:Ui.AlertEdit[$kind] = $ed
+        $g = New-Object -TypeName System.Windows.Forms.GroupBox
+        $g.Text = Get-FujiText ('alert.group' + $kind)
+        $g.AutoSize = $true
+        $g.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+        $g.Dock = [System.Windows.Forms.DockStyle]::Fill
+        $g.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
+        $inner = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+        $inner.AutoSize = $true
+        $inner.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+        $inner.ColumnCount = 1
+        $inner.Dock = [System.Windows.Forms.DockStyle]::Fill
+        $ed.Style = New-FujiComboBox -Items @((Get-FujiText 'alert.stylefull'), (Get-FujiText 'alert.styleborder'), (Get-FujiText 'alert.stylenone')) -Values $script:FujiAlertStyles -Width (Get-FujiScaled 220)
+        $ed.Style.SelectedIndex = [Array]::IndexOf($script:FujiAlertStyles, [string]$cfg.style)
+        $ed.ColorButton = New-FujiButton -Text (Get-FujiText 'alert.colorChange') -Tag $kind
+        $ed.ColorButton.UseVisualStyleBackColor = $false
+        $ed.ColorButton.Add_Click({ $k = [string]$this.Tag; Invoke-FujiUi { Select-FujiAlertColor -Kind $k } })
+        $ed.Flash = New-FujiCheck -Text (Get-FujiText 'alert.flash') -Checked ([bool]$cfg.flash)
+        $row1 = New-FujiFlow
+        foreach ($c in @((New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'alert.style')), $ed.Style)), (New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'alert.color')), $ed.ColorButton)), $ed.Flash)) { [void]$row1.Controls.Add($c) }
+        [void]$inner.Controls.Add($row1)
+        $soundRow = New-FujiFlow
+        if ($kind -eq 'confirm') {
+            $ed.Sound = New-FujiCheck -Text (Get-FujiText 'alert.sound') -Checked ([bool]$cfg.sound)
+            [void]$soundRow.Controls.Add($ed.Sound)
+        } else {
+            $ed.Sound = $null
+            [void]$soundRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'alert.soundLabel')))
+        }
+        $names = @($script:FujiAlertSounds | ForEach-Object { Get-FujiAlertSoundName -File $_ })
+        $ed.File = New-FujiComboBox -Items $names -Values $script:FujiAlertSounds -Width (Get-FujiScaled 150)
+        $ed.File.SelectedIndex = [Array]::IndexOf($script:FujiAlertSounds, [string]$cfg.file)
+        $ed.Listen = New-FujiButton -Text (Get-FujiText 'alert.listen') -Tag $kind
+        $ed.Listen.Add_Click({ $k = [string]$this.Tag; Invoke-FujiUi { Invoke-FujiAlarm -Force -Once -File (Get-FujiAlertDialogValue -Kind $k).file } })
+        [void]$soundRow.Controls.Add((New-FujiGlued @($ed.File, $ed.Listen)))
+        if ($kind -eq 'error') { [void]$soundRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'alert.errorSound'))) }
+        [void]$inner.Controls.Add($soundRow)
+        $row2 = New-FujiFlow
+        $ed.Repeat = New-FujiCheck -Text (Get-FujiText 'alert.repeat') -Checked ([bool]$cfg.repeat)
+        $ed.Minutes = New-FujiComboBox -Items $script:FujiAlertMinutes -Values $script:FujiAlertMinutes -Width (Get-FujiScaled 60)
+        $ed.Minutes.SelectedIndex = [Array]::IndexOf($script:FujiAlertMinutes, [int]$cfg.minutes)
+        [void]$row2.Controls.Add((New-FujiGlued @($ed.Repeat, $ed.Minutes, (New-FujiLabel -Text (Get-FujiText 'alert.minutes')))))
+        [void]$inner.Controls.Add($row2)
+        $test = New-FujiButton -Text (Get-FujiText 'alert.test') -Tag $kind
+        $test.Add_Click({ $k = [string]$this.Tag; Invoke-FujiUi { Show-FujiAlertTest -Kind $k } })
+        [void]$inner.Controls.Add($test)
+        [void]$g.Controls.Add($inner)
+        [void]$layout.Controls.Add($g)
+        foreach ($c in @($ed.Style, $ed.Repeat, $ed.Sound)) {
+            if ($null -eq $c) { continue }
+            if ($c -is [System.Windows.Forms.ComboBox]) { $c.Add_SelectedIndexChanged({ Update-FujiAlertDialogState }) } else { $c.Add_CheckedChanged({ Update-FujiAlertDialogState }) }
+        }
+    }
+    [void]$layout.Controls.Add((New-FujiLabel -Text (Get-FujiText 'alert.note') -MaxWidth ($width - (Get-FujiScaled 30))))
+    $bar = New-FujiButtonBar
+    $bar.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $ok = New-FujiButton -Text (Get-FujiText 'gui.ok')
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    [void]$bar.Controls.Add($cancel)
+    [void]$bar.Controls.Add($ok)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.alerts')))
+    [void]$layout.Controls.Add($bar)
+    [void]$f.Controls.Add($layout)
+    $f.AcceptButton = $ok
+    $f.CancelButton = $cancel
+    Update-FujiAlertDialogState
+    if ((Show-FujiDialog -Form $f) -eq [System.Windows.Forms.DialogResult]::OK) {
+        foreach ($kind in $script:FujiAlertKinds) { Set-FujiAlertSetting -Settings $script:Settings -Kind $kind -Value (Get-FujiAlertDialogValue -Kind $kind) }
+        Save-FujiScheduleSetting
+        Write-FujiUiLog -Message (Get-FujiText 'alert.saved') -Level 'ok'
+    }
+    $f.Dispose()
+}
+
+function Get-FujiAlertDialogValue {
+    param([string]$Kind)
+    $ed = $script:Ui.AlertEdit[$Kind]
+    $v = [ordered]@{
+        style = $script:FujiAlertStyles[[Math]::Max(0, $ed.Style.SelectedIndex)]; color = $ed.Color; flash = $ed.Flash.Checked
+        sound = ($null -ne $ed.Sound -and $ed.Sound.Checked); file = $script:FujiAlertSounds[[Math]::Max(0, $ed.File.SelectedIndex)]; repeat = $ed.Repeat.Checked; minutes = $script:FujiAlertMinutes[[Math]::Max(0, $ed.Minutes.SelectedIndex)]
+    }
+    return $v
+}
+
+# What cannot be used greys out: no colour without anything shown, no repeat without a screen to answer or a sound
+function Update-FujiAlertDialogState {
+    foreach ($ed in $script:Ui.AlertEdit.Values) {
+        $shown = $ed.Style.SelectedIndex -ne 2
+        $ed.ColorButton.Enabled = $shown
+        $ed.Flash.Enabled = $shown
+        $ed.ColorButton.BackColor = Get-FujiColor $ed.Color
+        $ed.ColorButton.ForeColor = Get-FujiColor (Get-FujiAlertTextColor -Color $ed.Color)
+        $ed.File.Enabled = $null -eq $ed.Sound -or $ed.Sound.Checked
+        $ed.Listen.Enabled = $ed.File.Enabled
+        $ed.Repeat.Enabled = $shown -and ($null -eq $ed.Sound -or $ed.Sound.Checked)
+        $ed.Minutes.Enabled = $ed.Repeat.Enabled -and $ed.Repeat.Checked
+    }
+}
+
+function Select-FujiAlertColor {
+    param([string]$Kind)
+    $ed = $script:Ui.AlertEdit[$Kind]
+    $d = New-Object -TypeName System.Windows.Forms.ColorDialog
+    $d.FullOpen = $true
+    $d.Color = Get-FujiColor $ed.Color
+    if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $ed.Color = '#{0:X2}{1:X2}{2:X2}' -f $d.Color.R, $d.Color.G, $d.Color.B
+        Update-FujiAlertDialogState
+    }
+    $d.Dispose()
+}
+
+# The dialog's choices as they are now, before they are saved
+function Show-FujiAlertTest {
+    param([string]$Kind)
+    $v = Get-FujiAlertDialogValue -Kind $Kind
+    if ($v.style -eq 'none') {
+        Write-FujiUiLog -Message (Get-FujiText 'alert.testNone') -Level 'warn'
+        return
+    }
+    $title = Get-FujiText ('alert.' + $Kind + 'Title')
+    Show-FujiAlert -Kind $Kind -Title $title -Lines @((Get-FujiText 'alert.testLine')) -Config $v -Test
 }
 
 # ===== gui/Common.ps1 =====
@@ -5201,6 +5642,8 @@ function Get-FujiOwner {
 
 function Show-FujiDialog {
     param([Parameter(Mandatory)]$Form)
+    # above an alert that covers the screen (CONFIRM and ASK wait in front of it)
+    if (Test-FujiAlertOpen) { $Form.TopMost = $true }
     $owner = Get-FujiOwner
     if ($null -eq $owner) { $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen; return $Form.ShowDialog() }
     return $Form.ShowDialog($owner)
@@ -5494,7 +5937,9 @@ function Get-FujiDiagnostic {
     if ($before) { [void](Set-FujiClipboard -Text $before) } else { [void](Set-FujiClipboard -Text '') }
     & $add $ok 'clipboard' ''
 
-    foreach ($wav in @('Alarm01.wav', 'tada.wav')) {
+    # the sounds chosen for an error and for waiting (Alert.ps1), and the finishing sound
+    $wavs = @((Get-FujiAlertSetting -Settings $script:Settings -Kind 'error').file, (Get-FujiAlertSetting -Settings $script:Settings -Kind 'confirm').file, 'tada.wav')
+    foreach ($wav in @($wavs | Select-Object -Unique)) {
         $p = Join-Path $env:SystemRoot ('Media\' + $wav)
         & $add (Test-Path -LiteralPath $p -PathType Leaf) 'sound' $p
     }
@@ -5726,7 +6171,7 @@ function Show-FujiMainForm {
             # a restart for the new text size waits for the next close if this one was called off
             if ($e.Cancel) { $script:RestartAfterClose = $false }
         })
-    $form.Add_FormClosed({ Invoke-FujiUi { Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
+    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
                 Restore-FujiSplitPlacement
@@ -7204,6 +7649,9 @@ function New-FujiRunBar {
     $bell = New-FujiButton -Text (Get-FujiText 'gui.alarmTest') -Tip (Get-FujiText 'gui.alarmTestTip')
     $bell.Add_Click({ Invoke-FujiUi { Invoke-FujiAlarm -Force } })
     [void]$row.Controls.Add($bell)
+    $alerts = New-FujiButton -Text (Get-FujiText 'gui.alertSettings') -Tip (Get-FujiText 'gui.alertSettingsTip')
+    $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
+    [void]$row.Controls.Add($alerts)
     $script:Ui.SafeCheck = New-FujiCheck -Text (Get-FujiText 'gui.safeMode') -Checked $false -Tip (Get-FujiText 'gui.safeModeTip')
     $script:Ui.NotifyCheck = New-FujiCheck -Text (Get-FujiText 'gui.notify') -Checked $true -Tip (Get-FujiText 'gui.notifyTip')
     [void]$row.Controls.Add($script:Ui.SafeCheck)
@@ -7343,6 +7791,8 @@ function Start-FujiRunUi {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
         return ''
     }
+    # a frame alert leaves the window usable: running again answers it
+    Close-FujiAlert -Acknowledged
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
     $range = @{ StartAt = -1; EndAt = -1 }
@@ -7487,7 +7937,7 @@ function New-FujiWinIo {
         Progress = { param($Text) $script:Ui.Progress.Text = $Text }
         Highlight = { param($StepIndex) Set-FujiRunHighlight -Index $StepIndex }
         Watch = { Update-FujiWatchPanel }
-        Alarm = { Invoke-FujiAlarm }
+        Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
         EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
@@ -7827,7 +8277,12 @@ function Send-FujiOutlookMail {
 function Show-FujiRunConfirm {
     param([string]$Caption, [string]$Message)
     [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
-    $answer = Show-FujiChoice -Title $Caption -Message $Message -Buttons @((Get-FujiText 'run.continueButton'), (Get-FujiText 'run.skipButton'), (Get-FujiText 'run.stopButton'))
+    Show-FujiAlert -Kind 'confirm' -Title (Get-FujiText 'alert.confirmTitle') -Lines @($Caption, (Format-FujiShort $Message 200))
+    try {
+        $answer = Show-FujiChoice -Title $Caption -Message $Message -Buttons @((Get-FujiText 'run.continueButton'), (Get-FujiText 'run.skipButton'), (Get-FujiText 'run.stopButton'))
+    } finally {
+        Close-FujiAlert
+    }
     switch ($answer) {
         0 { return 'continue' }
         1 { return 'skip' }
@@ -7863,7 +8318,12 @@ function Show-FujiRunAsk {
     $script:Ui.AskDialog.Box = $box
     $f.Add_Shown({ $script:Ui.AskDialog.Box.SelectAll(); $script:Ui.AskDialog.Box.Focus() })
     $f.Add_FormClosing({ $script:Ui.AskDialog.Value = $script:Ui.AskDialog.Box.Text })
-    [void](Show-FujiDialog -Form $f)
+    Show-FujiAlert -Kind 'confirm' -Title (Get-FujiText 'alert.confirmTitle') -Lines @($Caption, (Format-FujiShort $Message 200))
+    try {
+        [void](Show-FujiDialog -Form $f)
+    } finally {
+        Close-FujiAlert
+    }
     $f.Dispose()
     return @{ Choice = $script:Ui.AskDialog.Choice; Value = $script:Ui.AskDialog.Value }
 }
@@ -7906,15 +8366,21 @@ function Update-FujiWatchPanel {
     $box.Text = [string]::Join("`r`n", $lines.ToArray())
 }
 
+# File: a sound of %SystemRoot%\Media ('' = the one chosen for errors). Once: play it one time (to listen to it)
 function Invoke-FujiAlarm {
-    param([switch]$Force)
+    param([switch]$Force, [string]$File = '', [switch]$Once)
     if (-not $Force -and -not $script:Ui.AlarmCheck.Checked) { return }
-    Write-FujiUiLog -Message (Get-FujiText 'run.alarm') -Level 'warn'
+    if (-not $File) { $File = (Get-FujiAlertSetting -Settings $script:Settings -Kind 'error').file }
+    if (-not $Once) { Write-FujiUiLog -Message (Get-FujiText 'run.alarm') -Level 'warn' }
     try {
         $c = $script:RunCtl
         if ($null -ne $c.Player) { $c.Player.Stop() }
-        $c.Player = New-Object -TypeName System.Media.SoundPlayer -ArgumentList (Join-Path $env:SystemRoot 'Media\Alarm01.wav')
+        $c.Player = New-Object -TypeName System.Media.SoundPlayer -ArgumentList (Join-Path $env:SystemRoot ('Media\' + $File))
         $c.Player.Load()
+        if ($Once) {
+            $c.Player.Play()
+            return
+        }
         $c.Player.PlayLooping()
         # about three times
         if ($null -eq $c.AlarmTimer) {
@@ -8065,7 +8531,7 @@ function Invoke-FujiTriggerCheck {
         }
         if ($st.Queue.Count -eq 0 -or $busy) { continue }
         if (Test-FujiDialogOpen) {
-            if ($slow) { Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn' }
+            if ($slow) { Write-FujiUiLog -Message (Get-FujiWaitDialogText) -Level 'warn' }
             if ($kind -eq 'HOTKEY') { $st.Queue.Clear() }
             continue
         }
@@ -8126,6 +8592,12 @@ function Update-FujiScheduleState {
     $label.Text = Get-FujiText 'schedule.next' $day $next.Schedule.time (Format-FujiShort $name 16)
 }
 
+# Why a schedule waits: an alert nobody has answered yet, or a dialog
+function Get-FujiWaitDialogText {
+    if (Test-FujiAlertOpen) { return (Get-FujiText 'schedule.waitAlert') }
+    return (Get-FujiText 'schedule.waitDialog')
+}
+
 function Test-FujiDialogOpen {
     return ([System.Windows.Forms.Application]::OpenForms.Count -gt 1)
 }
@@ -8137,7 +8609,7 @@ function Invoke-FujiScheduleCheck {
     foreach ($s in $script:Settings.schedules) {
         if (Test-FujiScheduleDue -Schedule $s -Now $now) {
             if (Test-FujiDialogOpen) {
-                Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn'
+                Write-FujiUiLog -Message (Get-FujiWaitDialogText) -Level 'warn'
                 return
             }
             [void](Invoke-FujiSchedule -Schedule $s)
