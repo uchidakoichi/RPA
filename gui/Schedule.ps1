@@ -87,7 +87,7 @@ function Invoke-FujiTriggerCheck {
         }
         if ($st.Queue.Count -eq 0 -or $busy) { continue }
         if (Test-FujiDialogOpen) {
-            if ($slow) { Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn' }
+            if ($slow) { Write-FujiUiLog -Message (Get-FujiWaitDialogText) -Level 'warn' }
             if ($kind -eq 'HOTKEY') { $st.Queue.Clear() }
             continue
         }
@@ -148,6 +148,12 @@ function Update-FujiScheduleState {
     $label.Text = Get-FujiText 'schedule.next' $day $next.Schedule.time (Format-FujiShort $name 16)
 }
 
+# Why a schedule waits: an alert nobody has answered yet, or a dialog
+function Get-FujiWaitDialogText {
+    if (Test-FujiAlertOpen) { return (Get-FujiText 'schedule.waitAlert') }
+    return (Get-FujiText 'schedule.waitDialog')
+}
+
 function Test-FujiDialogOpen {
     return ([System.Windows.Forms.Application]::OpenForms.Count -gt 1)
 }
@@ -159,7 +165,7 @@ function Invoke-FujiScheduleCheck {
     foreach ($s in $script:Settings.schedules) {
         if (Test-FujiScheduleDue -Schedule $s -Now $now) {
             if (Test-FujiDialogOpen) {
-                Write-FujiUiLog -Message (Get-FujiText 'schedule.waitDialog') -Level 'warn'
+                Write-FujiUiLog -Message (Get-FujiWaitDialogText) -Level 'warn'
                 return
             }
             [void](Invoke-FujiSchedule -Schedule $s)

@@ -18,7 +18,7 @@
 #    FileExists {Path} -> bool   Now {} -> datetime
 #    Confirm {Caption, Message} -> 'continue'|'skip'|'stop'
 #    Ask {Caption, Message, Default} -> @{ Choice = 'continue'|'skip'|'stop'; Value }
-#    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {}   Notify {}   EndRun {}
+#    Progress {Text}   Highlight {StepIndex}   Watch {}   Alarm {Message}   Notify {}   EndRun {}
 #    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
@@ -602,8 +602,9 @@ function Stop-FujiRunWithError {
     }
     Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultError') -Note $Result.Message
     Complete-FujiRun -Run $Run -Status 'error'
-    & $Run.Io.Alarm
+    # the window first, then the alarm over it (on the screen it may cover everything)
     & $Run.Io.FocusSelf
+    & $Run.Io.Alarm $Result.Message
 }
 
 # The whole screen at the moment a run stops with an error, kept with the other evidence

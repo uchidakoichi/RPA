@@ -49,6 +49,9 @@ function New-FujiRunBar {
     $bell = New-FujiButton -Text (Get-FujiText 'gui.alarmTest') -Tip (Get-FujiText 'gui.alarmTestTip')
     $bell.Add_Click({ Invoke-FujiUi { Invoke-FujiAlarm -Force } })
     [void]$row.Controls.Add($bell)
+    $alerts = New-FujiButton -Text (Get-FujiText 'gui.alertSettings') -Tip (Get-FujiText 'gui.alertSettingsTip')
+    $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
+    [void]$row.Controls.Add($alerts)
     $script:Ui.SafeCheck = New-FujiCheck -Text (Get-FujiText 'gui.safeMode') -Checked $false -Tip (Get-FujiText 'gui.safeModeTip')
     $script:Ui.NotifyCheck = New-FujiCheck -Text (Get-FujiText 'gui.notify') -Checked $true -Tip (Get-FujiText 'gui.notifyTip')
     [void]$row.Controls.Add($script:Ui.SafeCheck)
@@ -188,6 +191,8 @@ function Start-FujiRunUi {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
         return ''
     }
+    # a frame alert leaves the window usable: running again answers it
+    Close-FujiAlert -Acknowledged
     $macro = Get-FujiCurrentMacro $script:Ed
     $steps = $macro.steps
     $range = @{ StartAt = -1; EndAt = -1 }
@@ -332,7 +337,7 @@ function New-FujiWinIo {
         Progress = { param($Text) $script:Ui.Progress.Text = $Text }
         Highlight = { param($StepIndex) Set-FujiRunHighlight -Index $StepIndex }
         Watch = { Update-FujiWatchPanel }
-        Alarm = { Invoke-FujiAlarm }
+        Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
         EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
@@ -672,7 +677,12 @@ function Send-FujiOutlookMail {
 function Show-FujiRunConfirm {
     param([string]$Caption, [string]$Message)
     [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
-    $answer = Show-FujiChoice -Title $Caption -Message $Message -Buttons @((Get-FujiText 'run.continueButton'), (Get-FujiText 'run.skipButton'), (Get-FujiText 'run.stopButton'))
+    Show-FujiAlert -Kind 'confirm' -Title (Get-FujiText 'alert.confirmTitle') -Lines @($Caption, (Format-FujiShort $Message 200))
+    try {
+        $answer = Show-FujiChoice -Title $Caption -Message $Message -Buttons @((Get-FujiText 'run.continueButton'), (Get-FujiText 'run.skipButton'), (Get-FujiText 'run.stopButton'))
+    } finally {
+        Close-FujiAlert
+    }
     switch ($answer) {
         0 { return 'continue' }
         1 { return 'skip' }
@@ -708,7 +718,12 @@ function Show-FujiRunAsk {
     $script:Ui.AskDialog.Box = $box
     $f.Add_Shown({ $script:Ui.AskDialog.Box.SelectAll(); $script:Ui.AskDialog.Box.Focus() })
     $f.Add_FormClosing({ $script:Ui.AskDialog.Value = $script:Ui.AskDialog.Box.Text })
-    [void](Show-FujiDialog -Form $f)
+    Show-FujiAlert -Kind 'confirm' -Title (Get-FujiText 'alert.confirmTitle') -Lines @($Caption, (Format-FujiShort $Message 200))
+    try {
+        [void](Show-FujiDialog -Form $f)
+    } finally {
+        Close-FujiAlert
+    }
     $f.Dispose()
     return @{ Choice = $script:Ui.AskDialog.Choice; Value = $script:Ui.AskDialog.Value }
 }
@@ -751,15 +766,21 @@ function Update-FujiWatchPanel {
     $box.Text = [string]::Join("`r`n", $lines.ToArray())
 }
 
+# File: a sound of %SystemRoot%\Media ('' = the one chosen for errors). Once: play it one time (to listen to it)
 function Invoke-FujiAlarm {
-    param([switch]$Force)
+    param([switch]$Force, [string]$File = '', [switch]$Once)
     if (-not $Force -and -not $script:Ui.AlarmCheck.Checked) { return }
-    Write-FujiUiLog -Message (Get-FujiText 'run.alarm') -Level 'warn'
+    if (-not $File) { $File = (Get-FujiAlertSetting -Settings $script:Settings -Kind 'error').file }
+    if (-not $Once) { Write-FujiUiLog -Message (Get-FujiText 'run.alarm') -Level 'warn' }
     try {
         $c = $script:RunCtl
         if ($null -ne $c.Player) { $c.Player.Stop() }
-        $c.Player = New-Object -TypeName System.Media.SoundPlayer -ArgumentList (Join-Path $env:SystemRoot 'Media\Alarm01.wav')
+        $c.Player = New-Object -TypeName System.Media.SoundPlayer -ArgumentList (Join-Path $env:SystemRoot ('Media\' + $File))
         $c.Player.Load()
+        if ($Once) {
+            $c.Player.Play()
+            return
+        }
         $c.Player.PlayLooping()
         # about three times
         if ($null -eq $c.AlarmTimer) {

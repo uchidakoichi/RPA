@@ -30,7 +30,9 @@ function Get-FujiDiagnostic {
     if ($before) { [void](Set-FujiClipboard -Text $before) } else { [void](Set-FujiClipboard -Text '') }
     & $add $ok 'clipboard' ''
 
-    foreach ($wav in @('Alarm01.wav', 'tada.wav')) {
+    # the sounds chosen for an error and for waiting (Alert.ps1), and the finishing sound
+    $wavs = @((Get-FujiAlertSetting -Settings $script:Settings -Kind 'error').file, (Get-FujiAlertSetting -Settings $script:Settings -Kind 'confirm').file, 'tada.wav')
+    foreach ($wav in @($wavs | Select-Object -Unique)) {
         $p = Join-Path $env:SystemRoot ('Media\' + $wav)
         & $add (Test-Path -LiteralPath $p -PathType Leaf) 'sound' $p
     }

@@ -227,6 +227,8 @@ function Get-FujiOwner {
 
 function Show-FujiDialog {
     param([Parameter(Mandatory)]$Form)
+    # above an alert that covers the screen (CONFIRM and ASK wait in front of it)
+    if (Test-FujiAlertOpen) { $Form.TopMost = $true }
     $owner = Get-FujiOwner
     if ($null -eq $owner) { $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen; return $Form.ShowDialog() }
     return $Form.ShowDialog($owner)
