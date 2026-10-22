@@ -35,7 +35,7 @@ function ConvertFrom-FujiByteArray {
 # not valid UTF-8. Returns @{ Text; Encoding }.
 function Read-FujiCsvText {
     param([Parameter(Mandatory)][string]$Path, [ValidateSet('auto', 'utf-8', 'shift_jis', 'unicode')][string]$Encoding = 'auto')
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $bytes = Read-FujiSharedFileByte -Path $Path
     if ($Encoding -ne 'auto') {
         return @{ Text = (ConvertFrom-FujiByteArray -Bytes $bytes -Encoding $Encoding); Encoding = $Encoding }
     }
@@ -50,7 +50,42 @@ function Read-FujiCsvText {
 function Write-FujiTextFile {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text, [switch]$Bom)
     $enc = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList ([bool]$Bom)
-    [System.IO.File]::WriteAllText($Path, $Text, $enc)
+    try {
+        [System.IO.File]::WriteAllText($Path, $Text, $enc)
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
+    }
+}
+
+# The file is open in another program that keeps others from it (Excel keeps an open book or CSV
+# locked): ERROR_SHARING_VIOLATION 32 or ERROR_LOCK_VIOLATION 33, possibly wrapped by PowerShell
+function Test-FujiFileBusy {
+    param($Exception)
+    $e = $Exception
+    while ($null -ne $e) {
+        if ($e -is [System.IO.IOException] -and @(32, 33) -contains ($e.HResult -band 0xFFFF)) { return $true }
+        $e = $e.InnerException
+    }
+    return $false
+}
+
+# The bytes of a file another program may have open for writing (a CSV open in Excel can still be read)
+function Read-FujiSharedFileByte {
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $fs = New-Object -TypeName System.IO.FileStream -ArgumentList $Path, ([System.IO.FileMode]::Open), ([System.IO.FileAccess]::Read), ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
+    }
+    try {
+        $ms = New-Object -TypeName System.IO.MemoryStream
+        $fs.CopyTo($ms)
+        return , $ms.ToArray()
+    } finally {
+        $fs.Dispose()
+    }
 }
 
 # The only good copy is never overwritten in place: write a sibling file, read it back, keep the
@@ -58,14 +93,18 @@ function Write-FujiTextFile {
 function Write-FujiFileSafely {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text, [string]$BackupPath)
     $tmp = $Path + '.saving'
-    Write-FujiTextFile -Path $tmp -Text $Text
-    if ((Read-FujiUtf8File -Path $tmp) -cne $Text) {
+    try {
+        Write-FujiTextFile -Path $tmp -Text $Text
+        if ((Read-FujiUtf8File -Path $tmp) -cne $Text) { throw (Get-FujiText 'data.verifyFailed') }
+        if ($BackupPath -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            Copy-Item -LiteralPath $Path -Destination $BackupPath -Force
+        }
+        Copy-Item -LiteralPath $tmp -Destination $Path -Force
+    } catch {
+        # the target is untouched (or the copy failed): no half-written sibling is left behind
         Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-        throw (Get-FujiText 'data.verifyFailed')
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
     }
-    if ($BackupPath -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Copy-Item -LiteralPath $Path -Destination $BackupPath -Force
-    }
-    Copy-Item -LiteralPath $tmp -Destination $Path -Force
     Remove-Item -LiteralPath $tmp -Force
 }

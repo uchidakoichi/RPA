@@ -42,6 +42,9 @@ function Initialize-FujiUi {
     $native = Get-FujiNativeType
     [void]$native::SetProcessDPIAware()
     [System.Windows.Forms.Application]::EnableVisualStyles()
+    # an error no handler caught (in any event of any window) goes to the log, instead of the .NET
+    # "unhandled exception" box that offers to quit the app
+    [System.Windows.Forms.Application]::add_ThreadException({ param($Sender, $E) Write-FujiUnexpectedError -ErrorObject $E.Exception })
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
     try { $script:Ui.Scale = $g.DpiX / 96.0 * $Zoom } finally { $g.Dispose() }
@@ -77,11 +80,29 @@ function Invoke-FujiUi {
     try {
         & $Action
     } catch {
+        Write-FujiUnexpectedError -ErrorObject $_
+    }
+}
+
+# Logs an unexpected error (an ErrorRecord, or an exception from the message loop) with the place
+# in the script where it happened
+function Write-FujiUnexpectedError {
+    param($ErrorObject)
+    try {
+        $record = $ErrorObject
+        if ($record -is [System.Management.Automation.IContainsErrorRecord]) { $record = $record.ErrorRecord }
+        $message = $ErrorObject.Message
+        if ($ErrorObject -is [System.Management.Automation.ErrorRecord]) { $message = $ErrorObject.Exception.Message }
         # The innermost place in the script (InvocationInfo only names the outermost call)
         $where = ''
-        $trace = [string]$_.ScriptStackTrace
-        if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
-        Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $_.Exception.Message) + $where) -Level 'error'
+        if ($record -is [System.Management.Automation.ErrorRecord]) {
+            $trace = [string]$record.ScriptStackTrace
+            if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
+        }
+        Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $message) + $where) -Level 'error'
+    } catch {
+        # the log itself failed: nothing more can be done without a box that stops the app
+        $null = $_
     }
 }
 

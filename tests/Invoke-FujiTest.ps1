@@ -279,6 +279,108 @@ try {
     Remove-Item -LiteralPath $tmp -Recurse -Force
 }
 
+# ----------------------------------------------------------------- edge cases: files other programs hold, odd folders, broken files
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_test_' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $tmp | Out-Null
+try {
+    # Windows enforces share modes (Excel keeps an open CSV or book locked); macOS / Linux do not
+    if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) {
+        $p = Join-Path $tmp 'open.csv'
+        Write-FujiTextFile -Path $p -Text "a,b`r`n1,2`r`n"
+        $fs = [System.IO.File]::Open($p, 'Open', 'ReadWrite', 'Read')
+        try {
+            Assert-Equal "a,b`r`n1,2`r`n" (Read-FujiCsvText -Path $p).Text 'edge: a CSV open for writing in another program (Excel) is read'
+            $msg = ''
+            try { Write-FujiTextFile -Path $p -Text 'x' } catch { $msg = $_.Exception.Message }
+            Assert-Equal (Get-FujiText 'data.fileBusy' $p) $msg 'edge: writing a file another program holds says so in words'
+        } finally {
+            $fs.Dispose()
+        }
+        $main = Join-Path $tmp 'held.json'
+        Write-FujiTextFile -Path $main -Text 'v1'
+        $fs = [System.IO.File]::Open($main, 'Open', 'Read', 'Read')
+        try {
+            $msg = ''
+            try { Write-FujiFileSafely -Path $main -Text 'v2' -BackupPath (Join-Path $tmp 'held_backup.json') } catch { $msg = $_.Exception.Message }
+            Assert-Equal (Get-FujiText 'data.fileBusy' $main) $msg 'edge: safe write to a held file says so in words'
+        } finally {
+            $fs.Dispose()
+        }
+        Assert-True (-not (Test-Path -LiteralPath ($main + '.saving'))) 'edge: a failed safe write leaves no temp file'
+        Assert-Equal 'v1' (Read-FujiUtf8File -Path $main) 'edge: a failed safe write keeps the file'
+    }
+
+    # folders people make: spaces, Japanese, brackets (PowerShell wildcards), quotes, % and &
+    $names = @('with space', ($jp + ' x'), 'copy[1]', "o'quote", 'pct%20', 'a&b')
+    foreach ($name in $names) {
+        $dir = Join-Path $tmp $name
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        $e = New-FujiEditor -Directory $dir
+        Initialize-FujiEditorData -Editor $e -AskRestoreTemp { $true }
+        Add-FujiMacro -Editor $e -Name 'm2'
+        Assert-Equal '' (Save-FujiEditorData -Editor $e) ('edge: save in folder ' + $name)
+        $e2 = New-FujiEditor -Directory $dir
+        Initialize-FujiEditorData -Editor $e2 -AskRestoreTemp { $true }
+        Assert-Equal 2 $e2.Data.macros.Count ('edge: load in folder ' + $name)
+        [void](Initialize-FujiLogFile -Directory $dir)
+        Assert-Equal '' (Write-FujiLogFile -Message 'x') ('edge: log file in folder ' + $name)
+        Save-FujiSetting -Directory $dir -Settings (Read-FujiSetting -Directory $dir)
+        Assert-True (Test-Path -LiteralPath (Join-Path $dir 'fujikyun_settings.json')) ('edge: settings in folder ' + $name)
+    }
+    $script:FujiLogFile = $null
+
+    # JSON that is not a macros file is kept like a broken one, never read as "no macros"
+    foreach ($case in @(@('empty', ''), @('null', 'null'), @('array', '[]'), @('string', '"x"'), @('object', '{}'), @('macros not a list', '{"macros":{}}'), @('cut short', '{"macros":[{"name":"a"'))) {
+        $dir = Join-Path $tmp ('broken ' + $case[0])
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        [System.IO.File]::WriteAllText((Join-Path $dir 'fujikyun_macros.json'), $case[1])
+        $e = New-FujiEditor -Directory $dir
+        Initialize-FujiEditorData -Editor $e -AskRestoreTemp { $true }
+        Assert-True ([bool]$e.SaveBlockReason -and $e.Notices.Count -eq 1) ('edge: macros file ' + $case[0] + ' guards the next save')
+        Assert-Equal 1 @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_macros_broken_*.json').Count ('edge: macros file ' + $case[0] + ' copied aside')
+    }
+    $dir = Join-Path $tmp 'odd steps'
+    [void][System.IO.Directory]::CreateDirectory($dir)
+    [System.IO.File]::WriteAllText((Join-Path $dir 'fujikyun_macros.json'), '{"macros":[{"name":12,"id":34,"steps":[1,"x",null,{"cmd":5},{"cmd":"WAIT","val":{"a":1}},{"cmd":"wait","val":"100"}]},{"steps":null}]}')
+    $e = New-FujiEditor -Directory $dir
+    Initialize-FujiEditorData -Editor $e -AskRestoreTemp { $true }
+    Assert-True (-not $e.SaveBlockReason) 'edge: odd values inside a macros file are read'
+    Assert-Equal 'COMMENT WAIT WAIT' (@($e.Data.macros[0].steps | ForEach-Object { $_.cmd }) -join ' ') 'edge: odd steps cleaned (unknown number command kept as a comment)'
+    Assert-Equal '12' $e.Data.macros[0].name 'edge: a number as a macro name'
+
+    # a settings file that cannot be read: the app starts with standard settings, a copy is kept and it is told
+    foreach ($case in @(@('cut short', '{"ui":'), @('array', '[1]'), @('shift_jis', $null))) {
+        $dir = Join-Path $tmp ('settings ' + $case[0])
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        $sp = Join-Path $dir 'fujikyun_settings.json'
+        if ($null -eq $case[1]) { [System.IO.File]::WriteAllBytes($sp, (Get-FujiEncoding 'shift_jis').GetBytes('{"a":"' + $jp + '"}')) } else { [System.IO.File]::WriteAllText($sp, $case[1]) }
+        $script:FujiSettingsNotice = ''
+        $s = Read-FujiSetting -Directory $dir
+        Assert-True ($s.schedules.Count -eq 0 -and $script:FujiSettingsNotice -ne '') ('edge: settings ' + $case[0] + ' told')
+        Assert-Equal 1 @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_settings_broken_*.json').Count ('edge: settings ' + $case[0] + ' copied aside')
+    }
+    $script:FujiSettingsNotice = ''
+    [void](Read-FujiSetting -Directory $tmp)
+    Assert-Equal '' $script:FujiSettingsNotice 'edge: no settings file is not a problem'
+
+    # paths typed into the CSV box
+    $e = New-FujiEditor -Directory $tmp
+    Assert-True (-not (Import-FujiEditorCsv -Editor $e -Path 'C:\a|b.csv').Ok) 'edge: a CSV path with characters Windows refuses'
+    Assert-True (-not (Import-FujiEditorCsv -Editor $e -Path $tmp).Ok) 'edge: a folder in the CSV box'
+    Assert-True (-not (Import-FujiEditorCsv -Editor $e -Path (Join-Path $tmp '*.csv')).Ok) 'edge: a wildcard in the CSV box'
+} finally {
+    Remove-Item -LiteralPath $tmp -Recurse -Force
+}
+# values from a CSV or typed by people
+$ctx = @{ Row = @{ No = 3; Data = @('a', 'b') }; Header = @('x', 'y'); Vars = [ordered]@{} }
+Assert-Equal '{{ROW+99999999999}}' (Expand-FujiPlaceholder -Text '{{ROW+99999999999}}' -Context $ctx) 'edge: a row offset too large for a number is left as text'
+Assert-Equal '{{a}}' (Expand-FujiPlaceholder -Text '{{{{1}}}}' -Context $ctx) 'edge: nested braces'
+Assert-Equal ('x' * 5000) (Expand-FujiPlaceholder -Text ('x' * 5000) -Context $ctx) 'edge: a long text'
+Assert-Equal '1' (Invoke-FujiCalc -Expression ('(' * 300 + '1' + ')' * 300)) 'edge: deep brackets'
+Assert-Equal '0.3' (Invoke-FujiCalc -Expression '0.1+0.2') 'edge: decimals add exactly'
+Assert-Equal 3 (ConvertFrom-FujiCsv -Text "a,b`r`n`r`n1,2`r`n`r`n").Records.Count 'edge: blank lines inside a CSV keep their place, trailing ones go'
+Assert-Equal 2 (ConvertFrom-FujiCsv -Text "a,b`r1,2`r").Records.Count 'edge: a CSV with old Mac line ends'
+
 # ----------------------------------------------------------------- CSV writer round trip
 $rows = @(, @('a', 'b,c', "d`"e", "f`r`ng", ''))
 $text = ConvertTo-FujiCsvText -Rows $rows

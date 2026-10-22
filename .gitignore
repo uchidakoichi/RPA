@@ -8,3 +8,7 @@ rpa_images/
 macro_export/
 check/fujikyun_check_result.txt
 .DS_Store
+
+# logs and copies of unreadable settings the app writes when it runs from this folder
+fujikyun_logs/
+fujikyun_settings_broken_*.json

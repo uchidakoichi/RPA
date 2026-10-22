@@ -19,8 +19,11 @@ function Read-FujiSetting {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $settings }
     try {
         $s = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $path)
+        if ($s -isnot [System.Collections.IDictionary]) { throw (Get-FujiText 'schedule.settingsNotObject') }
     } catch {
-        # a broken settings file only means no schedules
+        # the app still starts (no schedules, standard look), but the file is kept: the next save
+        # writes over it
+        $script:FujiSettingsNotice = Save-FujiBrokenSetting -Path $path -Reason $_.Exception.Message
         return $settings
     }
     # the window's look on this PC: text size, window place and size, where the panes are split
@@ -37,6 +40,21 @@ function Read-FujiSetting {
         }
     }
     return $settings
+}
+
+# Set by Read-FujiSetting when the file could not be read: the text shown once after start
+$script:FujiSettingsNotice = ''
+
+# Copies an unreadable settings file to fujikyun_settings_broken_<time>.json; returns the notice text
+function Save-FujiBrokenSetting {
+    param([Parameter(Mandatory)][string]$Path, [string]$Reason)
+    $name = 'fujikyun_settings_broken_' + (Get-FujiTimeStamp) + '.json'
+    try {
+        Copy-Item -LiteralPath $Path -Destination (Join-Path (Split-Path -Path $Path -Parent) $name) -ErrorAction Stop
+        return (Get-FujiText 'schedule.settingsBroken' $script:FujiSettingsFile $Reason $name)
+    } catch {
+        return (Get-FujiText 'schedule.settingsBrokenNotCopied' $script:FujiSettingsFile $Reason)
+    }
 }
 
 function Save-FujiSetting {

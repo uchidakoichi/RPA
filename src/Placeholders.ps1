@@ -62,7 +62,8 @@ function Get-FujiPlaceholderValue {
         return ''
     }
     $up = $Key.ToUpperInvariant()
-    $m = [regex]::Match($up, '^ROW\s*([+\-])\s*([0-9]+)$')
+    # up to 9 digits: a longer number is not a row offset (and would not fit an int)
+    $m = [regex]::Match($up, '^ROW\s*([+\-])\s*([0-9]{1,9})$')
     if ($m.Success) {
         $delta = [int]$m.Groups[2].Value
         if ($m.Groups[1].Value -eq '-') { $delta = -$delta }
