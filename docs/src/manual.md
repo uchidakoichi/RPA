@@ -647,6 +647,7 @@ KEY コマンドや、WAIT_FOR・WINDOW_CHECK の「押すキー」は、Windows
 | `evidence\日付\` | SCREENSHOT の画像と、エラーで止まったときの画面 |
 | `rpa_images\` | CLICK_IMG 用に切り取った画像 |
 | `macro_export\` | 書き出したマクロ |
+| `fujikyun_logs\` | ログ（画面の下のログと同じ内容）。1日1ファイル `fujikyun_log_日付.txt` で、30日たったものは起動時に消えます。CSV から入力した文字の一部も残るので、扱いは実行結果CSVと同じにしてください |
 
 CSV は Excel で開きやすいように UTF-8（BOM付き）で保存します。
 

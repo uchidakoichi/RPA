@@ -88,6 +88,9 @@ function Invoke-FujiUi {
 # ----------------------------------------------------------------- log
 function Write-FujiUiLog {
     param([string]$Message, [string]$Level = 'info')
+    $fileFailed = Write-FujiLogFile -Message $Message -Level $Level
+    # shown once: after a failure the file is not tried again
+    if ($fileFailed) { Write-FujiUiLog -Message (Get-FujiText 'gui.logFileFailed' $fileFailed) -Level 'warn' }
     $line = '[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $Message
     $box = $script:Ui['Log']
     # Colours need the RichTextBox's window: lines before it exists wait in the buffer

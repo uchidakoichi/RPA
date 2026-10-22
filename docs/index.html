@@ -63,11 +63,11 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 </style>
 </head>
 <body data-page="index">
-<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav><a href="#page-index" class="current">目次</a><a href="#page-setup">準備</a><a href="#page-tutorial">チュートリアル</a><a href="#page-manual">操作マニュアル</a><a href="#page-templates">テンプレート解説</a><a href="#page-faq">Q&amp;A</a></nav></header>
+<header><span class="title"><b>ふじキュン♡</b>のおしごとロボット</span><nav><a href="#page-index" class="current">目次</a><a href="#page-setup">準備</a><a href="#page-tutorial">チュートリアル</a><a href="#page-manual">操作マニュアル</a><a href="#page-templates">テンプレート解説</a><a href="#page-faq">Q&amp;A</a><a href="#page-changes">更新履歴</a></nav></header>
 <main>
 <section class="page" id="page-index" data-title="ドキュメント">
 <h1 id="ドキュメント">ドキュメント</h1>
-<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>準備したい</td><td><a href="#page-setup">準備</a> — 5つのファイルの置き方・起動のしくみ・困ったとき</td></tr><tr><td>とにかく動かしてみたい</td><td><a href="#page-tutorial">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="#page-templates">テンプレート解説</a> — 381種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="#page-manual">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="#page-faq">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>準備したい</td><td><a href="#page-setup">準備</a> — 5つのファイルの置き方・起動のしくみ・困ったとき</td></tr><tr><td>とにかく動かしてみたい</td><td><a href="#page-tutorial">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="#page-templates">テンプレート解説</a> — 381種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="#page-manual">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="#page-faq">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr><tr><td>版ごとに何が変わったか知りたい</td><td><a href="#page-changes">更新履歴</a> — バージョンの確かめ方と、版ごとの変更</td></tr></tbody></table></div>
 <p>見本のCSVは <a href="../samples"><code>samples</code></a> フォルダにあります。ツールの［📚 テンプレート］から作ると、同じCSVが自動で用意されます。</p>
 </section>
 <section class="page" id="page-setup" data-title="準備">
@@ -351,7 +351,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <hr>
 <h2 id="16-保存されるファイル">16. 保存されるファイル</h2>
 <p>すべて <code>fujikyun.bat</code> と同じフォルダに作られます。</p>
-<div class="table-wrap"><table><thead><tr><th>ファイル／フォルダ</th><th>内容</th></tr></thead><tbody><tr><td><code>fujikyun_macros.json</code></td><td>本番のマクロファイル（［💾 本番ファイルに保存］で更新）。保存はいったん別ファイルに書いて読み直してから差し替えるので、途中で失敗しても壊れません</td></tr><tr><td><code>fujikyun_macros_backup.json</code></td><td>1つ前に保存した版。［📥 取込］で戻せます</td></tr><tr><td><code>fujikyun_macros_broken_日時.json</code></td><td>起動時に本番ファイルを読み込めなかったときの控え。このときは本番ファイルへの保存の前に確認が出ます</td></tr><tr><td><code>fujikyun_macros_temp.json</code></td><td>編集中の自動保存。本番保存すると消えます。起動時にあれば復元するか聞かれます</td></tr><tr><td><code>fujikyun_macros_temp_discarded_日時.json</code></td><td>復元しなかった一時ファイルの控え（毎回別の名前で残ります）</td></tr><tr><td><code>fujikyun_settings.json</code></td><td>予定（スケジュール）と、この PC での見た目（文字の大きさ・ウィンドウの位置と大きさ・左右の境目の位置）</td></tr><tr><td><code>fujikyun_error_list.csv</code></td><td>エラー行CSV</td></tr><tr><td><code>fujikyun_result.csv</code></td><td>実行結果CSV</td></tr><tr><td><code>samples\</code></td><td>テンプレートの見本CSV</td></tr><tr><td><code>evidence\日付\</code></td><td>SCREENSHOT の画像と、エラーで止まったときの画面</td></tr><tr><td><code>rpa_images\</code></td><td>CLICK_IMG 用に切り取った画像</td></tr><tr><td><code>macro_export\</code></td><td>書き出したマクロ</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>ファイル／フォルダ</th><th>内容</th></tr></thead><tbody><tr><td><code>fujikyun_macros.json</code></td><td>本番のマクロファイル（［💾 本番ファイルに保存］で更新）。保存はいったん別ファイルに書いて読み直してから差し替えるので、途中で失敗しても壊れません</td></tr><tr><td><code>fujikyun_macros_backup.json</code></td><td>1つ前に保存した版。［📥 取込］で戻せます</td></tr><tr><td><code>fujikyun_macros_broken_日時.json</code></td><td>起動時に本番ファイルを読み込めなかったときの控え。このときは本番ファイルへの保存の前に確認が出ます</td></tr><tr><td><code>fujikyun_macros_temp.json</code></td><td>編集中の自動保存。本番保存すると消えます。起動時にあれば復元するか聞かれます</td></tr><tr><td><code>fujikyun_macros_temp_discarded_日時.json</code></td><td>復元しなかった一時ファイルの控え（毎回別の名前で残ります）</td></tr><tr><td><code>fujikyun_settings.json</code></td><td>予定（スケジュール）と、この PC での見た目（文字の大きさ・ウィンドウの位置と大きさ・左右の境目の位置）</td></tr><tr><td><code>fujikyun_error_list.csv</code></td><td>エラー行CSV</td></tr><tr><td><code>fujikyun_result.csv</code></td><td>実行結果CSV</td></tr><tr><td><code>samples\</code></td><td>テンプレートの見本CSV</td></tr><tr><td><code>evidence\日付\</code></td><td>SCREENSHOT の画像と、エラーで止まったときの画面</td></tr><tr><td><code>rpa_images\</code></td><td>CLICK_IMG 用に切り取った画像</td></tr><tr><td><code>macro_export\</code></td><td>書き出したマクロ</td></tr><tr><td><code>fujikyun_logs\</code></td><td>ログ（画面の下のログと同じ内容）。1日1ファイル <code>fujikyun_log_日付.txt</code> で、30日たったものは起動時に消えます。CSV から入力した文字の一部も残るので、扱いは実行結果CSVと同じにしてください</td></tr></tbody></table></div>
 <p>CSV は Excel で開きやすいように UTF-8（BOM付き）で保存します。</p>
 <hr>
 <h2 id="17-マクロの共有書出取込">17. マクロの共有（書出・取込）</h2>
@@ -5819,6 +5819,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <div class="table-wrap"><table><thead><tr><th>メッセージの内容</th><th>どうする</th></tr></thead><tbody><tr><td><code>is not the expected UTF-8 file</code> など、JSON（<code>fujikyun_ja.json</code> など）が読めない</td><td>JSON を <strong>UTF-8</strong> で保存し直します（Shift_JIS で保存すると読めません）</td></tr><tr><td>ファイルが見つからない</td><td>5つのファイルが同じフォルダにあるか確認します</td></tr></tbody></table></div>
 <h3 id="q-ボタンなどが-guischedule-のような英字の名前で表示される">Q. ボタンなどが <code>gui.schedule</code> のような英字の名前で表示される</h3>
 <p><code>fujikyun_ja.json</code> が古いままです。<code>fujikyun.ps1</code> と同じ時点の <code>fujikyun_ja.json</code> に置き換えてください（起動時にもお知らせが出ます）。</p>
+<h3 id="q-もう開いているキュンと出て開かない">Q. 「もう開いているキュン」と出て開かない</h3>
+<p>同じフォルダのふじキュンがすでに開いています。タスクバーにあるふじキュンを使ってください。同じフォルダで2つ開くと、両方が同じファイルに保存して片方の編集が消えることがあるので、2つ目は開かないようにしています。タスクバーに見当たらないのに出るときは、タスクマネージャーで「Windows PowerShell」が残っていないか確認してください。</p>
 <h3 id="q-起動に時間がかかる">Q. 起動に時間がかかる</h3>
 <p>ログの「⏱ 起動にかかった時間」に内訳が出ます。PowerShell 自体の起動に数秒かかる端末があります。画像でクリック・記録は、最初に使うときだけ準備に数秒かかります。</p>
 <h3 id="q-一時ファイルへの自動保存に失敗と出る">Q. 「一時ファイルへの自動保存に失敗」と出る</h3>
@@ -5831,7 +5833,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h3 id="q-文字が小さくて読みにくい">Q. 文字が小さくて読みにくい</h3>
 <p>画面の上の <strong>［🔠 文字の大きさ］</strong> で、115%・130%・150% などを選びます。ふじキュンを起動し直すと、文字とボタンが大きくなります。この PC だけの設定です（<code>fujikyun_settings.json</code> に保存されます）。</p>
 <h3 id="q-使っているふじキュンのバージョンを知りたい">Q. 使っているふじキュンのバージョンを知りたい</h3>
-<p>タイトルバーの「（バージョン 2026.10.22）」のように、名前の後ろに出ています。<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」でも確かめられます。数字はその版を出した日付（年.月.日）です。</p>
+<p>タイトルバーの「（バージョン 2026.10.22）」のように、名前の後ろに出ています。<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」でも確かめられます。数字はその版を出した日付（年.月.日）です。版ごとの変更は <a href="#page-changes">更新履歴</a> にあります。</p>
 <h3 id="q-アプリの中から説明書を読みたい">Q. アプリの中から説明書を読みたい</h3>
 <p><strong>［📖 説明書］</strong> から開けます。F1 キーで、選んでいるステップのコマンドの説明が開きます。「説明書が見つからない」と出るときは、GitHub の <code>dist</code> フォルダにある <code>fujikyun_docs_samples.zip</code> を、ふじキュンのフォルダに展開してください。</p>
 <h2 id="音アラーム">音・アラーム</h2>
@@ -5943,6 +5945,18 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <ul><li>［🩺 環境チェック］で「文字認識」が OK か確認してください（日本語の文字認識が必要です）。</li><li>範囲を「範囲を指定」にして、読みたい部分だけを小さく囲むと正確になります。</li><li>文字が小さすぎる・背景と色が近い画面は苦手です。画面の拡大率を上げると改善することがあります。</li></ul>
 <h3 id="q-メールが送れない">Q. メールが送れない</h3>
 <ul><li>Outlook: ［🩺 環境チェック］で Outlook があるか確認してください。すぐ送信にすると、Outlook のセキュリティの確認が出ることがあります。</li><li>mailto: 既定のメールアプリが設定されていないと開きません。</li></ul>
+</section>
+<section class="page" id="page-changes" data-title="更新履歴">
+<h1 id="更新履歴">更新履歴</h1>
+<p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
+<p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
+<hr>
+<h2 id="20261022">2026.10.22</h2>
+<p>はじめてバージョン番号を付けた版です。これより前の版には番号がありません。</p>
+<p><strong>新しくなったこと</strong></p>
+<ul><li>タイトルバーと［🩺 環境チェック］に、バージョンを出すようにしました。</li><li>同じフォルダのふじキュンを2つ開けないようにしました。2つ目を開こうとすると、お知らせが出ます。2つ開くと、片方の編集が消えることがあったためです。別のフォルダに置いたふじキュンは、同時に開けます。</li><li>ログを <code>fujikyun_logs</code> フォルダにも保存するようにしました。1日1ファイルで、30日たったものは起動時に消えます（<a href="#page-manual/16-保存されるファイル">操作マニュアル 16章</a>）。</li><li>この更新履歴を説明書に加えました。</li></ul>
+<p><strong>直したこと</strong></p>
+<ul><li>「画像でクリック」の追加画面などで、絵文字の入った説明文が途中で切れて表示されていました。</li><li>実行バーの［実行結果CSV］［エラー行CSV］のボタンに、件数ではなく「({0})」と出ることがありました。</li><li>Windows のタスクスケジューラに登録した予定の時刻に、ふじキュンを開いていると、同じ予定が2回実行されることがありました。今は開いているほうだけが実行します。</li></ul>
 </section>
 <footer>このページはオフラインで読めます。最新版は GitHub の uchidakoichi/RPA リポジトリにあります。</footer>
 </main>

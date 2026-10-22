@@ -18,7 +18,8 @@ const PAGES = [
     { src: "tutorial.md", out: "tutorial.html", nav: "チュートリアル" },
     { src: "manual.md", out: "manual.html", nav: "操作マニュアル" },
     { src: "templates.md", out: "templates.html", nav: "テンプレート解説" },
-    { src: "faq.md", out: "faq.html", nav: "Q&A" }
+    { src: "faq.md", out: "faq.html", nav: "Q&A" },
+    { src: "changes.md", out: "changes.html", nav: "更新履歴" }
 ];
 
 // ---------------------------------------------------------------- Markdown -> HTML

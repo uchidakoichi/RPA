@@ -31,7 +31,7 @@ function New-FujiDocMenuButton {
     $b = New-FujiButton -Text (Get-FujiText 'gui.docs') -Tip (Get-FujiText 'gui.docsTip')
     $menu = New-Object -TypeName System.Windows.Forms.ContextMenuStrip
     $menu.Font = $script:Ui.Font
-    foreach ($p in @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')) {
+    foreach ($p in $script:FujiDocPages) {
         $item = New-Object -TypeName System.Windows.Forms.ToolStripMenuItem -ArgumentList (Get-FujiText ('gui.docPages.' + $p))
         $item.Tag = $p
         $item.Add_Click({ $page = [string]$this.Tag; Invoke-FujiUi { Open-FujiDoc -Page $page } })

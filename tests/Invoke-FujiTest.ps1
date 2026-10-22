@@ -63,6 +63,57 @@ Assert-True ((Get-FujiText 'gui.exportResults' '') -notlike '*{0}*') 'text: an e
 # ----------------------------------------------------------------- version
 Assert-True ($script:FujiAppVersion -match '^\d{4}\.\d{2}\.\d{2}(\.\d+)?$') 'version: year.month.day'
 
+# ----------------------------------------------------------------- log file
+$work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_log_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $work)
+try {
+    Assert-Equal '' (Write-FujiLogFile -Message 'before') 'log file: nothing written before it is set up'
+    [void](Initialize-FujiLogFile -Directory $work -Now ([datetime]'2026-10-22 09:00'))
+    $logDir = Join-Path $work 'fujikyun_logs'
+    Assert-True (Test-Path -LiteralPath $logDir) 'log file: folder made'
+    Write-FujiTextFile -Path (Join-Path $logDir 'fujikyun_log_2026-09-21.txt') -Text 'old'
+    Write-FujiTextFile -Path (Join-Path $logDir 'fujikyun_log_2026-09-22.txt') -Text 'kept'
+    Write-FujiTextFile -Path (Join-Path $logDir 'notes.txt') -Text 'not a log'
+    $removed = Initialize-FujiLogFile -Directory $work -Now ([datetime]'2026-10-22 09:00')
+    Assert-Equal 'fujikyun_log_2026-09-21.txt' ($removed -join ',') 'log file: only logs older than 30 days removed'
+    Assert-True ((Test-Path -LiteralPath (Join-Path $logDir 'fujikyun_log_2026-09-22.txt')) -and (Test-Path -LiteralPath (Join-Path $logDir 'notes.txt'))) 'log file: newer logs and other files kept'
+    Assert-Equal '' (Write-FujiLogFile -Message ('a' + "`n" + 'b') -Now ([datetime]'2026-10-22 10:41:02')) 'log file: written'
+    Assert-Equal '' (Write-FujiLogFile -Message 'stop' -Level 'error' -Now ([datetime]'2026-10-22 10:41:03')) 'log file: appended'
+    $logPath = Join-Path $logDir 'fujikyun_log_2026-10-22.txt'
+    $bytes = [System.IO.File]::ReadAllBytes($logPath)
+    Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF -and $bytes[3] -ne 0xEF) 'log file: one BOM at the start'
+    Assert-Equal ("[10:41:02] a`r`nb`r`n[10:41:03] [error] stop`r`n") (Read-FujiUtf8File -Path $logPath) 'log file: lines'
+    Remove-Item -LiteralPath $logDir -Recurse -Force
+    Write-FujiTextFile -Path $logDir -Text 'a file where the folder should be'
+    Assert-True ((Write-FujiLogFile -Message 'x') -ne '') 'log file: a failure is reported'
+    Assert-Equal '' (Write-FujiLogFile -Message 'y') 'log file: not tried again after a failure'
+} finally {
+    $script:FujiLogFile = $null
+    Remove-Item -LiteralPath $work -Recurse -Force
+}
+
+# ----------------------------------------------------------------- one app per folder
+$lockA = Join-Path ([System.IO.Path]::GetTempPath()) 'fujikyun_lock_a'
+Assert-Equal (Get-FujiAppLockName -Directory $lockA) (Get-FujiAppLockName -Directory ($lockA.ToUpperInvariant() + [System.IO.Path]::DirectorySeparatorChar)) 'lock: same folder, same name (case, end separator)'
+Assert-True ((Get-FujiAppLockName -Directory $lockA) -ne (Get-FujiAppLockName -Directory ($lockA + 'b'))) 'lock: another folder, another name'
+$lock = Enter-FujiAppLock -Directory $lockA
+try {
+    Assert-True ($null -ne $lock) 'lock: taken'
+    # another app is another thread (here a runspace): it must not get the lock
+    $other = [powershell]::Create()
+    try {
+        [void]$other.AddScript({ param($Name) $m = New-Object -TypeName System.Threading.Mutex -ArgumentList $false, $Name; $got = $m.WaitOne(0); if ($got) { $m.ReleaseMutex() }; $m.Dispose(); $got }).AddArgument((Get-FujiAppLockName -Directory $lockA))
+        Assert-True (-not [bool]($other.Invoke() | Select-Object -First 1)) 'lock: refused while another app has it'
+    } finally {
+        $other.Dispose()
+    }
+    $lockB = Enter-FujiAppLock -Directory ($lockA + 'b')
+    Assert-True ($null -ne $lockB) 'lock: another folder is free'
+    $lockB.ReleaseMutex(); $lockB.Dispose()
+} finally {
+    if ($null -ne $lock) { $lock.ReleaseMutex(); $lock.Dispose() }
+}
+
 # ----------------------------------------------------------------- golden: CSV
 foreach ($case in $golden.csv) {
     $r = ConvertFrom-FujiCsv -Text $case.text
