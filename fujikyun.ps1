@@ -1238,7 +1238,13 @@ function New-FujiSampleData {
 function Read-FujiMacroFile {
     param([Parameter(Mandatory)][hashtable]$Editor, [Parameter(Mandatory)][string]$Path)
     try {
-        return (ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $Path))
+        $obj = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $Path)
+        # JSON, but not a macros file (another program's file, or one cut short by hand): never
+        # read as "no macros", which the next save would write over the file
+        if ($obj -isnot [System.Collections.IDictionary] -or -not $obj.Contains('macros') -or $obj['macros'] -isnot [System.Collections.IList]) {
+            throw (Get-FujiText 'editor.notMacroFile')
+        }
+        return $obj
     } catch {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.readFailed' $Path $_.Exception.Message) -Level 'error'
         return $null
@@ -2019,7 +2025,13 @@ function Import-FujiEditorCsv {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.noPath') -Level 'warn'
         return @{ Ok = $false; HeaderForced = $false }
     }
-    if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+    try {
+        # a path with characters Windows does not allow (| < > ...) throws here too
+        $found = Test-Path -LiteralPath $p -PathType Leaf
+    } catch {
+        $found = $false
+    }
+    if (-not $found) {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.notFound' $p) -Level 'error'
         return @{ Ok = $false; HeaderForced = $false }
     }
@@ -2170,7 +2182,7 @@ function ConvertFrom-FujiByteArray {
 # not valid UTF-8. Returns @{ Text; Encoding }.
 function Read-FujiCsvText {
     param([Parameter(Mandatory)][string]$Path, [ValidateSet('auto', 'utf-8', 'shift_jis', 'unicode')][string]$Encoding = 'auto')
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $bytes = Read-FujiSharedFileByte -Path $Path
     if ($Encoding -ne 'auto') {
         return @{ Text = (ConvertFrom-FujiByteArray -Bytes $bytes -Encoding $Encoding); Encoding = $Encoding }
     }
@@ -2185,7 +2197,42 @@ function Read-FujiCsvText {
 function Write-FujiTextFile {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text, [switch]$Bom)
     $enc = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList ([bool]$Bom)
-    [System.IO.File]::WriteAllText($Path, $Text, $enc)
+    try {
+        [System.IO.File]::WriteAllText($Path, $Text, $enc)
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
+    }
+}
+
+# The file is open in another program that keeps others from it (Excel keeps an open book or CSV
+# locked): ERROR_SHARING_VIOLATION 32 or ERROR_LOCK_VIOLATION 33, possibly wrapped by PowerShell
+function Test-FujiFileBusy {
+    param($Exception)
+    $e = $Exception
+    while ($null -ne $e) {
+        if ($e -is [System.IO.IOException] -and @(32, 33) -contains ($e.HResult -band 0xFFFF)) { return $true }
+        $e = $e.InnerException
+    }
+    return $false
+}
+
+# The bytes of a file another program may have open for writing (a CSV open in Excel can still be read)
+function Read-FujiSharedFileByte {
+    param([Parameter(Mandatory)][string]$Path)
+    try {
+        $fs = New-Object -TypeName System.IO.FileStream -ArgumentList $Path, ([System.IO.FileMode]::Open), ([System.IO.FileAccess]::Read), ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete)
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
+    }
+    try {
+        $ms = New-Object -TypeName System.IO.MemoryStream
+        $fs.CopyTo($ms)
+        return , $ms.ToArray()
+    } finally {
+        $fs.Dispose()
+    }
 }
 
 # The only good copy is never overwritten in place: write a sibling file, read it back, keep the
@@ -2193,15 +2240,19 @@ function Write-FujiTextFile {
 function Write-FujiFileSafely {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Text, [string]$BackupPath)
     $tmp = $Path + '.saving'
-    Write-FujiTextFile -Path $tmp -Text $Text
-    if ((Read-FujiUtf8File -Path $tmp) -cne $Text) {
+    try {
+        Write-FujiTextFile -Path $tmp -Text $Text
+        if ((Read-FujiUtf8File -Path $tmp) -cne $Text) { throw (Get-FujiText 'data.verifyFailed') }
+        if ($BackupPath -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            Copy-Item -LiteralPath $Path -Destination $BackupPath -Force
+        }
+        Copy-Item -LiteralPath $tmp -Destination $Path -Force
+    } catch {
+        # the target is untouched (or the copy failed): no half-written sibling is left behind
         Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-        throw (Get-FujiText 'data.verifyFailed')
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
     }
-    if ($BackupPath -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Copy-Item -LiteralPath $Path -Destination $BackupPath -Force
-    }
-    Copy-Item -LiteralPath $tmp -Destination $Path -Force
     Remove-Item -LiteralPath $tmp -Force
 }
 
@@ -2540,7 +2591,8 @@ function Get-FujiPlaceholderValue {
         return ''
     }
     $up = $Key.ToUpperInvariant()
-    $m = [regex]::Match($up, '^ROW\s*([+\-])\s*([0-9]+)$')
+    # up to 9 digits: a longer number is not a row offset (and would not fit an int)
+    $m = [regex]::Match($up, '^ROW\s*([+\-])\s*([0-9]{1,9})$')
     if ($m.Success) {
         $delta = [int]$m.Groups[2].Value
         if ($m.Groups[1].Value -eq '-') { $delta = -$delta }
@@ -4179,8 +4231,11 @@ function Read-FujiSetting {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $settings }
     try {
         $s = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $path)
+        if ($s -isnot [System.Collections.IDictionary]) { throw (Get-FujiText 'schedule.settingsNotObject') }
     } catch {
-        # a broken settings file only means no schedules
+        # the app still starts (no schedules, standard look), but the file is kept: the next save
+        # writes over it
+        $script:FujiSettingsNotice = Save-FujiBrokenSetting -Path $path -Reason $_.Exception.Message
         return $settings
     }
     # the window's look on this PC: text size, window place and size, where the panes are split
@@ -4197,6 +4252,21 @@ function Read-FujiSetting {
         }
     }
     return $settings
+}
+
+# Set by Read-FujiSetting when the file could not be read: the text shown once after start
+$script:FujiSettingsNotice = ''
+
+# Copies an unreadable settings file to fujikyun_settings_broken_<time>.json; returns the notice text
+function Save-FujiBrokenSetting {
+    param([Parameter(Mandatory)][string]$Path, [string]$Reason)
+    $name = 'fujikyun_settings_broken_' + (Get-FujiTimeStamp) + '.json'
+    try {
+        Copy-Item -LiteralPath $Path -Destination (Join-Path (Split-Path -Path $Path -Parent) $name) -ErrorAction Stop
+        return (Get-FujiText 'schedule.settingsBroken' $script:FujiSettingsFile $Reason $name)
+    } catch {
+        return (Get-FujiText 'schedule.settingsBrokenNotCopied' $script:FujiSettingsFile $Reason)
+    }
 }
 
 function Save-FujiSetting {
@@ -4484,7 +4554,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 7
+$script:FujiTextVersion = 8
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -4853,7 +4923,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.23'
+$script:FujiAppVersion = '2026.10.23.2'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -5457,6 +5527,9 @@ function Initialize-FujiUi {
     $native = Get-FujiNativeType
     [void]$native::SetProcessDPIAware()
     [System.Windows.Forms.Application]::EnableVisualStyles()
+    # an error no handler caught (in any event of any window) goes to the log, instead of the .NET
+    # "unhandled exception" box that offers to quit the app
+    [System.Windows.Forms.Application]::add_ThreadException({ param($Sender, $E) Write-FujiUnexpectedError -ErrorObject $E.Exception })
     try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch { $null = $_ }
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
     try { $script:Ui.Scale = $g.DpiX / 96.0 * $Zoom } finally { $g.Dispose() }
@@ -5492,11 +5565,29 @@ function Invoke-FujiUi {
     try {
         & $Action
     } catch {
+        Write-FujiUnexpectedError -ErrorObject $_
+    }
+}
+
+# Logs an unexpected error (an ErrorRecord, or an exception from the message loop) with the place
+# in the script where it happened
+function Write-FujiUnexpectedError {
+    param($ErrorObject)
+    try {
+        $record = $ErrorObject
+        if ($record -is [System.Management.Automation.IContainsErrorRecord]) { $record = $record.ErrorRecord }
+        $message = $ErrorObject.Message
+        if ($ErrorObject -is [System.Management.Automation.ErrorRecord]) { $message = $ErrorObject.Exception.Message }
         # The innermost place in the script (InvocationInfo only names the outermost call)
         $where = ''
-        $trace = [string]$_.ScriptStackTrace
-        if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
-        Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $_.Exception.Message) + $where) -Level 'error'
+        if ($record -is [System.Management.Automation.ErrorRecord]) {
+            $trace = [string]$record.ScriptStackTrace
+            if ($trace) { $where = ' [' + ($trace -split "`r?`n")[0].Trim() + ']' }
+        }
+        Write-FujiUiLog -Message ((Get-FujiText 'gui.unexpected' $message) + $where) -Level 'error'
+    } catch {
+        # the log itself failed: nothing more can be done without a box that stops the app
+        $null = $_
     }
 }
 
@@ -10203,6 +10294,10 @@ function Invoke-FujiNameClick {
     $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
     Write-FujiUiLog -Message (Get-FujiText 'gui.started' $script:FujiAppVersion)
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
+    if ($script:FujiSettingsNotice) {
+        Write-FujiUiLog -Message $script:FujiSettingsNotice -Level 'error'
+        $script:Ed.Notices.Add($script:FujiSettingsNotice)
+    }
     $textOld = Test-FujiTextVersion
     if ($textOld) {
         Write-FujiUiLog -Message $textOld -Level 'error'
@@ -10219,6 +10314,8 @@ function Invoke-FujiNameClick {
     if ($_.InvocationInfo) { $detail += "`r`n" + $_.InvocationInfo.ScriptName + ':' + $_.InvocationInfo.ScriptLineNumber }
     $message = 'Fujikyun could not start.' + "`r`n" + $detail
     if ($textReady) { $message = Get-FujiText 'gui.startupError' $detail }
+    # kept in the log file too (when it is set up), for a question about it later
+    try { [void](Write-FujiLogFile -Message $message -Level 'error') } catch { $null = $_ }
     try {
         Add-Type -AssemblyName System.Windows.Forms
         [void][System.Windows.Forms.MessageBox]::Show($message, 'Fujikyun', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)

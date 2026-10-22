@@ -57,6 +57,10 @@ try {
     $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
     Write-FujiUiLog -Message (Get-FujiText 'gui.started' $script:FujiAppVersion)
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
+    if ($script:FujiSettingsNotice) {
+        Write-FujiUiLog -Message $script:FujiSettingsNotice -Level 'error'
+        $script:Ed.Notices.Add($script:FujiSettingsNotice)
+    }
     $textOld = Test-FujiTextVersion
     if ($textOld) {
         Write-FujiUiLog -Message $textOld -Level 'error'
@@ -73,6 +77,8 @@ try {
     if ($_.InvocationInfo) { $detail += "`r`n" + $_.InvocationInfo.ScriptName + ':' + $_.InvocationInfo.ScriptLineNumber }
     $message = 'Fujikyun could not start.' + "`r`n" + $detail
     if ($textReady) { $message = Get-FujiText 'gui.startupError' $detail }
+    # kept in the log file too (when it is set up), for a question about it later
+    try { [void](Write-FujiLogFile -Message $message -Level 'error') } catch { $null = $_ }
     try {
         Add-Type -AssemblyName System.Windows.Forms
         [void][System.Windows.Forms.MessageBox]::Show($message, 'Fujikyun', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)

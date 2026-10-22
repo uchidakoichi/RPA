@@ -166,7 +166,13 @@ function New-FujiSampleData {
 function Read-FujiMacroFile {
     param([Parameter(Mandatory)][hashtable]$Editor, [Parameter(Mandatory)][string]$Path)
     try {
-        return (ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $Path))
+        $obj = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $Path)
+        # JSON, but not a macros file (another program's file, or one cut short by hand): never
+        # read as "no macros", which the next save would write over the file
+        if ($obj -isnot [System.Collections.IDictionary] -or -not $obj.Contains('macros') -or $obj['macros'] -isnot [System.Collections.IList]) {
+            throw (Get-FujiText 'editor.notMacroFile')
+        }
+        return $obj
     } catch {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.readFailed' $Path $_.Exception.Message) -Level 'error'
         return $null
@@ -947,7 +953,13 @@ function Import-FujiEditorCsv {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.noPath') -Level 'warn'
         return @{ Ok = $false; HeaderForced = $false }
     }
-    if (-not (Test-Path -LiteralPath $p -PathType Leaf)) {
+    try {
+        # a path with characters Windows does not allow (| < > ...) throws here too
+        $found = Test-Path -LiteralPath $p -PathType Leaf
+    } catch {
+        $found = $false
+    }
+    if (-not $found) {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.csv.notFound' $p) -Level 'error'
         return @{ Ok = $false; HeaderForced = $false }
     }
