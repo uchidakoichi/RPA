@@ -1,6 +1,6 @@
 {
   "sentinel": "ふじキュン",
-  "textVersion": 4,
+  "textVersion": 5,
   "date": {
     "eras": [
       "令和",
@@ -272,6 +272,7 @@
   },
   "gui": {
     "title": "ふじキュン♡のおしごとロボット",
+    "titleVersion": "{0}　（バージョン {1}）",
     "welcome": "ふじキュン♡のおしごとロボットへようこそキュン♡ 今日もいっしょにがんばろうね！",
     "workDir": "📁 作業フォルダ: {0}",
     "startupError": "起動できなかったキュン…\n{0}",
@@ -889,6 +890,7 @@
     "colResult": "結果",
     "colItem": "項目",
     "colDetail": "内容",
+    "version": "ふじキュンのバージョン",
     "powershell": "PowerShell",
     "languageMode": "PowerShellの言語モード",
     "folder": "作業フォルダへの書き込み",

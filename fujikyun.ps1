@@ -4306,7 +4306,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 3
+$script:FujiTextVersion = 5
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -4667,6 +4667,15 @@ function Test-FujiWindowCondition {
     if ($Context.ContainsKey('WindowExists')) { return [bool](& $Context.WindowExists $Title) }
     return $false
 }
+
+# ===== src/Version.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Version of the app, shown in the title bar and in the environment check
+#  The release date (year.month.day; a second release on the same day adds .2). Raise it whenever
+#  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiAppVersion = '2026.10.22'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -5364,6 +5373,7 @@ function Get-FujiDiagnostic {
     $hints = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $add = { param($Ok, $Key, $Detail) $items.Add(@([bool]$Ok, (Get-FujiText ('diag.' + $Key)), [string]$Detail)) }
 
+    & $add $true 'version' $script:FujiAppVersion
     $mode = [string]$ExecutionContext.SessionState.LanguageMode
     & $add $true 'powershell' ('{0} {1}' -f $PSVersionTable.PSEdition, $PSVersionTable.PSVersion)
     & $add ($mode -eq 'FullLanguage') 'languageMode' $mode
@@ -5561,7 +5571,7 @@ $script:TextFlags = $null   # set by Show-FujiMainForm (needs Windows Forms load
 function Show-FujiMainForm {
     $script:TextFlags = [System.Windows.Forms.TextFormatFlags]'NoPrefix, SingleLine, VerticalCenter, EndEllipsis'
     $form = New-Object -TypeName System.Windows.Forms.Form
-    $form.Text = Get-FujiText 'gui.title'
+    $form.Text = Get-FujiText 'gui.titleVersion' (Get-FujiText 'gui.title') $script:FujiAppVersion
     $form.Font = $script:Ui.Font
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
     $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea

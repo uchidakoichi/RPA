@@ -360,7 +360,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <hr>
 <h2 id="18-環境チェック">18. 環境チェック</h2>
 <p>［🩺 環境チェック］を押すと、その端末で使える機能を調べて一覧にします。</p>
-<div class="table-wrap"><table><thead><tr><th>項目</th><th>NG のときに使えない機能</th></tr></thead><tbody><tr><td>PowerShell</td><td>（版の表示）</td></tr><tr><td>PowerShellの言語モード</td><td>FullLanguage 以外（組織の AppLocker / WDAC の設定）では、多くの機能が動きません</td></tr><tr><td>作業フォルダへの書き込み</td><td>マクロの保存、各種CSV・画像の保存</td></tr><tr><td>クリップボード</td><td>TEXT・CSV・COPY</td></tr><tr><td>アラーム・完了音のファイル</td><td>アラーム・完了音（鳴らせないときは Windows の警告音）</td></tr><tr><td>Excel</td><td>EXCEL_READ・EXCEL_WRITE</td></tr><tr><td>Outlook</td><td>MAIL の Outlook 送信（mailto は使えます）</td></tr><tr><td>名前でクリック（UIAutomation）</td><td>CLICK_NAME・FIELD_SET・FIELD_GET・TABLE_READ・［🎯 部品を指す］</td></tr><tr><td>C# のその場コンパイル</td><td>CLICK_IMG・記録</td></tr><tr><td>文字認識（OCR）</td><td>CLICK_TEXT・READ_TEXT（使える言語も表示します。日本語がなければ Windows の設定で追加します）</td></tr><tr><td>Windowsのタスク スケジューラ</td><td>⏰ 予定の Windows 登録（ふじキュンを開いているあいだの予定は動きます）</td></tr><tr><td>画面の大きさ（拡大率）・ウィンドウ一覧</td><td>（情報の表示）</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>NG のときに使えない機能</th></tr></thead><tbody><tr><td>ふじキュンのバージョン</td><td>（版の表示。タイトルバーにも出ています）</td></tr><tr><td>PowerShell</td><td>（版の表示）</td></tr><tr><td>PowerShellの言語モード</td><td>FullLanguage 以外（組織の AppLocker / WDAC の設定）では、多くの機能が動きません</td></tr><tr><td>作業フォルダへの書き込み</td><td>マクロの保存、各種CSV・画像の保存</td></tr><tr><td>クリップボード</td><td>TEXT・CSV・COPY</td></tr><tr><td>アラーム・完了音のファイル</td><td>アラーム・完了音（鳴らせないときは Windows の警告音）</td></tr><tr><td>Excel</td><td>EXCEL_READ・EXCEL_WRITE</td></tr><tr><td>Outlook</td><td>MAIL の Outlook 送信（mailto は使えます）</td></tr><tr><td>名前でクリック（UIAutomation）</td><td>CLICK_NAME・FIELD_SET・FIELD_GET・TABLE_READ・［🎯 部品を指す］</td></tr><tr><td>C# のその場コンパイル</td><td>CLICK_IMG・記録</td></tr><tr><td>文字認識（OCR）</td><td>CLICK_TEXT・READ_TEXT（使える言語も表示します。日本語がなければ Windows の設定で追加します）</td></tr><tr><td>Windowsのタスク スケジューラ</td><td>⏰ 予定の Windows 登録（ふじキュンを開いているあいだの予定は動きます）</td></tr><tr><td>画面の大きさ（拡大率）・ウィンドウ一覧</td><td>（情報の表示）</td></tr></tbody></table></div>
 <p>NG のときは、一覧の下にどうすればよいかのヒントが出ます。結果はログにも残るので、問い合わせのときに便利です。</p>
 <hr>
 <h2 id="19-キーボードショートカット">19. キーボードショートカット</h2>
@@ -5830,6 +5830,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <hr>
 <h3 id="q-文字が小さくて読みにくい">Q. 文字が小さくて読みにくい</h3>
 <p>画面の上の <strong>［🔠 文字の大きさ］</strong> で、115%・130%・150% などを選びます。ふじキュンを起動し直すと、文字とボタンが大きくなります。この PC だけの設定です（<code>fujikyun_settings.json</code> に保存されます）。</p>
+<h3 id="q-使っているふじキュンのバージョンを知りたい">Q. 使っているふじキュンのバージョンを知りたい</h3>
+<p>タイトルバーの「（バージョン 2026.10.22）」のように、名前の後ろに出ています。<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」でも確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <h3 id="q-アプリの中から説明書を読みたい">Q. アプリの中から説明書を読みたい</h3>
 <p><strong>［📖 説明書］</strong> から開けます。F1 キーで、選んでいるステップのコマンドの説明が開きます。「説明書が見つからない」と出るときは、GitHub の <code>dist</code> フォルダにある <code>fujikyun_docs_samples.zip</code> を、ふじキュンのフォルダに展開してください。</p>
 <h2 id="音アラーム">音・アラーム</h2>
