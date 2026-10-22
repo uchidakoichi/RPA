@@ -5,7 +5,7 @@
 #  reached through a small local page that forwards to it: a file opened by Windows loses #anchor.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')
+$script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup', 'changes')
 # Read on GitHub when the pages are not on this PC (no #anchor there: GitHub names its headings itself)
 $script:FujiDocsOnline = 'https://github.com/uchidakoichi/RPA/blob/master/docs/src/'
 

@@ -947,7 +947,7 @@ function Test-FujiBreakableStep {
 #  reached through a small local page that forwards to it: a file opened by Windows loses #anchor.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')
+$script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup', 'changes')
 # Read on GitHub when the pages are not on this PC (no #anchor there: GitHub names its headings itself)
 $script:FujiDocsOnline = 'https://github.com/uchidakoichi/RPA/blob/master/docs/src/'
 
@@ -2126,6 +2126,39 @@ function Write-FujiFileSafely {
     Remove-Item -LiteralPath $tmp -Force
 }
 
+# ===== src/Instance.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  One app per folder: a second start in the same folder would write the same temp and macros
+#  files as the first one, so it is refused. Apps in different folders run side by side.
+# ---------------------------------------------------------------------------------------------
+
+# Named after the folder (full path, case ignored): Local\FujikyunRPA_<sha256 of the path>
+function Get-FujiAppLockName {
+    param([Parameter(Mandatory)][string]$Directory)
+    $path = [System.IO.Path]::GetFullPath($Directory).TrimEnd('\', '/').ToUpperInvariant()
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($path))
+    } finally {
+        $sha.Dispose()
+    }
+    return ('Local\FujikyunRPA_' + (-join ($hash | ForEach-Object { $_.ToString('x2') })))
+}
+
+# The lock (a mutex owned by this thread; keep it until the app ends) or $null when another app has it
+function Enter-FujiAppLock {
+    param([Parameter(Mandatory)][string]$Directory)
+    $mutex = New-Object -TypeName System.Threading.Mutex -ArgumentList $false, (Get-FujiAppLockName -Directory $Directory)
+    try {
+        if ($mutex.WaitOne(0)) { return $mutex }
+    } catch [System.Threading.AbandonedMutexException] {
+        # the app that had it ended without letting go (it was killed): the lock is ours now
+        return $mutex
+    }
+    $mutex.Dispose()
+    return $null
+}
+
 # ===== src/Json.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  JSON
@@ -2215,6 +2248,69 @@ function ConvertTo-FujiJson {
         return '[' + $nl + ($parts -join (',' + $nl)) + $nl + $pad + ']'
     }
     return (ConvertTo-FujiJsonString -Value ([string]$InputObject))
+}
+
+# ===== src/Log.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Log file: every line of the log pane is also written to fujikyun_logs\fujikyun_log_<date>.txt,
+#  so the log is still there after the app is closed (for example for a question about an error).
+#  Files older than FujiLogKeepDays days are removed at start.
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiLogFolder = 'fujikyun_logs'
+$script:FujiLogKeepDays = 30
+# @{ Directory; Failed } once Initialize-FujiLogFile ran; $null = not written
+$script:FujiLogFile = $null
+
+# fujikyun_log_2026-10-22.txt
+function Get-FujiLogFileName {
+    param([datetime]$Date)
+    return ('fujikyun_log_' + $Date.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture) + '.txt')
+}
+
+# Makes the log folder in Directory and removes log files older than KeepDays (by the date in the name).
+# Returns the names removed.
+function Initialize-FujiLogFile {
+    param([Parameter(Mandatory)][string]$Directory, [datetime]$Now = (Get-Date))
+    $dir = Join-Path $Directory $script:FujiLogFolder
+    $script:FujiLogFile = @{ Directory = $dir; Failed = $false }
+    $removed = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    try {
+        if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir -ErrorAction Stop) }
+        $oldest = $Now.Date.AddDays(-$script:FujiLogKeepDays)
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_log_*.txt')) {
+            $m = [regex]::Match($f.Name, '^fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt$')
+            if (-not $m.Success) { continue }
+            $day = [datetime]::MinValue
+            if (-not [datetime]::TryParseExact($m.Groups[1].Value, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$day)) { continue }
+            if ($day -lt $oldest) {
+                Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
+                $removed.Add($f.Name)
+            }
+        }
+    } catch {
+        $script:FujiLogFile.Failed = $true
+    }
+    return , $removed
+}
+
+# Appends one line ("[10:41:02] [error] text"). '' when written (or not set up), otherwise the reason it
+# could not be: after the first failure nothing more is tried, so the caller shows the reason once.
+function Write-FujiLogFile {
+    param([string]$Message, [string]$Level = 'info', [datetime]$Now = (Get-Date))
+    $state = $script:FujiLogFile
+    if ($null -eq $state -or $state.Failed) { return '' }
+    $mark = ''
+    if ($Level -eq 'error' -or $Level -eq 'warn') { $mark = '[' + $Level + '] ' }
+    $line = '[' + $Now.ToString('HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture) + '] ' + $mark + (($Message -replace "`r`n", "`n") -replace "`n", "`r`n") + "`r`n"
+    try {
+        # a new file gets a BOM (Notepad on older Windows reads it as UTF-8); appending adds none
+        [System.IO.File]::AppendAllText((Join-Path $state.Directory (Get-FujiLogFileName -Date $Now)), $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $true))
+    } catch {
+        $state.Failed = $true
+        return $_.Exception.Message
+    }
+    return ''
 }
 
 # ===== src/Native.ps1 =====
@@ -4306,7 +4402,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 5
+$script:FujiTextVersion = 6
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -4966,6 +5062,9 @@ function Invoke-FujiUi {
 # ----------------------------------------------------------------- log
 function Write-FujiUiLog {
     param([string]$Message, [string]$Level = 'info')
+    $fileFailed = Write-FujiLogFile -Message $Message -Level $Level
+    # shown once: after a failure the file is not tried again
+    if ($fileFailed) { Write-FujiUiLog -Message (Get-FujiText 'gui.logFileFailed' $fileFailed) -Level 'warn' }
     $line = '[' + (Get-Date -Format 'HH:mm:ss') + '] ' + $Message
     $box = $script:Ui['Log']
     # Colours need the RichTextBox's window: lines before it exists wait in the buffer
@@ -5524,7 +5623,7 @@ function New-FujiDocMenuButton {
     $b = New-FujiButton -Text (Get-FujiText 'gui.docs') -Tip (Get-FujiText 'gui.docsTip')
     $menu = New-Object -TypeName System.Windows.Forms.ContextMenuStrip
     $menu.Font = $script:Ui.Font
-    foreach ($p in @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup')) {
+    foreach ($p in $script:FujiDocPages) {
         $item = New-Object -TypeName System.Windows.Forms.ToolStripMenuItem -ArgumentList (Get-FujiText ('gui.docPages.' + $p))
         $item.Tag = $p
         $item.Add_Click({ $page = [string]$this.Tag; Invoke-FujiUi { Open-FujiDoc -Page $page } })
@@ -9605,6 +9704,19 @@ function Invoke-FujiNameClick {
     Import-FujiText -Path (Join-Path $here 'fujikyun_ja.json')
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
+    [void](Initialize-FujiLogFile -Directory $here)
+    # one app per folder (kept until the app ends)
+    $script:AppLock = Enter-FujiAppLock -Directory $here
+    if ($null -eq $script:AppLock) {
+        if ($AutoRun) {
+            # the open app runs the schedule itself (it watches the same schedules)
+            [void](Write-FujiLogFile -Message (Get-FujiText 'schedule.autoAlreadyOpen' $AutoRun) -Level 'warn')
+            exit 0
+        }
+        Add-Type -AssemblyName System.Windows.Forms
+        [void][System.Windows.Forms.MessageBox]::Show((Get-FujiText 'gui.alreadyOpen' $here), (Get-FujiText 'gui.title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        exit 0
+    }
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     # this PC's settings first: the text size is needed before any window is made
     $script:Settings = Read-FujiSetting -Directory $here
@@ -9617,6 +9729,7 @@ function Invoke-FujiNameClick {
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
     # An Excel book in the CSV box: Excel reads its first sheet
     $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
+    Write-FujiUiLog -Message (Get-FujiText 'gui.started' $script:FujiAppVersion)
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
     $textOld = Test-FujiTextVersion
     if ($textOld) {

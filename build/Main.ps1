@@ -30,6 +30,19 @@ try {
     Import-FujiText -Path (Join-Path $here 'fujikyun_ja.json')
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
+    [void](Initialize-FujiLogFile -Directory $here)
+    # one app per folder (kept until the app ends)
+    $script:AppLock = Enter-FujiAppLock -Directory $here
+    if ($null -eq $script:AppLock) {
+        if ($AutoRun) {
+            # the open app runs the schedule itself (it watches the same schedules)
+            [void](Write-FujiLogFile -Message (Get-FujiText 'schedule.autoAlreadyOpen' $AutoRun) -Level 'warn')
+            exit 0
+        }
+        Add-Type -AssemblyName System.Windows.Forms
+        [void][System.Windows.Forms.MessageBox]::Show((Get-FujiText 'gui.alreadyOpen' $here), (Get-FujiText 'gui.title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        exit 0
+    }
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     # this PC's settings first: the text size is needed before any window is made
     $script:Settings = Read-FujiSetting -Directory $here
@@ -42,6 +55,7 @@ try {
     $script:FujiCsvHeaderNameOf = { param($Column) Get-FujiCsvHeaderName -Editor $script:Ed -Column $Column }
     # An Excel book in the CSV box: Excel reads its first sheet
     $script:FujiWorkbookReader = { param($Path) Read-FujiWorkbookCsv -Path $Path }
+    Write-FujiUiLog -Message (Get-FujiText 'gui.started' $script:FujiAppVersion)
     Write-FujiUiLog -Message (Get-FujiText 'gui.workDir' $here)
     $textOld = Test-FujiTextVersion
     if ($textOld) {
