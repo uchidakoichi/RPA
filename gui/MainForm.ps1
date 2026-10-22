@@ -15,7 +15,7 @@ $script:TextFlags = $null   # set by Show-FujiMainForm (needs Windows Forms load
 function Show-FujiMainForm {
     $script:TextFlags = [System.Windows.Forms.TextFormatFlags]'NoPrefix, SingleLine, VerticalCenter, EndEllipsis'
     $form = New-Object -TypeName System.Windows.Forms.Form
-    $form.Text = Get-FujiText 'gui.title'
+    $form.Text = Get-FujiText 'gui.titleVersion' (Get-FujiText 'gui.title') $script:FujiAppVersion
     $form.Font = $script:Ui.Font
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
     $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea

@@ -8,6 +8,7 @@ function Get-FujiDiagnostic {
     $hints = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $add = { param($Ok, $Key, $Detail) $items.Add(@([bool]$Ok, (Get-FujiText ('diag.' + $Key)), [string]$Detail)) }
 
+    & $add $true 'version' $script:FujiAppVersion
     $mode = [string]$ExecutionContext.SessionState.LanguageMode
     & $add $true 'powershell' ('{0} {1}' -f $PSVersionTable.PSEdition, $PSVersionTable.PSVersion)
     & $add ($mode -eq 'FullLanguage') 'languageMode' $mode

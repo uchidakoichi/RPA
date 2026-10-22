@@ -60,6 +60,9 @@ function Get-Expected {
 Assert-True ((Get-FujiText 'gui.exportResults' 0) -notlike '*{0}*') 'text: 0 is put in place of {0}'
 Assert-True ((Get-FujiText 'gui.exportResults' '') -notlike '*{0}*') 'text: an empty value is put in place of {0}'
 
+# ----------------------------------------------------------------- version
+Assert-True ($script:FujiAppVersion -match '^\d{4}\.\d{2}\.\d{2}(\.\d+)?$') 'version: year.month.day'
+
 # ----------------------------------------------------------------- golden: CSV
 foreach ($case in $golden.csv) {
     $r = ConvertFrom-FujiCsv -Text $case.text
