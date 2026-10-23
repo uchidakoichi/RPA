@@ -48,10 +48,15 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 - 結果の記録: 実行結果CSV、エラー行CSV（直して再実行）、画面の証跡保存、エラーで止まった瞬間の画面の自動保存
 - 編集: ドラッグ＆ドロップ、ブロックの折りたたみ、無効化、元に戻す（30件）、自動保存、マクロの書出・取込
 
-## ドキュメントと見本CSV（zip でまとめてダウンロード）
+## ドキュメント（ブラウザで読む説明書）
 
-- **[dist/fujikyun_docs_samples.zip](dist/fujikyun_docs_samples.zip)** に、ブラウザで読めるマニュアル（HTML）と見本CSVをまとめています。
-  展開して `docs\index.html` をダブルクリックすると、ネット接続なしでブラウザで読めます。
+- ［📖 説明書］や F1 で開く説明書は、ふじキュンのフォルダの中の `docs` フォルダに置きます。
+  次の7つを、コードと同じく GitHub で RAW 表示して丸ごとメモ帳などに貼り付け、このファイル名で、**文字コード「UTF-8」で保存**します。
+  - `docs/` の `index.html`・`tutorial.html`・`manual.html`・`templates.html`・`faq.html`・`setup.html`・`changes.html`（7つ）
+
+  自治体セキュリティクラウドのダウンロード（無害化）を通すと、HTML の中の仕組み（スクリプトやリンク）が消されて、「…を開きます。」と出るだけになります。HTML も**ダウンロードしないでください**。
+  7つとも置くと、`docs\index.html` をダブルクリックして、ネット接続なしで読めます（`index.html` が説明書の本体で、ほかの6つは `index.html` の該当ページを開くためのファイルです）。
+- ダウンロードできる環境なら、**[dist/fujikyun_docs_samples.zip](dist/fujikyun_docs_samples.zip)** に説明書（HTML）と見本CSVをまとめています。展開して `docs\index.html` をダブルクリックします。
 - GitHub 上で読む場合: [チュートリアル](docs/src/tutorial.md)・[テンプレート解説](docs/src/templates.md)・[操作マニュアル](docs/src/manual.md)・[Q&A](docs/src/faq.md)
 
 ## フォルダ構成

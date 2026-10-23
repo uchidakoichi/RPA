@@ -536,7 +536,7 @@
       "changes": "🆕 更新履歴（バージョンごとの変更）"
     },
     "docTitle": "📖 説明書",
-    "docMissing": "説明書（docs フォルダ）がこのPCに見つからなかったよ。\r\nGitHub の dist フォルダにある fujikyun_docs_samples.zip を、ふじキュンのフォルダ（{0}）に展開すると、ネットにつながっていなくてもアプリから開けるよ。\r\n\r\nいまは GitHub で読む？（ネットにつながる PC だけ）",
+    "docMissing": "説明書（docs フォルダ）がこのPCに見つからなかったよ。\r\nふじキュンのフォルダ（{0}）に docs フォルダを作って、GitHub の docs フォルダにある7つの HTML を、RAW 表示からメモ帳に貼り付けて UTF-8 で保存すると、ネットにつながっていなくてもアプリから開けるよ（くわしくは説明書の「準備」）。\r\n\r\nいまは GitHub で読む？（ネットにつながる PC だけ）",
     "docOnline": "GitHub で読む",
     "docOpened": "📖 説明書をブラウザで開いたよ: {0}",
     "docFailed": "説明書を開けなかった: {0}",
