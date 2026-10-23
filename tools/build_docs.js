@@ -420,6 +420,7 @@ function makeZip(entries) {
 const TOP = "fujikyun_docs_samples/";
 const readme = "﻿ふじキュン♡のおしごとロボット　ドキュメントと見本CSV\r\n\r\n" +
     "・docs\\index.html をダブルクリックすると、ブラウザでマニュアルが開きます（ネット接続は不要です）。\r\n" +
+    "・自治体セキュリティクラウドのダウンロード（無害化）を通した zip では、HTML の中のスクリプトやリンクが消されて読めません。そのときは GitHub の docs フォルダの7つの HTML を、Raw 表示からメモ帳に貼り付けて UTF-8 で保存してください。\r\n" +
     "・samples フォルダには、テンプレートの見本CSV（すべて架空のデータ）が入っています。\r\n" +
     "・ツール本体（リポジトリ直下の5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
 const entries = [{ name: TOP + "README.txt", data: Buffer.from(readme, "utf8") }];
