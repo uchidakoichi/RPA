@@ -62,6 +62,9 @@ Assert-True ((Get-FujiText 'gui.exportResults' '') -notlike '*{0}*') 'text: an e
 
 # ----------------------------------------------------------------- version
 Assert-True ($script:FujiAppVersion -match '^\d{4}\.\d{2}\.\d{2}(\.\d+)?$') 'version: year.month.day'
+# the app file people copy alone carries its license (MIT asks for the notice in every copy)
+$mainHead = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'build') 'Main.ps1'))
+Assert-True ($mainHead.Contains('MIT License') -and $mainHead.Contains('Copyright (c) 2026 Koichi Uchida') -and $mainHead.Contains('THE SOFTWARE IS PROVIDED "AS IS"')) 'license: notice in the app script'
 
 # ----------------------------------------------------------------- log file
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_log_' + [guid]::NewGuid().ToString('N'))
@@ -326,6 +329,7 @@ try {
         Assert-Equal '' (Write-FujiLogFile -Message 'x') ('edge: log file in folder ' + $name)
         Save-FujiSetting -Directory $dir -Settings (Read-FujiSetting -Directory $dir)
         Assert-True (Test-Path -LiteralPath (Join-Path $dir 'fujikyun_settings.json')) ('edge: settings in folder ' + $name)
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $dir 'fujikyun_settings.json.saving'))) ('edge: settings saved without a leftover in folder ' + $name)
     }
     $script:FujiLogFile = $null
 

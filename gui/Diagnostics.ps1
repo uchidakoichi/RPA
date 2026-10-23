@@ -80,6 +80,20 @@ function Get-FujiDiagnostic {
     return @{ Items = $items; Hints = $hints }
 }
 
+# The result as text to paste into a mail or a chat when asking for help (version first)
+function ConvertTo-FujiDiagnosticText {
+    param([Parameter(Mandatory)][hashtable]$Result)
+    $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $lines.Add((Get-FujiText 'diag.title') + '  ' + (Get-Date).ToString('yyyy/MM/dd HH:mm'))
+    foreach ($i in $Result.Items) {
+        $mark = 'OK'
+        if (-not $i[0]) { $mark = 'NG' }
+        $lines.Add(('{0}  {1}  {2}' -f $mark, $i[1], $i[2]).TrimEnd())
+    }
+    foreach ($h in $Result.Hints) { $lines.Add(''); $lines.Add($h) }
+    return [string]::Join("`r`n", $lines.ToArray())
+}
+
 function Show-FujiDiagnostic {
     Write-FujiUiLog -Message (Get-FujiText 'diag.running')
     $r = Get-FujiDiagnostic
@@ -117,6 +131,14 @@ function Show-FujiDiagnostic {
     $close = New-FujiButton -Text (Get-FujiText 'gui.close')
     $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     [void]$bar.Controls.Add($close)
+    $copy = New-FujiButton -Text (Get-FujiText 'diag.copy') -Tip (Get-FujiText 'diag.copyTip') -Tag (ConvertTo-FujiDiagnosticText -Result $r)
+    $copy.Add_Click({
+        $t = [string]$this.Tag
+        Invoke-FujiUi {
+            if (Set-FujiClipboard -Text $t) { Write-FujiUiLog -Message (Get-FujiText 'diag.copied') -Level 'ok' } else { Write-FujiUiLog -Message (Get-FujiText 'diag.copyFailed') -Level 'warn' }
+        }
+    })
+    [void]$bar.Controls.Add($copy)
     [void]$bar.Controls.Add((New-FujiDocButton -Page 'setup' -Anchor (Get-FujiText 'gui.docAnchors.trouble') -TextKey 'gui.docTrouble'))
     [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.diagnostics')))
     $f.CancelButton = $close
