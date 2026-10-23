@@ -1306,17 +1306,14 @@ try {
 }
 
 # manuals opened from the window: every place the app points to exists in the built pages
-# (every file holds every page as a section and shows its own first: no file forwards to another,
-# because a browser may refuse to go from one local file to another)
+# (index.html holds every page as a section; the other files forward to theirs)
 $docHtml = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') 'index.html'))
 $docIds = @{}
 foreach ($pg in $script:FujiDocPages) {
     $section = [regex]::Match($docHtml, '<section class="page" id="page-' + $pg + '"[\s\S]*?</section>').Value
     Assert-True ($section -ne '') ('index.html has the page ' + $pg)
-    $own = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
-    Assert-True ($own.Contains('<body data-page="' + $pg + '">')) ($pg + '.html shows its own page first')
-    foreach ($other in $script:FujiDocPages) { Assert-True ($own.Contains('<section class="page" id="page-' + $other + '"')) ($pg + '.html holds the page ' + $other) }
-    Assert-True (-not $own.Contains('location.replace(')) ($pg + '.html does not forward to another file')
+    $forward = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
+    if ($pg -ne 'index') { Assert-True ($forward.Contains('index.html#page-' + $pg)) ($pg + '.html forwards to its page in index.html') }
     $docIds[$pg] = @{}
     foreach ($m in [regex]::Matches($section, 'id="([^"]+)"')) { $docIds[$pg][[System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)] = $true }
 }

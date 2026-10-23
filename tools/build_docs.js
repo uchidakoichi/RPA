@@ -276,10 +276,10 @@ function decorateTemplates(body) {
     return body.replace('<h2 id="一覧">', FINDER_HTML + '\n<h2 id="一覧">') + "\n" + FINDER_JS;
 }
 
-// Every file holds all the pages and shows one at a time: a browser may refuse a link or a forward
-// from one local file (file://) to another ("'file:' URLs are treated as unique security origins"),
-// but a "#" inside the same file always works. Links between pages become "#page-manual/<heading>";
-// with no "#" the page shown is the file's own (body data-page). Without scripts every page shows.
+// index.html holds all the pages and shows one at a time: a browser may refuse a link from one local
+// file (file://) to another ("'file:' URLs are treated as unique security origins"), but a "#" inside
+// the same file always works. Links between pages become "#page-manual/<heading>"; with no "#" the
+// page shown is body data-page. Without scripts every page shows, one after another.
 const NAV_JS = `<script>
 (function () {
   var pages = [].slice.call(document.querySelectorAll("section.page"));
@@ -357,9 +357,18 @@ function toInternal(body) {
     return body.replace(/href="([\w-]+\.html)(?:#([^"]*))?"/g, (m, file, hash) => built[file] ? 'href="#page-' + pageName(file) + (hash ? "/" + hash : "") + '"' : m);
 }
 const sections = PAGES.map(p => '<section class="page" id="page-' + pageName(p.out) + '" data-title="' + esc(built[p.out].title) + '">\n' + toInternal(built[p.out].html) + "\n</section>").join("\n");
+// index.html holds every page; the other files only forward to their page in it, so links and
+// bookmarks to manual.html#heading (and the app's help buttons) keep working
+function forwarder(p) {
+    const to = "index.html#page-" + pageName(p.out);
+    return "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<title>" + esc(built[p.out].title) + " - ふじキュン♡のおしごとロボット</title>\n" +
+        '<meta http-equiv="refresh" content="0;url=' + to + '">\n' +
+        '<script>location.replace("' + to + '" + (location.hash ? "/" + location.hash.slice(1) : ""));</script>\n' +
+        '</head>\n<body>\n<p><a href="' + to + '">' + esc(built[p.out].title) + "</a> を開きます。</p>\n</body>\n</html>\n";
+}
 const files = {};
 for (const p of PAGES) {
-    files[p.out] = page(p.out, PAGES, sections);
+    files[p.out] = p.out === "index.html" ? page(p.out, PAGES, sections) : forwarder(p);
     fs.writeFileSync(path.join(outDir, p.out), files[p.out], "utf8");
 }
 
