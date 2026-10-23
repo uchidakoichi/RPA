@@ -12,10 +12,10 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 
 ## ダウンロードと起動
 
-1. リポジトリ直下の次の5つを、ローカルの**同じフォルダ**に置きます。
+1. リポジトリ直下の次の5つを、ローカルの**同じフォルダ**に置きます。説明書 `fujikyun_manual.html` も同じフォルダに置くと、アプリの［📖 説明書］と F1 で開けます。
    - `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json`
 
-   自治体セキュリティクラウドのダウンロード機能では**ダウンロードしないでください**（ファイルが壊れることがあります）。GitHub で RAW 表示したコードを丸ごとメモ帳などに貼り付け、このファイル名で保存します。**JSON は文字コード「UTF-8」で保存**してください。
+   自治体セキュリティクラウドのダウンロード機能では**ダウンロードしないでください**（ファイルが壊れることがあります。HTML はスクリプトやリンクが消され、説明書が動かなくなります）。GitHub で RAW 表示したコードを丸ごとメモ帳などに貼り付け、このファイル名で保存します。**JSON と HTML は文字コード「UTF-8」で保存**してください。
 2. `fujikyun.bat` をダブルクリックで起動し、**［🩺 環境チェック］** で使える機能を確認します。
 3. **［📚 テンプレート］** からお手本マクロを作って、動かしてみましょう。
 
@@ -48,15 +48,11 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 - 結果の記録: 実行結果CSV、エラー行CSV（直して再実行）、画面の証跡保存、エラーで止まった瞬間の画面の自動保存
 - 編集: ドラッグ＆ドロップ、ブロックの折りたたみ、無効化、元に戻す（30件）、自動保存、マクロの書出・取込
 
-## ドキュメント（ブラウザで読む説明書）
+## 説明書と見本CSV
 
-- ［📖 説明書］や F1 で開く説明書は、ふじキュンのフォルダの中の `docs` フォルダに置きます。
-  次の7つを、コードと同じく GitHub で RAW 表示して丸ごとメモ帳などに貼り付け、このファイル名で、**文字コード「UTF-8」で保存**します。
-  - `docs/` の `index.html`・`tutorial.html`・`manual.html`・`templates.html`・`faq.html`・`setup.html`・`changes.html`（7つ）
-
-  自治体セキュリティクラウドのダウンロード（無害化）を通すと、HTML の中の仕組み（スクリプトやリンク）が消されて、「…を開きます。」と出るだけになります。HTML も**ダウンロードしないでください**。
-  7つとも置くと、`docs\index.html` をダブルクリックして、ネット接続なしで読めます（`index.html` が説明書の本体で、ほかの6つは `index.html` の該当ページを開くためのファイルです）。
-- ダウンロードできる環境なら、**[dist/fujikyun_docs_samples.zip](dist/fujikyun_docs_samples.zip)** に説明書（HTML）と見本CSVをまとめています。展開して `docs\index.html` をダブルクリックします。
+- 説明書は **`fujikyun_manual.html`** の1ファイルです（目次・準備・チュートリアル・操作マニュアル・テンプレート解説・Q&A・更新履歴）。上のメニューでページを切り替えて読みます。
+  コードと同じく RAW 表示から貼り付けて UTF-8 で保存し、5つのファイルと同じフォルダに置きます。ダブルクリックすると、ネット接続なしでブラウザで読めます。
+- 見本CSV は **[dist/fujikyun_samples.zip](dist/fujikyun_samples.zip)** にまとめています（［📚 テンプレート］から作ると同じCSVが自動で用意されるので、なくても使えます）。ふじキュンのフォルダで展開すると `samples` フォルダになります。
 - GitHub 上で読む場合: [チュートリアル](docs/src/tutorial.md)・[テンプレート解説](docs/src/templates.md)・[操作マニュアル](docs/src/manual.md)・[Q&A](docs/src/faq.md)
 
 ## フォルダ構成
@@ -64,14 +60,14 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 | パス | 内容 |
 | --- | --- |
 | `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json` | ツール本体（利用者に必要なのはこの5つだけ） |
+| `fujikyun_manual.html` | ブラウザで読む説明書（全ページで1ファイル。`docs/src/*.md` から生成） |
 | `check/` | 事前チェックツール（この端末でふじキュンが動くかを調べる） |
 | `src/`・`gui/`・`build/`・`tests/` | 保守用: ソース・組み立て・テスト（説明は [DEVELOP.md](DEVELOP.md)） |
 | `samples/` | テンプレート用の見本CSV（すべて架空のデータ） |
-| `docs/*.html` | ブラウザで読むドキュメント（`docs/src/*.md` から生成） |
 | `docs/src/` | ドキュメントの原稿（Markdown） |
-| `dist/fujikyun_docs_samples.zip` | ドキュメント（HTML）と見本CSVのまとめ |
+| `dist/fujikyun_samples.zip` | 見本CSVのまとめ |
 | `build/Build-FujiTemplateDoc.ps1` | 保守用: `fujikyun_templates.json` から `samples/` と `docs/src/templates.md` を生成 |
-| `tools/build_docs.js` | 保守用: `docs/src/*.md` から `docs/*.html` と zip を生成（Node.js が必要。利用者には不要） |
+| `tools/build_docs.js` | 保守用: `docs/src/*.md` から `fujikyun_manual.html` と zip を生成（Node.js が必要。利用者には不要） |
 
 ## ライセンス
 

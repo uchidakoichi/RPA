@@ -1,6 +1,6 @@
 // Builds the browser-readable manuals and the download package (maintainers only, needs Node.js):
 //   powershell -File build\Build-FujiTemplateDoc.ps1   (regenerates samples/ and docs/src/templates.md)
-//   node tools/build_docs.js        (docs/src/*.md -> docs/*.html, then dist/fujikyun_docs_samples.zip)
+//   node tools/build_docs.js        (docs/src/*.md -> fujikyun_manual.html, then dist/fujikyun_samples.zip)
 // No external packages: a small Markdown converter for the subset the docs use, and a ZIP writer
 // on top of Node's zlib, so the result opens offline in any browser on a municipal PC.
 "use strict";
@@ -10,7 +10,8 @@ const zlib = require("zlib");
 
 const root = path.join(__dirname, "..");
 const srcDir = path.join(root, "docs", "src");
-const outDir = path.join(root, "docs");
+// The one file people put next to fujikyun.ps1 (pasted from GitHub's Raw view like the code files)
+const MANUAL = "fujikyun_manual.html";
 
 const PAGES = [
     { src: "index.md", out: "index.html", nav: "目次" },
@@ -32,7 +33,7 @@ function slug(text) {
 
 function rewriteHref(href) {
     return href
-        .replace(/^\.\.\/\.\.\/samples/, "../samples")
+        .replace(/^\.\.\/\.\.\/samples/, "samples")
         .replace(/^([\w-]+)\.md(#|$)/, "$1.html$2")
         .replace(/^README\.md/, "index.html")
         .replace(/^index\.html/, "index.html");
@@ -276,10 +277,10 @@ function decorateTemplates(body) {
     return body.replace('<h2 id="一覧">', FINDER_HTML + '\n<h2 id="一覧">') + "\n" + FINDER_JS;
 }
 
-// index.html holds all the pages and shows one at a time: a browser may refuse a link from one local
-// file (file://) to another ("'file:' URLs are treated as unique security origins"), but a "#" inside
-// the same file always works. Links between pages become "#page-manual/<heading>"; with no "#" the
-// page shown is body data-page. Without scripts every page shows, one after another.
+// fujikyun_manual.html holds all the pages and shows one at a time: one file to put in place, and a
+// "#" inside the same file always works (a browser may refuse a link from one local file to another).
+// Links between pages become "#page-manual/<heading>"; with no "#" the page shown is body data-page.
+// Without scripts every page shows, one after another.
 const NAV_JS = `<script>
 (function () {
   var pages = [].slice.call(document.querySelectorAll("section.page"));
@@ -340,7 +341,7 @@ const problems = [];
 for (const [name, b] of Object.entries(built)) {
     for (const m of b.html.matchAll(/href="([^"]+)"/g)) {
         const href = m[1];
-        if (/^https?:/.test(href) || href.startsWith("../samples")) { continue; }
+        if (/^https?:/.test(href) || /^samples(\/|$)/.test(href)) { continue; }
         const [file, hash] = href.split("#");
         const target = file === "" ? name : file;
         if (!built[target]) { problems.push(name + ": missing page " + href); continue; }
@@ -357,20 +358,7 @@ function toInternal(body) {
     return body.replace(/href="([\w-]+\.html)(?:#([^"]*))?"/g, (m, file, hash) => built[file] ? 'href="#page-' + pageName(file) + (hash ? "/" + hash : "") + '"' : m);
 }
 const sections = PAGES.map(p => '<section class="page" id="page-' + pageName(p.out) + '" data-title="' + esc(built[p.out].title) + '">\n' + toInternal(built[p.out].html) + "\n</section>").join("\n");
-// index.html holds every page; the other files only forward to their page in it, so links and
-// bookmarks to manual.html#heading (and the app's help buttons) keep working
-function forwarder(p) {
-    const to = "index.html#page-" + pageName(p.out);
-    return "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<title>" + esc(built[p.out].title) + " - ふじキュン♡のおしごとロボット</title>\n" +
-        '<meta http-equiv="refresh" content="0;url=' + to + '">\n' +
-        '<script>location.replace("' + to + '" + (location.hash ? "/" + location.hash.slice(1) : ""));</script>\n' +
-        '</head>\n<body>\n<p><a href="' + to + '">' + esc(built[p.out].title) + "</a> を開きます。</p>\n</body>\n</html>\n";
-}
-const files = {};
-for (const p of PAGES) {
-    files[p.out] = p.out === "index.html" ? page(p.out, PAGES, sections) : forwarder(p);
-    fs.writeFileSync(path.join(outDir, p.out), files[p.out], "utf8");
-}
+fs.writeFileSync(path.join(root, MANUAL), page("index.html", PAGES, sections), "utf8");
 
 // ---------------------------------------------------------------- ZIP (deflate, fixed timestamps)
 const CRC_TABLE = (() => {
@@ -417,19 +405,12 @@ function makeZip(entries) {
     return Buffer.concat(locals.concat([centralBuf, end]));
 }
 
-const TOP = "fujikyun_docs_samples/";
-const readme = "﻿ふじキュン♡のおしごとロボット　ドキュメントと見本CSV\r\n\r\n" +
-    "・docs\\index.html をダブルクリックすると、ブラウザでマニュアルが開きます（ネット接続は不要です）。\r\n" +
-    "・自治体セキュリティクラウドのダウンロード（無害化）を通した zip では、HTML の中のスクリプトやリンクが消されて読めません。そのときは GitHub の docs フォルダの7つの HTML を、Raw 表示からメモ帳に貼り付けて UTF-8 で保存してください。\r\n" +
-    "・samples フォルダには、テンプレートの見本CSV（すべて架空のデータ）が入っています。\r\n" +
-    "・ツール本体（リポジトリ直下の5つのファイル）はこの zip に入っていません。GitHub の README の手順どおり、Raw 表示したコードをメモ帳に貼り付けて保存してください（JSON は UTF-8 で保存）。\r\n";
-const entries = [{ name: TOP + "README.txt", data: Buffer.from(readme, "utf8") }];
-for (const p of PAGES) {
-    entries.push({ name: TOP + "docs/" + p.out, data: Buffer.from(files[p.out], "utf8") });
-}
+// The sample CSVs only: extracted in the folder of fujikyun.ps1 they land in samples\, where the
+// templates and the manual's links look for them
+const entries = [];
 for (const f of fs.readdirSync(path.join(root, "samples")).filter(f => f.endsWith(".csv")).sort()) {
-    entries.push({ name: TOP + "samples/" + f, data: fs.readFileSync(path.join(root, "samples", f)) });
+    entries.push({ name: "samples/" + f, data: fs.readFileSync(path.join(root, "samples", f)) });
 }
 fs.mkdirSync(path.join(root, "dist"), { recursive: true });
-fs.writeFileSync(path.join(root, "dist", "fujikyun_docs_samples.zip"), makeZip(entries));
-console.log("built", PAGES.length, "HTML pages and dist/fujikyun_docs_samples.zip (" + entries.length + " files)");
+fs.writeFileSync(path.join(root, "dist", "fujikyun_samples.zip"), makeZip(entries));
+console.log("built", MANUAL, "(" + PAGES.length + " pages) and dist/fujikyun_samples.zip (" + entries.length + " files)");

@@ -1306,14 +1306,12 @@ try {
 }
 
 # manuals opened from the window: every place the app points to exists in the built pages
-# (index.html holds every page as a section; the other files forward to theirs)
-$docHtml = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') 'index.html'))
+# (fujikyun_manual.html holds every page as a section)
+$docHtml = [System.IO.File]::ReadAllText((Join-Path $psRoot $script:FujiDocFileName))
 $docIds = @{}
 foreach ($pg in $script:FujiDocPages) {
     $section = [regex]::Match($docHtml, '<section class="page" id="page-' + $pg + '"[\s\S]*?</section>').Value
-    Assert-True ($section -ne '') ('index.html has the page ' + $pg)
-    $forward = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'docs') ($pg + '.html')))
-    if ($pg -ne 'index') { Assert-True ($forward.Contains('index.html#page-' + $pg)) ($pg + '.html forwards to its page in index.html') }
+    Assert-True ($section -ne '') ('the manual file has the page ' + $pg)
     $docIds[$pg] = @{}
     foreach ($m in [regex]::Matches($section, 'id="([^"]+)"')) { $docIds[$pg][[System.Net.WebUtility]::HtmlDecode($m.Groups[1].Value)] = $true }
 }
@@ -1327,10 +1325,13 @@ foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual
 $missingTpl = @(foreach ($t in $templates['templates']) { if (-not $docIds['templates'].ContainsKey([string]$t['id'])) { $t['id'] } })
 Assert-Equal 0 $missingTpl.Count ('every template has its anchor in the templates page: ' + ($missingTpl -join ', '))
 $docRoot = Join-Path 'R' 'app'
-$found = Find-FujiDocFile -Directory $docRoot -Page 'manual' -FileExists { param($p) $p -eq (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') }
-Assert-Equal (Join-Path (Join-Path $docRoot (Join-Path 'fujikyun_docs_samples' 'docs')) 'manual.html') $found 'manual found in the extracted zip folder'
-Assert-Equal '' (Find-FujiDocFile -Directory $docRoot -Page 'manual' -FileExists { param($p) $null = $p; $false }) 'no manual here'
-Assert-Equal '' (Find-FujiDocFile -Directory $docRoot -Page '..\x' -FileExists { param($p) $null = $p; $true }) 'only the known pages'
+$found = Find-FujiDocFile -Directory $docRoot -FileExists { param($p) $p -eq (Join-Path $docRoot 'fujikyun_manual.html') }
+Assert-Equal (Join-Path $docRoot 'fujikyun_manual.html') $found 'manual found next to fujikyun.ps1'
+Assert-Equal '' (Find-FujiDocFile -Directory $docRoot -FileExists { param($p) $null = $p; $false }) 'no manual here'
+Assert-Equal 'page-manual' (Get-FujiDocPageAnchor -Page 'manual') 'a page of the manual'
+Assert-Equal 'page-setup/trouble' (Get-FujiDocPageAnchor -Page 'setup' -Anchor 'trouble') 'a heading in a page'
+Assert-Equal 'page-index' (Get-FujiDocPageAnchor -Page '..\x') 'only the known pages'
+Assert-True ((ConvertTo-FujiDocUrl -Path ([System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'fujikyun_manual.html')) -Anchor 'page-manual/a').EndsWith('#page-manual%2Fa')) 'page and heading in one address'
 $docUrl = ConvertTo-FujiDocUrl -Path ([System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'manual.html')) -Anchor ([string][char]0x8868 + 'a b')
 Assert-True ($docUrl.StartsWith('file:///') -and $docUrl.EndsWith('#%E8%A1%A8a%20b')) 'manual address with its place'
 Assert-True ((New-FujiDocForwardHtml -Url 'file:///a"><b>').Contains('url=file:///a&quot;&gt;&lt;b&gt;"')) 'forwarding page keeps the address one attribute'

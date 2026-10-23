@@ -86,7 +86,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `Vision.ps1` | 画像照合（初回だけコンパイルする小さな C#）と、OCR の結果から文字を探す処理 |
 | `Native.ps1` | Windows API の宣言（C# のコンパイルなし）と、ウィンドウ名の照合 |
 | `Credential.ps1` | Windows の資格情報マネージャー（汎用資格情報）の読み書き。CredReadW などを Native.ps1 と同じ方法で宣言し、CREDENTIALW をオフセットで読み書きする |
-| `Docs.ps1` | アプリから開く説明書（`docs\*.html`）の場所探しと、ページ内の位置（#…）へ飛ぶための転送ページ。コマンドごとの説明の位置は `fujikyun_commands.json` の `doc` |
+| `Docs.ps1` | アプリから開く説明書（`fujikyun_manual.html`、全ページで1ファイル）の場所探しと、ページと見出し（#page-…/…）へ飛ぶための転送ページ。コマンドごとの説明の位置は `fujikyun_commands.json` の `doc` |
 | `Editor.ps1` | 編集の操作（起動時の読み込み・一時ファイル・保存・元に戻す・追加・移動・削除・複製・無効化・折りたたみ・取込・書出・テンプレート・CSV の読み込み）。画面から呼ぶだけで、テストできる |
 
 ### gui の中身
