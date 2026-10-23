@@ -1,26 +1,31 @@
 # ---------------------------------------------------------------------------------------------
-#  The manuals (docs\*.html) opened from the window
-#  The pages come with the docs-and-samples zip (dist/fujikyun_docs_samples.zip): extracted into
-#  this folder they are in docs\ or fujikyun_docs_samples\docs\. A place in a page (#anchor) is
-#  reached through a small local page that forwards to it: a file opened by Windows loses #anchor.
+#  The manual opened from the window: fujikyun_manual.html next to fujikyun.ps1 holds every page
+#  and shows the one named in its address (#page-manual/<heading>). That address is reached through
+#  a small local page that forwards to it: a file opened by Windows loses #anchor.
 # ---------------------------------------------------------------------------------------------
 
 $script:FujiDocPages = @('index', 'tutorial', 'manual', 'templates', 'faq', 'setup', 'changes')
+$script:FujiDocFileName = 'fujikyun_manual.html'
 # Read on GitHub when the pages are not on this PC (no #anchor there: GitHub names its headings itself)
 $script:FujiDocsOnline = 'https://github.com/uchidakoichi/RPA/blob/master/docs/src/'
 
-# The page's file, or '' when it is not here. FileExists: { param($Path) ... } (the runner's Io style)
+# The manual's file, or '' when it is not here. FileExists: { param($Path) ... } (the runner's Io style)
 function Find-FujiDocFile {
-    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][string]$Page, [Parameter(Mandatory)][scriptblock]$FileExists)
-    if ($script:FujiDocPages -notcontains $Page) { return '' }
-    foreach ($folder in @('docs', (Join-Path 'fujikyun_docs_samples' 'docs'))) {
-        $p = Join-Path (Join-Path $Directory $folder) ($Page + '.html')
-        if (& $FileExists $p) { return $p }
-    }
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][scriptblock]$FileExists)
+    $p = Join-Path $Directory $script:FujiDocFileName
+    if (& $FileExists $p) { return $p }
     return ''
 }
 
-# file:///C:/.../manual.html#anchor (the anchor percent-encoded; browsers match it to the heading id)
+# The address of a page, and of a heading in it, inside the manual: page-manual or page-manual/<heading>
+function Get-FujiDocPageAnchor {
+    param([Parameter(Mandatory)][string]$Page, [string]$Anchor = '')
+    if ($script:FujiDocPages -notcontains $Page) { $Page = 'index' }
+    if ($Anchor) { return 'page-' + $Page + '/' + $Anchor }
+    return 'page-' + $Page
+}
+
+# file:///C:/.../fujikyun_manual.html#anchor (the anchor percent-encoded; browsers match it to the heading id)
 function ConvertTo-FujiDocUrl {
     param([Parameter(Mandatory)][string]$Path, [AllowEmptyString()][string]$Anchor = '')
     $url = (New-Object -TypeName System.Uri -ArgumentList $Path, ([System.UriKind]::Absolute)).AbsoluteUri
