@@ -59,7 +59,8 @@ function Save-FujiBrokenSetting {
 
 function Save-FujiSetting {
     param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
-    Write-FujiTextFile -Path (Join-Path $Directory $script:FujiSettingsFile) -Text (ConvertTo-FujiJson -InputObject $Settings -Indent 2)
+    # written beside and then put in place, so a stop halfway does not leave a cut-off file
+    Write-FujiFileSafely -Path (Join-Path $Directory $script:FujiSettingsFile) -Text (ConvertTo-FujiJson -InputObject $Settings -Indent 2)
 }
 
 function Get-FujiScheduleValue {
