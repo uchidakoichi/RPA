@@ -80,7 +80,7 @@ function Get-FujiDiagnostic {
     return @{ Items = $items; Hints = $hints }
 }
 
-# The result as text to paste into a mail or a chat when asking for help (version first)
+# The result as text to paste and keep (version first)
 function ConvertTo-FujiDiagnosticText {
     param([Parameter(Mandatory)][hashtable]$Result)
     $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
