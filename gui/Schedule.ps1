@@ -225,6 +225,7 @@ function Start-FujiAutoRun {
     foreach ($x in $script:Settings.schedules) { if ($x.id -eq $script:AutoRunId) { $s = $x } }
     if ($null -eq $s) {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.autoMissing' $script:AutoRunId) -Level 'warn'
+        Complete-FujiAutoRunStart
         return
     }
     Write-FujiUiLog -Message (Get-FujiText 'schedule.autoStart') -Level 'run'
@@ -237,13 +238,26 @@ function Start-FujiAutoRun {
             Invoke-FujiUi {
                 if ($script:RunCtl.Running -or (Test-FujiDialogOpen)) {
                     Write-FujiUiLog -Message (Get-FujiText 'schedule.autoBusy') -Level 'warn'
+                    Complete-FujiAutoRunStart
                     return
                 }
                 $status = Invoke-FujiSchedule -Schedule $sched
-                if ($status -eq 'done' -and [bool](Get-FujiScheduleValue $sched 'closeAfter' $false)) { Start-FujiAutoClose }
+                if ($status -eq 'done' -and [bool](Get-FujiScheduleValue $sched 'closeAfter' $false)) { Start-FujiAutoClose } else { Complete-FujiAutoRunStart }
             }
         })
     $t.Start()
+}
+
+# After the scheduled run (the window stays open): what the start held back so nobody had to answer
+# it first - the last time's unsaved work, and the start notices
+function Complete-FujiAutoRunStart {
+    if ($script:Ed.TempPending) {
+        $ask = (Get-FujiText 'editor.tempAskAfterRun') + "`r`n`r`n" + (Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp)
+        $restore = (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
+        [void](Resolve-FujiEditorTemp -Editor $script:Ed -Restore $restore)
+        Update-FujiAll
+    }
+    Show-FujiStartNotice
 }
 
 # Closes the app 10 seconds after a scheduled run finished, unless someone clicks meanwhile
@@ -260,6 +274,8 @@ function Start-FujiAutoClose {
                 if ([System.Windows.Forms.Control]::MouseButtons -ne [System.Windows.Forms.MouseButtons]::None) {
                     $a.Enabled = $false
                     $this.Stop()
+                    # someone is at the PC and keeps the window: now the questions held back
+                    Invoke-FujiUi { Complete-FujiAutoRunStart }
                     return
                 }
                 $a.Elapsed += 250
@@ -283,6 +299,16 @@ function Register-FujiScheduleTask {
     if ((Get-FujiScheduleKind $Schedule) -ne 'TIME') {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.registerTimeOnly') -Level 'warn'
         return
+    }
+    # the task starts the app, which reads the saved macros: unsaved changes would not be in the run
+    if ($script:Ed.Dirty) {
+        $answer = Show-FujiChoice -Title (Get-FujiText 'schedule.saveTitle') -Message (Get-FujiText 'schedule.saveAsk') -Buttons @((Get-FujiText 'schedule.saveAndRegister'), (Get-FujiText 'schedule.registerNoSave'), (Get-FujiText 'gui.cancel'))
+        if ($answer -eq 0) {
+            Save-FujiUi
+            if ($script:Ed.Dirty) { return }
+        } elseif ($answer -ne 1) {
+            return
+        }
     }
     $name = Get-FujiTaskName -Schedule $Schedule
     try {

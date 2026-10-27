@@ -91,6 +91,8 @@ try {
         }
     }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
+        # started by a scheduled task: nobody may be at the PC, so the run is not held up by a question
+        if ($script:AutoRunId) { return 'later' }
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
         (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
     }

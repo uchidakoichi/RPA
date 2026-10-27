@@ -41,6 +41,9 @@ function New-FujiEditor {
         SaveBlockReason = ''
         Notices         = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Csv             = (New-FujiCsvState)
+        # a temp file left from the last time, not asked about yet (start by a scheduled task): it is
+        # neither read nor written over until Restore-FujiEditorTemp / Move-FujiTempFileAside
+        TempPending     = $false
     }
 }
 
@@ -231,13 +234,19 @@ function Copy-FujiUnreadableFile {
 }
 
 # Startup (the HTA's loadInitialData). AskRestoreTemp: { $true = restore the temp file }
+# AskRestoreTemp: $true restore the temp file, $false move it aside, 'later' leave it for now
+# (a scheduled run runs the saved macros and asks after it)
 function Initialize-FujiEditorData {
     param([Parameter(Mandatory)][hashtable]$Editor, [Parameter(Mandatory)][scriptblock]$AskRestoreTemp)
     $loaded = $null
     $tempPath = Get-FujiEditorPath $Editor $script:FujiFileNames.Temp
     $mainPath = Get-FujiEditorPath $Editor $script:FujiFileNames.Macro
     if (Test-Path -LiteralPath $tempPath -PathType Leaf) {
-        if (& $AskRestoreTemp) {
+        $answer = & $AskRestoreTemp
+        if ($answer -is [string] -and $answer -eq 'later') {
+            $Editor.TempPending = $true
+            Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.tempLater' $script:FujiFileNames.Macro) -Level 'warn'
+        } elseif ($answer) {
             $loaded = Read-FujiMacroFile -Editor $Editor -Path $tempPath
             if ($null -ne $loaded) {
                 $Editor.Dirty = $true
@@ -289,8 +298,32 @@ function Initialize-FujiEditorData {
     Add-FujiHistory -Editor $Editor -Description (Get-FujiText 'editor.historyStart')
 }
 
+# The temp file left from the last time, asked about after a scheduled run: restore it ($true when
+# it was read) or move it aside
+function Resolve-FujiEditorTemp {
+    param([Parameter(Mandatory)][hashtable]$Editor, [bool]$Restore)
+    if (-not $Editor.TempPending) { return $false }
+    $Editor.TempPending = $false
+    if (-not $Restore) { [void](Move-FujiTempFileAside -Editor $Editor); return $false }
+    $loaded = Read-FujiMacroFile -Editor $Editor -Path (Get-FujiEditorPath $Editor $script:FujiFileNames.Temp)
+    if ($null -eq $loaded) { return $false }
+    $Editor.Data = (ConvertTo-FujiMacroData -Source $loaded).Data
+    $Editor.MacroIndex = 0
+    $Editor.Selected = -1
+    Initialize-FujiMacroList -Editor $Editor
+    $Editor.History.Clear()
+    $Editor.HistoryPos = -1
+    Add-FujiHistory -Editor $Editor -Description (Get-FujiText 'editor.historyStart')
+    $Editor.Dirty = $true
+    Test-FujiEditorDataVersion -Editor $Editor -Source $loaded -What (Get-FujiText 'editor.whatTemp')
+    Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.tempRestored') -Level 'ok'
+    return $true
+}
+
 function Save-FujiEditorTemp {
     param([Parameter(Mandatory)][hashtable]$Editor)
+    # the last time's unsaved work is still to be asked about: never written over
+    if ($Editor.TempPending) { return }
     try {
         Write-FujiTextFile -Path (Get-FujiEditorPath $Editor $script:FujiFileNames.Temp) -Text (ConvertTo-FujiMacroJson -Data $Editor.Data)
     } catch {
@@ -310,7 +343,8 @@ function Save-FujiEditorData {
         return $msg
     }
     $temp = Get-FujiEditorPath $Editor $script:FujiFileNames.Temp
-    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    # the last time's unsaved work, not asked about yet, is not this session's temp file: kept
+    if (-not $Editor.TempPending -and (Test-Path -LiteralPath $temp)) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
     $Editor.Dirty = $false
     Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.saved' $script:FujiFileNames.Macro $script:FujiFileNames.Backup) -Level 'ok'
     return ''
