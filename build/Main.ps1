@@ -84,10 +84,11 @@ try {
         Write-FujiUiLog -Message $script:FujiSettingsNotice -Level 'error'
         $script:Ed.Notices.Add($script:FujiSettingsNotice)
     }
-    $textOld = Test-FujiTextVersion
-    if ($textOld) {
-        Write-FujiUiLog -Message $textOld -Level 'error'
-        $script:Ed.Notices.Add($textOld)
+    foreach ($old in @((Test-FujiTextVersion), (Test-FujiCommandsVersion))) {
+        if ($old) {
+            Write-FujiUiLog -Message $old -Level 'error'
+            $script:Ed.Notices.Add($old)
+        }
     }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp

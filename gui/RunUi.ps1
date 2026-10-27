@@ -338,10 +338,22 @@ function Test-FujiTouchPause {
     } finally {
         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
     }
-    if (-not (Test-FujiUserInput -State $c.Input -LastInput $last -Now $c.Clock.ElapsedMilliseconds)) { return }
+    if (-not (Test-FujiUserInput -State $c.Input -LastInput $last -Now $c.Clock.ElapsedMilliseconds -Pressed { Test-FujiAnyKeyDown })) { return }
     Switch-FujiRunPause
     Write-FujiUiLog -Message (Get-FujiText 'run.touchPaused') -Level 'warn'
     [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
+}
+
+# A key or a mouse button held down now (GetAsyncKeyState high bit; only "down now": the "pressed
+# since the last call" bit also keeps the robot's own keys). 0xE8: the robot's key that brings a
+# window to the front. The cursor moving is not a key.
+function Test-FujiAnyKeyDown {
+    $native = Get-FujiNativeType
+    for ($vk = 1; $vk -le 254; $vk++) {
+        if ($vk -eq 0xE8) { continue }
+        if (([int]$native::GetAsyncKeyState($vk) -band 0x8000) -ne 0) { return $true }
+    }
+    return $false
 }
 
 # The robot's own keys and clicks are not someone touching the PC

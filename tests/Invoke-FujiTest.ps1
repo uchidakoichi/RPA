@@ -1471,12 +1471,15 @@ Assert-True ((Get-FakeCall 'ALARM') -eq 'ALARM' -and (Get-FakeCall 'KEYS') -eq '
 
 # ----------------------------------------------------------------- pause when touched
 $ts = @{ Mark = $null; RobotUntil = 0 }
-Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1000)) 'touch: the first look only takes the input as it is'
-Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1100)) 'touch: no new input'
+$down = { $true }
+$up = { $false }
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1000 -Pressed $down)) 'touch: the first look only takes the input as it is'
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1100 -Pressed $down)) 'touch: no new input'
 $ts.RobotUntil = 1700
-Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 150 -Now 1200) -and $ts.Mark -eq 150) 'touch: input during the robot''s own keys and clicks is not a person'
-Assert-True (Test-FujiUserInput -State $ts -LastInput 160 -Now 1800) 'touch: new input after that is a person'
-Assert-True (-not (Test-FujiUserInput -State @{ Mark = [uint32]4294967200; RobotUntil = 0 } -LastInput ([uint32]4294967200) -Now 5)) 'touch: tick counts above 2^31'
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 150 -Now 1200 -Pressed $down) -and $ts.Mark -eq 150) 'touch: input during the robot''s own keys and clicks is not a person'
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 155 -Now 1800 -Pressed $up) -and $ts.Mark -eq 155) 'touch: the cursor only moving (nothing pressed) does not pause'
+Assert-True (Test-FujiUserInput -State $ts -LastInput 160 -Now 1810 -Pressed $down) 'touch: a key or button pressed after that is a person'
+Assert-True (-not (Test-FujiUserInput -State @{ Mark = [uint32]4294967200; RobotUntil = 0 } -LastInput ([uint32]4294967200) -Now 5 -Pressed $down)) 'touch: tick counts above 2^31'
 
 # ----------------------------------------------------------------- check before a run
 $chk = { param($Cmds, [string[]]$Header = $null, [int]$Columns = -1, [object[]]$Other = @(), [string[]]$Have = @())
@@ -1642,6 +1645,11 @@ Assert-True ($null -eq (Select-FujiWindow -Windows $wins -Title 'memo pad') -and
 
 # ----------------------------------------------------------------- every text the scripts ask for exists
 Assert-Equal '' (Test-FujiTextVersion) 'fujikyun_ja.json has the text version the scripts need'
+Assert-Equal '' (Test-FujiCommandsVersion) 'fujikyun_commands.json has the version the scripts need'
+$keepCommands = $script:FujiCommands
+$script:FujiCommands = [ordered]@{ commands = $keepCommands['commands'] }
+Assert-Equal (Get-FujiText 'gui.commandsOld' 0 $script:FujiCommandsVersion) (Test-FujiCommandsVersion) 'an old fujikyun_commands.json (no version) is reported'
+$script:FujiCommands = $keepCommands
 $keyFiles = @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'gui') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $psRoot 'build/Main.ps1'))
 $missing = New-Object -TypeName 'System.Collections.Generic.List[string]'
 $seen = 0

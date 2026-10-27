@@ -291,6 +291,9 @@ function Select-FujiSeriousProblem {
 
 $script:FujiCommands = $null
 $script:FujiBlockEnds = @{}
+# Raised whenever fujikyun_commands.json gets commands or fields the scripts need (2: FILE_OP):
+# an older file is reported at start (its palette would lack the new buttons)
+$script:FujiCommandsVersion = 2
 
 function Import-FujiCommand {
     param([Parameter(Mandatory)][string]$Path)
@@ -299,6 +302,19 @@ function Import-FujiCommand {
     foreach ($start in $script:FujiCommands['blocks']['pairs'].Keys) {
         $script:FujiBlockEnds[$script:FujiCommands['blocks']['pairs'][$start]] = $start
     }
+}
+
+# '' when fujikyun_commands.json is as new as this script, otherwise the message to show
+function Test-FujiCommandsVersion {
+    $have = 0
+    if ($script:FujiCommands.Contains('commandsVersion')) { $have = [int]$script:FujiCommands['commandsVersion'] }
+    if ($have -ge $script:FujiCommandsVersion) { return '' }
+    $message = Get-FujiText 'gui.commandsOld' $have $script:FujiCommandsVersion
+    if ($message -eq 'gui.commandsOld') {
+        # fujikyun_ja.json is old too (it is reported as well)
+        $message = 'fujikyun_commands.json is older than fujikyun.ps1 (version {0}, needed {1}). Please replace fujikyun_commands.json with the latest one.' -f $have, $script:FujiCommandsVersion
+    }
+    return $message
 }
 
 function Get-FujiCommandDef {
@@ -3473,16 +3489,20 @@ $script:FujiEvidenceFolder = 'evidence'
 # After the robot's own keys and clicks, input is the robot's for this long (a value set here)
 $script:FujiRobotInputMs = 500
 
-# "Pause when touched": $true when someone used the keyboard or mouse since the last look.
+# "Pause when touched": $true when someone pressed a key or a mouse button since the last look.
 # State: @{ Mark (the last input tick seen, $null: take the next one as it is); RobotUntil };
 # Now and RobotUntil in milliseconds of one clock. Input up to RobotUntil is the robot's own.
+# Pressed: { } -> $true when a key or mouse button is down now. New input with nothing pressed is
+# the cursor moving (a mouse pushed aside, a desk knocked): it does not pause the run.
 function Test-FujiUserInput {
-    param([Parameter(Mandatory)][hashtable]$State, [uint32]$LastInput, [long]$Now)
+    param([Parameter(Mandatory)][hashtable]$State, [uint32]$LastInput, [long]$Now, [Parameter(Mandatory)][scriptblock]$Pressed)
     if ($null -eq $State.Mark -or $Now -lt $State.RobotUntil) {
         $State.Mark = $LastInput
         return $false
     }
-    return ($LastInput -ne [uint32]$State.Mark)
+    if ($LastInput -eq [uint32]$State.Mark) { return $false }
+    $State.Mark = $LastInput
+    return [bool](& $Pressed)
 }
 
 function New-FujiStopException {
@@ -5434,7 +5454,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 9
+$script:FujiTextVersion = 10
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -5803,7 +5823,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27.5'
+$script:FujiAppVersion = '2026.10.27.6'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -9373,10 +9393,22 @@ function Test-FujiTouchPause {
     } finally {
         [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
     }
-    if (-not (Test-FujiUserInput -State $c.Input -LastInput $last -Now $c.Clock.ElapsedMilliseconds)) { return }
+    if (-not (Test-FujiUserInput -State $c.Input -LastInput $last -Now $c.Clock.ElapsedMilliseconds -Pressed { Test-FujiAnyKeyDown })) { return }
     Switch-FujiRunPause
     Write-FujiUiLog -Message (Get-FujiText 'run.touchPaused') -Level 'warn'
     [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
+}
+
+# A key or a mouse button held down now (GetAsyncKeyState high bit; only "down now": the "pressed
+# since the last call" bit also keeps the robot's own keys). 0xE8: the robot's key that brings a
+# window to the front. The cursor moving is not a key.
+function Test-FujiAnyKeyDown {
+    $native = Get-FujiNativeType
+    for ($vk = 1; $vk -le 254; $vk++) {
+        if ($vk -eq 0xE8) { continue }
+        if (([int]$native::GetAsyncKeyState($vk) -band 0x8000) -ne 0) { return $true }
+    }
+    return $false
 }
 
 # The robot's own keys and clicks are not someone touching the PC
@@ -11901,10 +11933,11 @@ function Show-FujiWatchRuleDialog {
         Write-FujiUiLog -Message $script:FujiSettingsNotice -Level 'error'
         $script:Ed.Notices.Add($script:FujiSettingsNotice)
     }
-    $textOld = Test-FujiTextVersion
-    if ($textOld) {
-        Write-FujiUiLog -Message $textOld -Level 'error'
-        $script:Ed.Notices.Add($textOld)
+    foreach ($old in @((Test-FujiTextVersion), (Test-FujiCommandsVersion))) {
+        if ($old) {
+            Write-FujiUiLog -Message $old -Level 'error'
+            $script:Ed.Notices.Add($old)
+        }
     }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
