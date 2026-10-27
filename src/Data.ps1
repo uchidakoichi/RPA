@@ -1,11 +1,15 @@
 # ---------------------------------------------------------------------------------------------
 #  Data model: macros file, steps and block structure
-#  A macro: [ordered]@{ id; name; targetWindow; steps = List[object] }
+#  A macro: [ordered]@{ id; name; targetWindow; [watch = List[rule];] steps = List[object] }
 #  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] [; breakpoint = $true] }
-#  The file format is the HTA's fujikyun_macros.json (data version 27).
+#  A watch rule (a window that may appear at any time during a run, and what to do then):
+#           [ordered]@{ title; key; action = 'STOP'|'ERROR'|'SKIP'|'CONTINUE'|'CALL'; macroId; macroName }
+#  The file format is the HTA's fujikyun_macros.json; version 28 added watch rules (an app that
+#  knows only 27 would drop them when saving, so it asks first).
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiDataVersion = 27
+$script:FujiDataVersion = 28
+$script:FujiWatchActions = @('STOP', 'ERROR', 'SKIP', 'CONTINUE', 'CALL')
 
 function New-FujiId {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates an in-memory value only')]
@@ -68,9 +72,37 @@ function ConvertTo-FujiMacroData {
         if ($m.Contains('name') -and $m['name']) { $name = [string]$m['name'] }
         $target = ''
         if ($m.Contains('targetWindow') -and $m['targetWindow']) { $target = [string]$m['targetWindow'] }
-        $data.macros.Add([ordered]@{ id = $id; name = $name; targetWindow = $target; steps = $steps })
+        $macro = [ordered]@{ id = $id; name = $name; targetWindow = $target; steps = $steps }
+        if ($m.Contains('watch') -and $m['watch'] -is [System.Collections.IList]) {
+            $rules = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($r in $m['watch']) { $rule = ConvertTo-FujiWatchRule -Source $r; if ($null -ne $rule) { $rules.Add($rule) } }
+            if ($rules.Count -gt 0) { $macro['watch'] = $rules }
+        }
+        $data.macros.Add($macro)
     }
     return @{ Data = $data; NewerVersion = $newer }
+}
+
+# One watch rule from the file (or the dialog): $null when it has no window title
+function ConvertTo-FujiWatchRule {
+    param($Source)
+    if ($Source -isnot [System.Collections.IDictionary]) { return $null }
+    $get = { param($k) if ($Source.Contains($k) -and $null -ne $Source[$k]) { return [string]$Source[$k] }; return '' }
+    $title = (& $get 'title').Trim()
+    if (-not $title) { return $null }
+    $action = (& $get 'action').ToUpperInvariant()
+    if ($script:FujiWatchActions -notcontains $action) { $action = 'STOP' }
+    $rule = [ordered]@{ title = $title; key = (& $get 'key'); action = $action; macroId = ''; macroName = '' }
+    if ($action -eq 'CALL') { $rule.macroId = & $get 'macroId'; $rule.macroName = & $get 'macroName' }
+    return $rule
+}
+
+# The watch rules of a macro (an empty list when it has none)
+function Get-FujiWatchRule {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Macro)
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    if ($Macro.Contains('watch') -and $null -ne $Macro['watch']) { foreach ($r in $Macro['watch']) { $list.Add($r) } }
+    return , $list
 }
 
 # Clean data -> file text (same shape and indentation as the HTA's JSON.stringify(..., null, 2)).
@@ -89,7 +121,10 @@ function ConvertTo-FujiMacroJson {
                 $steps.Add($s)
             }
         }
-        $macros.Add([ordered]@{ id = $m.id; name = $m.name; targetWindow = $m.targetWindow; steps = $steps })
+        $out = [ordered]@{ id = $m.id; name = $m.name; targetWindow = $m.targetWindow }
+        if ($m.Contains('watch') -and $m['watch'].Count -gt 0) { $out['watch'] = $m['watch'] }
+        $out['steps'] = $steps
+        $macros.Add($out)
     }
     return (ConvertTo-FujiJson -InputObject ([ordered]@{ version = $script:FujiDataVersion; macros = $macros }) -Indent 2)
 }

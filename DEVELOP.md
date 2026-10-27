@@ -9,7 +9,7 @@ Windows PowerShell 5.1 ＋ Windows Forms で動く本体です。使う人向け
 | 動かすもの | Windows に最初から入っている **Windows PowerShell 5.1**（インストール不要・exe なし） |
 | 起動 | `.bat` をダブルクリック → PowerShell 5.1 を STA モードで起動 |
 | 画面 | Windows Forms |
-| マクロのデータ | `fujikyun_macros.json`（データ版27） |
+| マクロのデータ | `fujikyun_macros.json`（データ版28） |
 | メール | Outlook と mailto（SMTP は使わない） |
 
 ### 文字コードの決まり
@@ -100,6 +100,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `Vision.ps1` | 画像でクリック・文字認識（OCR）・名前でクリック（UI Automation）。重い処理は別の runspace で動かし、クリックは元のスレッドで行う |
 | `Uia.ps1` | 欄に入力・欄の値を読む・表を読む（UI Automation。欄は名前・ID・すぐ左か上の見出しで探す）、［🎯 部品を指す］［🔍 見つかるか試す］、部品を囲む赤い枠 |
 | `Credential.ps1` | SECRET の［🔑 登録・変更］ダイアログ（パスワードは画面・ログに出さない） |
+| `Watch.ps1` | ［👁 見張り］（マクロごとの見張りの一覧と編集。実行中の動きは `src/Runner.ps1` の `Invoke-FujiWatchRule`） |
 | `Check.ps1` | ［✅ チェック］の一覧と、▶ 実行の前の確認（予定・きっかけではログに残すだけ） |
 | `Effect.ps1` | ［📈 効果］の画面、実行後の記録、エラーの知らせを確認するまでの時間、［⏱ 時間］（ステップごとの時間） |
 | `Docs.ps1` | ［📖 説明書］メニュー、F1、各ダイアログの［📖 説明］ボタン |

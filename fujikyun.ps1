@@ -156,6 +156,19 @@ function Get-FujiMacroProblem {
     $seen = @{}
     $queue.Enqueue($Macro)
     $seen[[string]$Macro.id] = $true
+    # the macros the watch rules call run too
+    foreach ($r in (Get-FujiWatchRule -Macro $Macro)) {
+        if ($r.action -ne 'CALL') { continue }
+        $target = $null
+        foreach ($x in $Macros) { if ($r.macroId -and [string]$x.id -eq $r.macroId) { $target = $x; break } }
+        if ($null -eq $target) { foreach ($x in $Macros) { if ($r.macroName -and [string]$x.name -eq $r.macroName) { $target = $x; break } } }
+        if ($null -eq $target) {
+            $problems.Add(@{ MacroId = [string]$Macro.id; Macro = [string]$Macro.name; Index = -1; Level = 'error'; Message = (Get-FujiText 'check.watchCall' $r.title $r.macroName) })
+        } elseif (-not $seen.ContainsKey([string]$target.id)) {
+            $seen[[string]$target.id] = $true
+            $queue.Enqueue($target)
+        }
+    }
     while ($queue.Count -gt 0) {
         $m = $queue.Dequeue()
         $add = { param($Index, $Level, $Message) $problems.Add(@{ MacroId = [string]$m.id; Macro = [string]$m.name; Index = $Index; Level = $Level; Message = $Message }) }
@@ -968,12 +981,16 @@ function ConvertTo-FujiSafeCsvValue {
 # ===== src/Data.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Data model: macros file, steps and block structure
-#  A macro: [ordered]@{ id; name; targetWindow; steps = List[object] }
+#  A macro: [ordered]@{ id; name; targetWindow; [watch = List[rule];] steps = List[object] }
 #  A step:  [ordered]@{ cmd; val; label [; when = 'first'|'last'] [; disabled = $true] [; breakpoint = $true] }
-#  The file format is the HTA's fujikyun_macros.json (data version 27).
+#  A watch rule (a window that may appear at any time during a run, and what to do then):
+#           [ordered]@{ title; key; action = 'STOP'|'ERROR'|'SKIP'|'CONTINUE'|'CALL'; macroId; macroName }
+#  The file format is the HTA's fujikyun_macros.json; version 28 added watch rules (an app that
+#  knows only 27 would drop them when saving, so it asks first).
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiDataVersion = 27
+$script:FujiDataVersion = 28
+$script:FujiWatchActions = @('STOP', 'ERROR', 'SKIP', 'CONTINUE', 'CALL')
 
 function New-FujiId {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Creates an in-memory value only')]
@@ -1036,9 +1053,37 @@ function ConvertTo-FujiMacroData {
         if ($m.Contains('name') -and $m['name']) { $name = [string]$m['name'] }
         $target = ''
         if ($m.Contains('targetWindow') -and $m['targetWindow']) { $target = [string]$m['targetWindow'] }
-        $data.macros.Add([ordered]@{ id = $id; name = $name; targetWindow = $target; steps = $steps })
+        $macro = [ordered]@{ id = $id; name = $name; targetWindow = $target; steps = $steps }
+        if ($m.Contains('watch') -and $m['watch'] -is [System.Collections.IList]) {
+            $rules = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($r in $m['watch']) { $rule = ConvertTo-FujiWatchRule -Source $r; if ($null -ne $rule) { $rules.Add($rule) } }
+            if ($rules.Count -gt 0) { $macro['watch'] = $rules }
+        }
+        $data.macros.Add($macro)
     }
     return @{ Data = $data; NewerVersion = $newer }
+}
+
+# One watch rule from the file (or the dialog): $null when it has no window title
+function ConvertTo-FujiWatchRule {
+    param($Source)
+    if ($Source -isnot [System.Collections.IDictionary]) { return $null }
+    $get = { param($k) if ($Source.Contains($k) -and $null -ne $Source[$k]) { return [string]$Source[$k] }; return '' }
+    $title = (& $get 'title').Trim()
+    if (-not $title) { return $null }
+    $action = (& $get 'action').ToUpperInvariant()
+    if ($script:FujiWatchActions -notcontains $action) { $action = 'STOP' }
+    $rule = [ordered]@{ title = $title; key = (& $get 'key'); action = $action; macroId = ''; macroName = '' }
+    if ($action -eq 'CALL') { $rule.macroId = & $get 'macroId'; $rule.macroName = & $get 'macroName' }
+    return $rule
+}
+
+# The watch rules of a macro (an empty list when it has none)
+function Get-FujiWatchRule {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Macro)
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    if ($Macro.Contains('watch') -and $null -ne $Macro['watch']) { foreach ($r in $Macro['watch']) { $list.Add($r) } }
+    return , $list
 }
 
 # Clean data -> file text (same shape and indentation as the HTA's JSON.stringify(..., null, 2)).
@@ -1057,7 +1102,10 @@ function ConvertTo-FujiMacroJson {
                 $steps.Add($s)
             }
         }
-        $macros.Add([ordered]@{ id = $m.id; name = $m.name; targetWindow = $m.targetWindow; steps = $steps })
+        $out = [ordered]@{ id = $m.id; name = $m.name; targetWindow = $m.targetWindow }
+        if ($m.Contains('watch') -and $m['watch'].Count -gt 0) { $out['watch'] = $m['watch'] }
+        $out['steps'] = $steps
+        $macros.Add($out)
     }
     return (ConvertTo-FujiJson -InputObject ([ordered]@{ version = $script:FujiDataVersion; macros = $macros }) -Indent 2)
 }
@@ -1347,7 +1395,13 @@ function Copy-FujiMacro {
         foreach ($k in $s.Keys) { $o[$k] = $s[$k] }
         $steps.Add($o)
     }
-    return [ordered]@{ id = $Macro.id; name = $Macro.name; targetWindow = $Macro.targetWindow; steps = $steps }
+    $copy = [ordered]@{ id = $Macro.id; name = $Macro.name; targetWindow = $Macro.targetWindow; steps = $steps }
+    if ($Macro.Contains('watch')) {
+        $rules = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($r in $Macro['watch']) { $rules.Add((Copy-FujiStep -Step $r)) }
+        $copy['watch'] = $rules
+    }
+    return $copy
 }
 
 function Copy-FujiMacroData {
@@ -1687,6 +1741,19 @@ function Set-FujiTargetWindow {
     Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'editor.history.target' $shown)
     if (-not $value) { $value = Get-FujiText 'editor.targetNone' }
     Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.targetSet' $value)
+}
+
+# The current macro's watch rules (Rules: rules as the dialog gives them; none removes them)
+function Set-FujiMacroWatch {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Edits in-memory data; undo restores it')]
+    param([Parameter(Mandatory)][hashtable]$Editor, [AllowEmptyCollection()][object[]]$Rules)
+    $m = Get-FujiCurrentMacro $Editor
+    if ($null -eq $m) { return }
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($r in $Rules) { $rule = ConvertTo-FujiWatchRule -Source $r; if ($null -ne $rule) { $list.Add($rule) } }
+    if ($list.Count -gt 0) { $m['watch'] = $list } elseif ($m.Contains('watch')) { $m.Remove('watch') }
+    Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'editor.history.watch' $list.Count)
+    Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.watchSet' $m.name $list.Count) -Level 'ok'
 }
 
 # Writes the current macro to macro_export\<name>.json (never overwriting) and returns the path
@@ -3495,6 +3562,8 @@ function New-FujiRun {
         Running = $false; Status = ''; StartTime = (Get-Date); Summary = ''
         # time a person spent on the run (confirm, ask, pause, breakpoints), and per step how long it took
         AttendedMs = 0.0; StepTimes = [ordered]@{}; TimingOpen = $null
+        # windows watched before every step (the macro's watch rules); the rules acted on whose window is still there
+        WatchRules = (Get-FujiWatchRule -Macro $Macro); WatchHit = @{}
     }
 }
 
@@ -4160,11 +4229,18 @@ function Invoke-FujiRunRow {
         & $Run.Io.Highlight $highlight
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
-        $current = $Run.Steps[$Run.StepIndex]
         Stop-FujiStepTiming -Run $Run
-        if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
-        Start-FujiStepTiming -Run $Run -Step $current
-        $res = Invoke-FujiRunStep -Run $Run -Step $current
+        $res = Invoke-FujiWatchRule -Run $Run
+        if ($null -ne $res -and $res.Action -eq 'called') {
+            Wait-FujiRun -Run $Run -Ms $Run.Interval
+            continue
+        }
+        if ($null -eq $res) {
+            $current = $Run.Steps[$Run.StepIndex]
+            if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+            Start-FujiStepTiming -Run $Run -Step $current
+            $res = Invoke-FujiRunStep -Run $Run -Step $current
+        }
         switch ($res.Action) {
             'skipRow' {
                 if ($Run.FinalOnly) {
@@ -4206,6 +4282,67 @@ function Invoke-FujiRunRow {
             }
         }
     }
+}
+
+# ----------------------------------------------------------------- watch rules
+# Before every step: a watched window that is there now is dealt with as its rule says. $null to
+# run the step as usual, @{ Action = 'called' } when a macro was called for it, or a step result
+# (error / skipRow). A window still there after the rule acted on it (key, called macro) stops the
+# run instead of acting again and again. Not while a macro called by a rule is running.
+function Invoke-FujiWatchRule {
+    param([hashtable]$Run)
+    if ($Run.WatchRules.Count -eq 0) { return $null }
+    foreach ($f in $Run.CallStack) { if ($f.ContainsKey('Watch') -and $f.Watch) { return $null } }
+    for ($i = 0; $i -lt $Run.WatchRules.Count; $i++) {
+        $r = $Run.WatchRules[$i]
+        $title = Expand-FujiRunText -Run $Run -Text ([string]$r.title)
+        if (-not $title -or -not [bool](& $Run.Io.WindowExists $title)) { $Run.WatchHit.Remove($i); continue }
+        if ($Run.WatchHit.ContainsKey($i)) { return (Get-FujiRunError -Message (Get-FujiText 'run.watchStill' $title) -Uncatchable $true) }
+        Write-FujiRunLog $Run (Get-FujiText 'run.watchFound' $title (Get-FujiText ('watch.action.' + $r.action))) 'warn'
+        if ($r.key) {
+            if (Invoke-FujiActivate -Run $Run -Title $title) {
+                Wait-FujiRun -Run $Run -Ms 300
+                & $Run.Io.SendKeys (ConvertTo-FujiSendKey ([string]$r.key))
+                Write-FujiRunLog $Run (Get-FujiText 'run.pressed' $r.key)
+            }
+        }
+        switch ([string]$r.action) {
+            'CONTINUE' {
+                $Run.WatchHit[$i] = $true
+                Wait-FujiRun -Run $Run -Ms 500
+                if ($Run.ActiveTitle) { [void](Invoke-FujiActivate -Run $Run -Title $Run.ActiveTitle) }
+                return $null
+            }
+            'CALL' {
+                $target = $null
+                foreach ($m in $Run.Macros) { if ($r.macroId -and [string]$m.id -eq $r.macroId) { $target = $m; break } }
+                if ($null -eq $target) { foreach ($m in $Run.Macros) { if ($r.macroName -and [string]$m.name -eq $r.macroName) { $target = $m; break } } }
+                if ($null -eq $target) { return (Get-FujiRunError (Get-FujiText 'run.callNotFound' ([string]$r.macroName))) }
+                if ($Run.CallStack.Count -ge $script:FujiRunLimits.CallDepthMax) { return (Get-FujiRunError (Get-FujiText 'run.callDepth' $script:FujiRunLimits.CallDepthMax)) }
+                if (-not (Test-FujiBlockBalanced -Steps $target.steps)) { return (Get-FujiRunError (Get-FujiText 'run.callUnbalanced' $target.name)) }
+                $Run.WatchHit[$i] = $true
+                # back at the step that was about to run (the runner moves on by one after a call)
+                $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = ($Run.StepIndex - 1); LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name; Id = [string]$target.id; Watch = $true })
+                $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                foreach ($s in $target.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
+                $Run.Steps = $steps
+                $Run.LoopStack = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                $Run.TryStack = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                $Run.StepIndex = 0
+                Write-FujiRunLog $Run (Get-FujiText 'run.called' $target.name)
+                return @{ Action = 'called' }
+            }
+            'SKIP' {
+                Add-FujiErrorRow -Run $Run -Reason (Get-FujiText 'run.watchSkipReason' $title)
+                Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultSkip') -Note (Get-FujiText 'run.watchSkipReason' $title)
+                Wait-FujiRun -Run $Run -Ms 500
+                return @{ Action = 'skipRow' }
+            }
+            'ERROR' { return (Get-FujiRunError (Get-FujiText 'run.watchError' $title)) }
+        }
+        return (Get-FujiRunError -Message (Get-FujiText 'run.watchStop' $title) -Uncatchable $true)
+    }
+    return $null
 }
 
 # One step; unexpected failures become errors (a stop always passes through)
@@ -5650,7 +5787,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27.3'
+$script:FujiAppVersion = '2026.10.27.4'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -7577,6 +7714,10 @@ function New-FujiTopPanel {
     $wl = New-FujiButton -Text (Get-FujiText 'gui.windowList') -Tip (Get-FujiText 'gui.windowListTip')
     $wl.Add_Click({ Invoke-FujiUi { Select-FujiWindowUi } })
     [void]$row.Controls.Add($wl)
+    $watch = New-FujiButton -Text (Get-FujiText 'gui.watchRules') -Tip (Get-FujiText 'gui.watchRulesTip')
+    $watch.Add_Click({ Invoke-FujiUi { Show-FujiWatchDialog } })
+    $script:Ui.WatchButton = $watch
+    [void]$row.Controls.Add($watch)
     $top.Add((Set-FujiToolbarRow $row))
 
     # CSV
@@ -8051,6 +8192,8 @@ function Update-FujiMacroSelect {
         $c.SelectedIndex = $script:Ed.MacroIndex
         $m = Get-FujiCurrentMacro $script:Ed
         $script:Ui.Target.Text = [string]$m.targetWindow
+        $count = (Get-FujiWatchRule -Macro $m).Count
+        if ($count -gt 0) { $script:Ui.WatchButton.Text = Get-FujiText 'gui.watchRulesCount' $count } else { $script:Ui.WatchButton.Text = Get-FujiText 'gui.watchRules' }
     } finally {
         $script:Refreshing = $false
     }
@@ -8216,6 +8359,14 @@ function Import-FujiMacroUi {
 }
 
 function Select-FujiWindowUi {
+    $title = Show-FujiWindowListDialog
+    if (-not $title) { return }
+    $script:Ui.Target.Text = $title
+    Set-FujiTargetWindowUi
+}
+
+# The titles of the open windows to choose from; the chosen one, or '' when cancelled
+function Show-FujiWindowListDialog {
     $titles = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | ForEach-Object { $_.MainWindowTitle } | Sort-Object -Unique)
     $f = New-FujiDialogForm -Title (Get-FujiText 'gui.windowListTitle') -Width (Get-FujiScaled 600) -Height (Get-FujiScaled 440)
     $help = New-FujiLabel -Text (Get-FujiText 'gui.windowListHelp') -MaxWidth (Get-FujiScaled 580)
@@ -8242,9 +8393,7 @@ function Select-FujiWindowUi {
     $title = ''
     if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $titles.Count -gt 0 -and $lb.SelectedIndex -ge 0) { $title = [string]$lb.SelectedItem }
     $f.Dispose()
-    if (-not $title) { return }
-    $script:Ui.Target.Text = $title
-    Set-FujiTargetWindowUi
+    return $title
 }
 
 # ----------------------------------------------------------------- templates
@@ -11424,6 +11573,189 @@ function Invoke-FujiNameClick {
     if ($r -eq 'NOTFOUND') { throw (Get-FujiText 'run.uiaNotFound' $Name) }
     if ($r -eq 'NOPATTERN') { throw (Get-FujiText 'run.uiaNoPattern') }
     return $r
+}
+
+# ===== gui/Watch.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Watch rules of the selected macro (rules: Runner.ps1 Invoke-FujiWatchRule): windows that may
+#  appear at any time during a run (a session timeout, a server error) and what to do then
+# ---------------------------------------------------------------------------------------------
+
+function Show-FujiWatchDialog {
+    if (Test-FujiEditLocked) { return }
+    $m = Get-FujiCurrentMacro $script:Ed
+    if ($null -eq $m) { return }
+    $rules = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($r in (Get-FujiWatchRule -Macro $m)) { $rules.Add((Copy-FujiStep -Step $r)) }
+    $f = New-FujiDialogForm -Title (Get-FujiText 'watch.title' $m.name) -Width (Get-FujiScaled 820) -Height (Get-FujiScaled 440)
+    $f.MaximizeBox = $true
+    $help = New-FujiLabel -Text (Get-FujiText 'watch.help') -MaxWidth (Get-FujiScaled 790)
+    $help.Dock = [System.Windows.Forms.DockStyle]::Top
+    $lv = New-FujiListView -Headings (Get-FujiText 'watch.head') -Widths @(280, 110, 220, 180) -LeftColumns @(0, 1, 2, 3)
+    $tools = New-FujiFlow
+    $tools.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    foreach ($b in @(@('watch.add', 'add'), @('watch.edit', 'edit'), @('watch.delete', 'delete'), @('watch.up', 'up'), @('watch.down', 'down'))) {
+        $btn = New-FujiButton -Text (Get-FujiText $b[0]) -Tag $b[1]
+        $btn.Add_Click({ $what = [string]$this.Tag; Invoke-FujiUi { Edit-FujiWatchListUi -What $what } })
+        [void]$tools.Controls.Add($btn)
+    }
+    $bar = New-FujiButtonBar
+    $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $ok = New-FujiButton -Text (Get-FujiText 'gui.ok')
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    [void]$bar.Controls.Add($cancel)
+    [void]$bar.Controls.Add($ok)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.watch')))
+    $f.AcceptButton = $ok
+    $f.CancelButton = $cancel
+    $lv.Add_DoubleClick({ Invoke-FujiUi { Edit-FujiWatchListUi -What 'edit' } })
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($help)
+    [void]$f.Controls.Add($tools)
+    [void]$f.Controls.Add($bar)
+    $script:Ui.WatchDialog = @{ Rules = $rules; List = $lv }
+    Update-FujiWatchList
+    $result = Show-FujiDialog -Form $f
+    $f.Dispose()
+    $script:Ui.WatchDialog = $null
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    Set-FujiMacroWatch -Editor $script:Ed -Rules $rules.ToArray()
+    Update-FujiAll
+}
+
+function Update-FujiWatchList {
+    param([int]$Select = -1)
+    $d = $script:Ui.WatchDialog
+    $lv = $d.List
+    $lv.BeginUpdate()
+    $lv.Items.Clear()
+    foreach ($r in $d.Rules) {
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList ([string]$r.title)
+        $key = ''
+        if ($r.key) { $key = Get-FujiKeyName ([string]$r.key) }
+        $call = ''
+        if ($r.action -eq 'CALL') { $call = Get-FujiWatchMacroName -Rule $r }
+        foreach ($v in @($key, (Get-FujiText ('watch.action.' + $r.action)), $call)) { [void]$item.SubItems.Add([string]$v) }
+        [void]$lv.Items.Add($item)
+    }
+    if ($Select -ge 0 -and $Select -lt $lv.Items.Count) { $lv.Items[$Select].Selected = $true }
+    $lv.EndUpdate()
+}
+
+# The called macro's current name (by id, else the name kept in the rule)
+function Get-FujiWatchMacroName {
+    param([System.Collections.IDictionary]$Rule)
+    foreach ($m in $script:Ed.Data.macros) { if ($Rule.macroId -and [string]$m.id -eq $Rule.macroId) { return [string]$m.name } }
+    return [string]$Rule.macroName
+}
+
+function Edit-FujiWatchListUi {
+    param([string]$What)
+    $d = $script:Ui.WatchDialog
+    $i = -1
+    if ($d.List.SelectedIndices.Count -gt 0) { $i = $d.List.SelectedIndices[0] }
+    switch ($What) {
+        'add' {
+            $r = Show-FujiWatchRuleDialog -Rule $null
+            if ($null -ne $r) { $d.Rules.Add($r); Update-FujiWatchList -Select ($d.Rules.Count - 1) }
+        }
+        'edit' {
+            if ($i -lt 0) { return }
+            $r = Show-FujiWatchRuleDialog -Rule $d.Rules[$i]
+            if ($null -ne $r) { $d.Rules[$i] = $r; Update-FujiWatchList -Select $i }
+        }
+        'delete' {
+            if ($i -lt 0) { return }
+            $d.Rules.RemoveAt($i)
+            Update-FujiWatchList -Select ([Math]::Min($i, $d.Rules.Count - 1))
+        }
+        { $_ -in @('up', 'down') } {
+            $j = $i - 1
+            if ($What -eq 'down') { $j = $i + 1 }
+            if ($i -lt 0 -or $j -lt 0 -or $j -ge $d.Rules.Count) { return }
+            $tmp = $d.Rules[$i]
+            $d.Rules[$i] = $d.Rules[$j]
+            $d.Rules[$j] = $tmp
+            Update-FujiWatchList -Select $j
+        }
+    }
+}
+
+# One rule: the window title, a key to press, what to do, the macro to call. $null when cancelled.
+function Show-FujiWatchRuleDialog {
+    param([System.Collections.IDictionary]$Rule)
+    if ($null -eq $Rule) { $Rule = [ordered]@{ title = ''; key = ''; action = 'STOP'; macroId = ''; macroName = '' } }
+    $width = Get-FujiScaled 560
+    $f = New-FujiDialogForm -Title (Get-FujiText 'watch.ruleTitle') -Width $width -Height (Get-FujiScaled 420)
+    $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $layout.ColumnCount = 1
+    $layout.AutoScroll = $true
+    Add-FujiFullColumn -Table $layout
+    $layout.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 10)
+    $inner = $width - (Get-FujiScaled 50)
+    $title = New-FujiTextBox -Text ([string]$Rule.title) -Width ($inner - (Get-FujiScaled 110))
+    $pick = New-FujiButton -Text (Get-FujiText 'gui.windowList')
+    $pick.Add_Click({ Invoke-FujiUi { $t = Show-FujiWindowListDialog; if ($t) { $script:Ui.WatchRuleDialog.Title.Text = $t } } })
+    $key = New-Object -TypeName System.Windows.Forms.ComboBox
+    $key.Width = Get-FujiScaled 200
+    foreach ($p in $script:FujiCommands['keyPresets']) { [void]$key.Items.Add([string]$p[0]) }
+    $key.Text = [string]$Rule.key
+    $script:Ui.ToolTip.SetToolTip($key, (Get-FujiText 'watch.keyTip'))
+    $actions = @($script:FujiWatchActions | ForEach-Object { Get-FujiText ('watch.action.' + $_) })
+    $action = New-FujiComboBox -Items $actions -Values $script:FujiWatchActions -Width $inner
+    $action.SelectedIndex = [Math]::Max(0, [Array]::IndexOf($script:FujiWatchActions, [string]$Rule.action))
+    $names = @($script:Ed.Data.macros | ForEach-Object { [string]$_.name })
+    $ids = @($script:Ed.Data.macros | ForEach-Object { [string]$_.id })
+    $macro = New-FujiComboBox -Items $names -Values $ids -Width $inner
+    if ($Rule.action -eq 'CALL') {
+        $mi = [Array]::IndexOf($ids, [string]$Rule.macroId)
+        if ($mi -lt 0) { $mi = [Array]::IndexOf($names, [string]$Rule.macroName) }
+        $macro.SelectedIndex = $mi
+    }
+    $err = New-FujiLabel -Text '' -MaxWidth $inner
+    $err.ForeColor = Get-FujiColor '#c62828'
+    $add = { param($c) [void]$layout.Controls.Add($c) }
+    & $add (New-FujiFieldLabel -Text (Get-FujiText 'watch.fieldTitle'))
+    & $add (New-FujiGlued @($title, $pick))
+    & $add (New-FujiFieldLabel -Text (Get-FujiText 'watch.fieldKey'))
+    & $add $key
+    & $add (New-FujiFieldLabel -Text (Get-FujiText 'watch.fieldAction'))
+    & $add $action
+    & $add (New-FujiFieldLabel -Text (Get-FujiText 'watch.fieldMacro'))
+    & $add $macro
+    & $add $err
+    $bar = New-FujiButtonBar
+    $cancel = New-FujiButton -Text (Get-FujiText 'gui.cancel')
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $ok = New-FujiButton -Text (Get-FujiText 'gui.ok')
+    [void]$bar.Controls.Add($cancel)
+    [void]$bar.Controls.Add($ok)
+    $script:Ui.WatchRuleDialog = @{ Title = $title; Key = $key; Action = $action; Macro = $macro; Error = $err; Result = $null }
+    $action.Add_SelectedIndexChanged({ $d = $script:Ui.WatchRuleDialog; $d.Macro.Enabled = ([object[]]$d.Action.Tag)[$d.Action.SelectedIndex] -eq 'CALL' })
+    $macro.Enabled = ($action.SelectedIndex -ge 0 -and $script:FujiWatchActions[$action.SelectedIndex] -eq 'CALL')
+    $ok.Add_Click({
+            $d = $script:Ui.WatchRuleDialog
+            $act = [string]([object[]]$d.Action.Tag)[$d.Action.SelectedIndex]
+            if ($d.Title.Text.Trim() -eq '') { $d.Error.Text = Get-FujiText 'watch.needTitle'; return }
+            $rule = [ordered]@{ title = $d.Title.Text.Trim(); key = $d.Key.Text.Trim(); action = $act; macroId = ''; macroName = '' }
+            if ($act -eq 'CALL') {
+                if ($d.Macro.SelectedIndex -lt 0) { $d.Error.Text = Get-FujiText 'watch.needMacro'; return }
+                $rule.macroId = [string]([object[]]$d.Macro.Tag)[$d.Macro.SelectedIndex]
+                $rule.macroName = [string]$d.Macro.SelectedItem
+            }
+            $d.Result = ConvertTo-FujiWatchRule -Source $rule
+            $this.FindForm().DialogResult = [System.Windows.Forms.DialogResult]::OK
+        })
+    $f.AcceptButton = $ok
+    $f.CancelButton = $cancel
+    [void]$f.Controls.Add($layout)
+    [void]$f.Controls.Add($bar)
+    $result = Show-FujiDialog -Form $f
+    $f.Dispose()
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
+    return $script:Ui.WatchRuleDialog.Result
 }
 
     Import-FujiText -Path (Join-Path $here 'fujikyun_ja.json')

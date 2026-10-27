@@ -128,6 +128,8 @@ function New-FujiRun {
         Running = $false; Status = ''; StartTime = (Get-Date); Summary = ''
         # time a person spent on the run (confirm, ask, pause, breakpoints), and per step how long it took
         AttendedMs = 0.0; StepTimes = [ordered]@{}; TimingOpen = $null
+        # windows watched before every step (the macro's watch rules); the rules acted on whose window is still there
+        WatchRules = (Get-FujiWatchRule -Macro $Macro); WatchHit = @{}
     }
 }
 
@@ -793,11 +795,18 @@ function Invoke-FujiRunRow {
         & $Run.Io.Highlight $highlight
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
-        $current = $Run.Steps[$Run.StepIndex]
         Stop-FujiStepTiming -Run $Run
-        if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
-        Start-FujiStepTiming -Run $Run -Step $current
-        $res = Invoke-FujiRunStep -Run $Run -Step $current
+        $res = Invoke-FujiWatchRule -Run $Run
+        if ($null -ne $res -and $res.Action -eq 'called') {
+            Wait-FujiRun -Run $Run -Ms $Run.Interval
+            continue
+        }
+        if ($null -eq $res) {
+            $current = $Run.Steps[$Run.StepIndex]
+            if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+            Start-FujiStepTiming -Run $Run -Step $current
+            $res = Invoke-FujiRunStep -Run $Run -Step $current
+        }
         switch ($res.Action) {
             'skipRow' {
                 if ($Run.FinalOnly) {
@@ -839,6 +848,67 @@ function Invoke-FujiRunRow {
             }
         }
     }
+}
+
+# ----------------------------------------------------------------- watch rules
+# Before every step: a watched window that is there now is dealt with as its rule says. $null to
+# run the step as usual, @{ Action = 'called' } when a macro was called for it, or a step result
+# (error / skipRow). A window still there after the rule acted on it (key, called macro) stops the
+# run instead of acting again and again. Not while a macro called by a rule is running.
+function Invoke-FujiWatchRule {
+    param([hashtable]$Run)
+    if ($Run.WatchRules.Count -eq 0) { return $null }
+    foreach ($f in $Run.CallStack) { if ($f.ContainsKey('Watch') -and $f.Watch) { return $null } }
+    for ($i = 0; $i -lt $Run.WatchRules.Count; $i++) {
+        $r = $Run.WatchRules[$i]
+        $title = Expand-FujiRunText -Run $Run -Text ([string]$r.title)
+        if (-not $title -or -not [bool](& $Run.Io.WindowExists $title)) { $Run.WatchHit.Remove($i); continue }
+        if ($Run.WatchHit.ContainsKey($i)) { return (Get-FujiRunError -Message (Get-FujiText 'run.watchStill' $title) -Uncatchable $true) }
+        Write-FujiRunLog $Run (Get-FujiText 'run.watchFound' $title (Get-FujiText ('watch.action.' + $r.action))) 'warn'
+        if ($r.key) {
+            if (Invoke-FujiActivate -Run $Run -Title $title) {
+                Wait-FujiRun -Run $Run -Ms 300
+                & $Run.Io.SendKeys (ConvertTo-FujiSendKey ([string]$r.key))
+                Write-FujiRunLog $Run (Get-FujiText 'run.pressed' $r.key)
+            }
+        }
+        switch ([string]$r.action) {
+            'CONTINUE' {
+                $Run.WatchHit[$i] = $true
+                Wait-FujiRun -Run $Run -Ms 500
+                if ($Run.ActiveTitle) { [void](Invoke-FujiActivate -Run $Run -Title $Run.ActiveTitle) }
+                return $null
+            }
+            'CALL' {
+                $target = $null
+                foreach ($m in $Run.Macros) { if ($r.macroId -and [string]$m.id -eq $r.macroId) { $target = $m; break } }
+                if ($null -eq $target) { foreach ($m in $Run.Macros) { if ($r.macroName -and [string]$m.name -eq $r.macroName) { $target = $m; break } } }
+                if ($null -eq $target) { return (Get-FujiRunError (Get-FujiText 'run.callNotFound' ([string]$r.macroName))) }
+                if ($Run.CallStack.Count -ge $script:FujiRunLimits.CallDepthMax) { return (Get-FujiRunError (Get-FujiText 'run.callDepth' $script:FujiRunLimits.CallDepthMax)) }
+                if (-not (Test-FujiBlockBalanced -Steps $target.steps)) { return (Get-FujiRunError (Get-FujiText 'run.callUnbalanced' $target.name)) }
+                $Run.WatchHit[$i] = $true
+                # back at the step that was about to run (the runner moves on by one after a call)
+                $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = ($Run.StepIndex - 1); LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name; Id = [string]$target.id; Watch = $true })
+                $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                foreach ($s in $target.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
+                $Run.Steps = $steps
+                $Run.LoopStack = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                $Run.TryStack = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                $Run.StepIndex = 0
+                Write-FujiRunLog $Run (Get-FujiText 'run.called' $target.name)
+                return @{ Action = 'called' }
+            }
+            'SKIP' {
+                Add-FujiErrorRow -Run $Run -Reason (Get-FujiText 'run.watchSkipReason' $title)
+                Set-FujiRowResult -Run $Run -Status (Get-FujiText 'run.resultSkip') -Note (Get-FujiText 'run.watchSkipReason' $title)
+                Wait-FujiRun -Run $Run -Ms 500
+                return @{ Action = 'skipRow' }
+            }
+            'ERROR' { return (Get-FujiRunError (Get-FujiText 'run.watchError' $title)) }
+        }
+        return (Get-FujiRunError -Message (Get-FujiText 'run.watchStop' $title) -Uncatchable $true)
+    }
+    return $null
 }
 
 # One step; unexpected failures become errors (a stop always passes through)
