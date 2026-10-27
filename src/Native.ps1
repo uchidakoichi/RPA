@@ -42,6 +42,7 @@ function Get-FujiNativeType {
         # rect: int[4] left, top, right, bottom (a blittable array is pinned, so it is filled in)
         @($u, 'GetWindowRect', [bool], [type[]]@([IntPtr], [int[]]), $auto),
         @('kernel32.dll', 'GetCurrentThreadId', [uint32], [type[]]@(), $auto),
+        @('kernel32.dll', 'GetLongPathName', [uint32], [type[]]@([string], [System.Text.StringBuilder], [uint32]), $wide),
         # out arguments: pointers to memory the caller allocated
         @('kernel32.dll', 'OpenProcess', [IntPtr], [type[]]@([uint32], [bool], [uint32]), $auto),
         @('kernel32.dll', 'CloseHandle', [bool], [type[]]@([IntPtr]), $auto),

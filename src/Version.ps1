@@ -4,4 +4,4 @@
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.23.2'
+$script:FujiAppVersion = '2026.10.27'

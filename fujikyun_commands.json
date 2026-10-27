@@ -1496,6 +1496,80 @@
       "hideVal": true,
       "doc": "askrecordexcel"
     },
+    "FILE_OP": {
+      "title": "ファイルをコピー・移動・名前変更",
+      "icon": "🗂",
+      "category": "var",
+      "format": "json",
+      "help": "ファイルをコピー・移動したり、名前を変えたりするキュン。元のファイル名に * を使うと、合うファイルをまとめてコピー・移動できるよ（例: C:\\ダウンロード\\*.pdf）。行き先のフォルダが無ければ作るよ。",
+      "defaultVal": "{\"op\":\"COPY\",\"src\":\"\",\"dest\":\"\",\"overwrite\":\"NO\",\"var\":\"\"}",
+      "fields": [
+        {
+          "id": "op",
+          "label": "すること",
+          "type": "select",
+          "options": [
+            [
+              "COPY",
+              "コピーする"
+            ],
+            [
+              "MOVE",
+              "移動する"
+            ],
+            [
+              "RENAME",
+              "名前を変える"
+            ]
+          ]
+        },
+        {
+          "id": "src",
+          "label": "元のファイル（パス・差し込み可・* でまとめて）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\受付_{{1}}.pdf",
+          "placeholders": true
+        },
+        {
+          "id": "dest",
+          "label": "行き先のフォルダかパス（名前を変えるときは新しい名前・差し込み可）",
+          "type": "text",
+          "placeholder": "例: C:\\RPA作業\\済み\\",
+          "placeholders": true
+        },
+        {
+          "id": "overwrite",
+          "label": "行き先に同じ名前のファイルがあるとき",
+          "type": "select",
+          "options": [
+            [
+              "NO",
+              "エラーにする（上書きしない）"
+            ],
+            [
+              "YES",
+              "上書きする"
+            ]
+          ]
+        },
+        {
+          "id": "var",
+          "label": "行き先のパスを入れる変数名（空なら入れない）",
+          "type": "text",
+          "placeholder": "例: 保存先"
+        }
+      ],
+      "parseDefaults": {
+        "op": "COPY",
+        "src": "",
+        "dest": "",
+        "overwrite": "NO",
+        "var": ""
+      },
+      "definesVar": "var",
+      "hideVal": true,
+      "doc": "ファイルのコピー移動名前の変更file_op"
+    },
     "GROUP_START": {
       "title": "グループ",
       "icon": "📁",
@@ -1631,7 +1705,8 @@
         "ASK",
         "RECORD",
         "EXCEL_READ",
-        "EXCEL_WRITE"
+        "EXCEL_WRITE",
+        "FILE_OP"
       ]
     },
     {

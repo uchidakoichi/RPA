@@ -157,6 +157,7 @@ function ConvertFrom-FujiStepValue {
         'SCREENSHOT' { if ($settings['scope'] -ne 'FULL') { $settings['scope'] = 'WINDOW' } }
         'FIELD_SET' { if ($settings['how'] -ne 'PASTE') { $settings['how'] = 'AUTO' } }
         'SECRET' { if ($settings['part'] -ne 'USER') { $settings['part'] = 'PASSWORD' } }
+        'FILE_OP' { $settings['op'] = Get-FujiFileOpKind $settings['op']; if ($settings['overwrite'] -ne 'YES') { $settings['overwrite'] = 'NO' } }
     }
     return $settings
 }
@@ -166,6 +167,13 @@ function Get-FujiCheckMode {
     $m = ([string]$Mode).ToUpperInvariant()
     if ($m -eq 'SKIP' -or $m -eq 'CONTINUE') { return $m }
     return 'STOP'
+}
+
+function Get-FujiFileOpKind {
+    param([AllowEmptyString()][string]$Op)
+    $o = ([string]$Op).ToUpperInvariant()
+    if ($o -eq 'MOVE' -or $o -eq 'RENAME') { return $o }
+    return 'COPY'
 }
 
 function Get-FujiThreshold {
@@ -198,6 +206,7 @@ function ConvertTo-FujiStepValue {
         { $_ -in @('FIELD_SET', 'FIELD_GET') } { $v['nth'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['nth'] -Default 1)) }
         'FIELD_SET' { if ($v['how'] -ne 'PASTE') { $v['how'] = 'AUTO' } }
         'SECRET' { if ($v['part'] -ne 'USER') { $v['part'] = 'PASSWORD' } }
+        'FILE_OP' { $v['op'] = Get-FujiFileOpKind $v['op']; if ($v['overwrite'] -ne 'YES') { $v['overwrite'] = 'NO' } }
         'RETRY_START' {
             $v['times'] = [string][Math]::Max(1, (Get-FujiInt -Text $v['times'] -Default 3))
             $v['wait'] = [string][Math]::Max(0, (Get-FujiInt -Text $v['wait'] -Default 2000))
@@ -319,6 +328,18 @@ function Test-FujiStepSetting {
             if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
         }
         'SECRET' { if ($s['target'] -eq '') { return (Get-FujiText 'validate.secretTarget') } }
+        'FILE_OP' {
+            if (([string]$s['src']).Trim() -eq '') { return (Get-FujiText 'validate.fileSrc') }
+            $dest = ([string]$s['dest']).Trim()
+            if ($s['op'] -eq 'RENAME') {
+                if ($dest -eq '') { return (Get-FujiText 'validate.fileNewName') }
+                if (-not (Test-FujiPlainFileName $dest)) { return (Get-FujiText 'validate.fileNewNameOnly') }
+                if ((Get-FujiFileName $s['src']) -match '[*?]') { return (Get-FujiText 'validate.fileRenameWild') }
+            } elseif ($dest -eq '') {
+                return (Get-FujiText 'validate.fileDest')
+            }
+            if ($s['var'] -ne '') { return (Get-FujiVarNameError $s['var']) }
+        }
         'RETRY_START' {
             if (-not (Test-FujiPositiveInt $s['times'] 1)) { return (Get-FujiText 'validate.retryTimes') }
             if (-not (Test-FujiPositiveInt $s['wait'] 0)) { return (Get-FujiText 'validate.waitMs') }
@@ -433,6 +454,10 @@ function Get-FujiStepLabel {
             $part = Get-FujiText 'label.secretPassword'
             if ($p['part'] -eq 'USER') { $part = Get-FujiText 'label.secretUser' }
             return (Get-FujiLabelText 'secret' @{ target = $p['target']; part = $part })
+        }
+        'FILE_OP' {
+            $what = Get-FujiText ('label.fileOp' + (Get-FujiFileOpKind $p['op']))
+            return (Get-FujiLabelText 'fileOp' @{ op = $what; src = (Format-FujiShort (Get-FujiFileName $p['src']) 24); dest = (Format-FujiShort $p['dest'] 24) })
         }
         'RETRY_START' {
             $sec = ([decimal](Get-FujiInt -Text $p['wait'] -Default 2000) / 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture)
