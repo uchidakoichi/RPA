@@ -88,6 +88,80 @@ function Read-FujiSharedFileByte {
     }
 }
 
+# FILE_OP: copies, moves or renames files. Source: a full path; its name may hold * and ? (copy and
+# move: every matching file of that folder). Dest: a folder (ends with \ or exists as one; made when
+# missing) or a full path; for RENAME the new name only. Every target is checked before anything is
+# done, so an error leaves all files as they were. The app's own files (fujikyun* in AppDirectory)
+# are never touched. Returns @(@{ From; To }, ...).
+function Invoke-FujiFileOperation {
+    param([Parameter(Mandatory)][ValidateSet('COPY', 'MOVE', 'RENAME')][string]$Op, [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$Dest, [bool]$Overwrite = $false, [string]$AppDirectory = '')
+    $folder = [System.IO.Path]::GetDirectoryName($Source)
+    $pattern = [System.IO.Path]::GetFileName($Source)
+    $wild = $pattern -match '[*?]'
+    if ($wild -and $Op -eq 'RENAME') { throw (Get-FujiText 'validate.fileRenameWild') }
+    $files = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    if ($wild) {
+        if (-not $folder -or -not [System.IO.Directory]::Exists($folder)) { throw (Get-FujiText 'run.fileNoFolder' $folder) }
+        # GetFiles("*.pdf") also returns .pdfx (8.3 names): match the names again exactly
+        $re = New-Object -TypeName System.Text.RegularExpressions.Regex -ArgumentList @(('^' + ([regex]::Escape($pattern) -replace '\\\*', '.*' -replace '\\\?', '.') + '$'), [System.Text.RegularExpressions.RegexOptions]'IgnoreCase, CultureInvariant')
+        foreach ($f in [System.IO.Directory]::GetFiles($folder)) { if ($re.IsMatch([System.IO.Path]::GetFileName($f))) { $files.Add($f) } }
+        if ($files.Count -eq 0) { throw (Get-FujiText 'run.fileNoMatch' $pattern $folder) }
+    } else {
+        if (-not [System.IO.File]::Exists($Source)) { throw (Get-FujiText 'run.fileNotFound' $Source) }
+        $files.Add([System.IO.Path]::GetFullPath($Source))
+    }
+    $toFolder = ''
+    if ($Op -ne 'RENAME' -and ($wild -or $Dest.EndsWith('\') -or $Dest.EndsWith('/') -or [System.IO.Directory]::Exists($Dest))) { $toFolder = $Dest }
+    $pairs = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($f in $files) {
+        if ($Op -eq 'RENAME') { $to = Join-Path ([System.IO.Path]::GetDirectoryName($f)) $Dest }
+        elseif ($toFolder) { $to = Join-Path $toFolder ([System.IO.Path]::GetFileName($f)) }
+        else { $to = $Dest }
+        $to = [System.IO.Path]::GetFullPath($to)
+        foreach ($p in @($f, $to)) { if (Test-FujiAppFile -Path $p -AppDirectory $AppDirectory) { throw (Get-FujiText 'run.fileProtected' $p) } }
+        if ([string]::Equals($f, $to, [System.StringComparison]::Ordinal)) { throw (Get-FujiText 'run.fileSame' $f) }
+        # only the case of the name changes (a.pdf -> A.pdf): the same file, not one in the way
+        $caseOnly = [string]::Equals($f, $to, [System.StringComparison]::OrdinalIgnoreCase)
+        if ($caseOnly -and $Op -eq 'COPY') { throw (Get-FujiText 'run.fileSame' $f) }
+        if ([System.IO.Directory]::Exists($to)) { throw (Get-FujiText 'run.fileIsFolder' $to) }
+        if (-not $caseOnly -and [System.IO.File]::Exists($to) -and -not $Overwrite) { throw (Get-FujiText 'run.fileExists' $to) }
+        foreach ($q in $pairs) { if ([string]::Equals($q.To, $to, [System.StringComparison]::OrdinalIgnoreCase)) { throw (Get-FujiText 'run.fileExists' $to) } }
+        $pairs.Add(@{ From = $f; To = $to; CaseOnly = $caseOnly })
+    }
+    try {
+        foreach ($p in $pairs) {
+            $parent = [System.IO.Path]::GetDirectoryName($p.To)
+            if (-not [System.IO.Directory]::Exists($parent)) { [void][System.IO.Directory]::CreateDirectory($parent) }
+            if ($Op -eq 'COPY') {
+                [System.IO.File]::Copy($p.From, $p.To, $Overwrite)
+            } elseif (-not $p.CaseOnly -and [System.IO.File]::Exists($p.To)) {
+                # File.Move never replaces a file: copy over it, then remove the original
+                [System.IO.File]::Copy($p.From, $p.To, $true)
+                [System.IO.File]::Delete($p.From)
+            } else {
+                [System.IO.File]::Move($p.From, $p.To)
+            }
+        }
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'run.fileBusy') }
+        throw
+    }
+    $out = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($p in $pairs) { $out.Add(@{ From = $p.From; To = $p.To }) }
+    return , $out.ToArray()
+}
+
+# The app itself, its settings and macros: fujikyun* directly in the app's folder
+function Test-FujiAppFile {
+    param([string]$Path, [string]$AppDirectory)
+    if (-not $AppDirectory) { return $false }
+    $dir = [System.IO.Path]::GetFullPath($AppDirectory).TrimEnd('\', '/')
+    $parent = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($Path))
+    if (-not [string]::Equals($dir, ([string]$parent).TrimEnd('\', '/'), [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
+    return [System.IO.Path]::GetFileName($Path).StartsWith('fujikyun', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 # The only good copy is never overwritten in place: write a sibling file, read it back, keep the
 # previous version as BackupPath, then replace the target
 function Write-FujiFileSafely {

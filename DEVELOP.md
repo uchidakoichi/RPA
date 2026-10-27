@@ -74,7 +74,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `Log.ps1` | ログのファイル（`fujikyun_logs\fujikyun_log_日付.txt`）への書き込みと、30日より古いものの削除 |
 | `Instance.ps1` | 同じフォルダで2つ開かないためのロック（フォルダごとの名前付きミューテックス） |
 | `Json.ps1` | JSON の読み書き（5.1 と 7 で同じ結果。決まった書式で書く） |
-| `Files.ps1` | 文字コードの判定（CSV）、壊れにくい保存 |
+| `Files.ps1` | 文字コードの判定（CSV）、壊れにくい保存、ファイルのコピー・移動・名前の変更（FILE_OP） |
 | `Csv.ps1` | CSV の読み書き |
 | `Values.ps1` | 数値（decimal で正確に）・和暦（明治〜令和）・日付・計算・文字加工・条件 |
 | `Placeholders.ps1` | 差し込み |

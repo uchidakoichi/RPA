@@ -79,7 +79,12 @@
     "tablePath": "保存するCSVのパスを入れてね",
     "secretTarget": "登録名を入れてね（例: 基幹系）",
     "retryTimes": "やり直す回数は1以上の数字で入れてね",
-    "tablePathCsv": "保存するファイルは .csv にしてね（例: 一覧_{{YYYYMMDD}}.csv）"
+    "tablePathCsv": "保存するファイルは .csv にしてね（例: 一覧_{{YYYYMMDD}}.csv）",
+    "fileSrc": "元のファイルのパスを入れてね",
+    "fileDest": "行き先のフォルダかパスを入れてね（フォルダは最後に \\ を付けてね）",
+    "fileNewName": "新しい名前を入れてね（例: 済_{{1}}.pdf）",
+    "fileNewNameOnly": "名前を変えるときは、新しい名前だけを入れてね（\\ や / は使えないよ。別のフォルダに移すときは「移動する」を使ってね）",
+    "fileRenameWild": "名前を変えるときは、元のファイル名に * や ? は使えないよ（1つずつ変えてね）"
   },
   "label": {
     "key": "キー送信 {key}",
@@ -130,6 +135,10 @@
     "record": "🧾 結果の「{name}」に {value}",
     "excelRead": "📗 {file} の {cell} を読む → ${name}",
     "excelWrite": "🖊 {file} の {cell} に {value} を書く",
+    "fileOp": "🗂 {src} を{op} → {dest}",
+    "fileOpCOPY": "コピー",
+    "fileOpMOVE": "移動",
+    "fileOpRENAME": "名前変更",
     "condLeft": "「{left}」",
     "condRight": "が「{right}」",
     "condUnary": {
@@ -791,7 +800,19 @@
     "secretWrongPlace": "「{0}」のパスワードは、登録した画面にしか入れないよ（いま前にあるのは「{1}」、登録した画面は「{2}」）。対象ウィンドウや SWITCH を確かめてね",
     "tablePathUnsafe": "表の保存先に差し込んだ値に、使えない文字（..　:　先頭の \\ ・改行）が入っていたから保存しなかったよ: {0}",
     "tablePathCsv": "表の保存先は .csv のファイルにしてね: {0}",
-    "secretNotPasswordField": "「{0}」のパスワードは、パスワードの欄（入れた文字が ● になる欄）にしか入れないよ。前のステップでパスワードの欄を選んでね"
+    "secretNotPasswordField": "「{0}」のパスワードは、パスワードの欄（入れた文字が ● になる欄）にしか入れないよ。前のステップでパスワードの欄を選んでね",
+    "fileEmpty": "{0}する元のファイルか行き先が空っぽだよ（差し込んだ値も確かめてね）",
+    "fileFailed": "🚨 ファイルの{0}ができなかったキュン（{1}）",
+    "fileDone": "🗂 {0}したよ: {1} → {2}",
+    "fileDoneMany": "🗂 {0} 件のファイルを{1}したよ → {2}",
+    "fileNotFound": "元のファイルが見つからない: {0}",
+    "fileNoFolder": "元のフォルダが見つからない: {0}",
+    "fileNoMatch": "「{0}」に合うファイルが見つからない（フォルダ: {1}）",
+    "fileExists": "行き先に同じ名前のファイルがあるよ（上書きしない設定）: {0}",
+    "fileIsFolder": "行き先に同じ名前のフォルダがあるよ: {0}",
+    "fileSame": "元と行き先が同じファイルだよ: {0}",
+    "fileProtected": "ふじキュン自身のファイル（fujikyun で始まるファイル）は操作しないよ: {0}",
+    "fileBusy": "ファイルがほかのアプリで開かれているよ。そのアプリで閉じてから、もう一度実行してね"
   },
   "schedule": {
     "repeats": {

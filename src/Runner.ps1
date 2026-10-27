@@ -25,6 +25,7 @@
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
 #    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
 #    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
+#    FileOp {Request} -> @(@{ From; To }, ...) (Invoke-FujiFileOperation; throws a message when it cannot)
 #
 #  Each step returns @{ Action = 'next'|'skipRow'|'error'; Delay; Message; RecordRow; Uncatchable }.
 # ---------------------------------------------------------------------------------------------
@@ -907,6 +908,7 @@ function Invoke-FujiRunCommand {
         'SCREENSHOT' { return (Invoke-FujiScreenshot -Run $Run -Settings $p) }
         'MAIL' { return (Invoke-FujiMail -Run $Run -Settings $p) }
         { $_ -in @('EXCEL_READ', 'EXCEL_WRITE') } { return (Invoke-FujiExcel -Run $Run -Cmd $cmd -Settings $p) }
+        'FILE_OP' { return (Invoke-FujiFileOp -Run $Run -Settings $p) }
         'LOOP_START' { return (Invoke-FujiLoopStart -Run $Run -Settings $p) }
         'LOOP_END' {
             if ($Run.LoopStack.Count -gt 0) {
@@ -1343,6 +1345,32 @@ function Invoke-FujiExcel {
         & $Run.Io.Watch
     }
     return (Get-FujiRunNext 0)
+}
+
+# Copy, move or rename. A path that is not a full one is in the app's folder.
+function Invoke-FujiFileOp {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $op = Get-FujiFileOpKind $Settings['op']
+    $src = (Expand-FujiRunText -Run $Run -Text $Settings['src']).Trim().Trim('"')
+    $dest = (Expand-FujiRunText -Run $Run -Text $Settings['dest']).Trim().Trim('"')
+    $what = Get-FujiText ('label.fileOp' + $op)
+    if ($src -eq '' -or $dest -eq '') { return (Get-FujiRunError (Get-FujiText 'run.fileEmpty' $what)) }
+    if ($op -eq 'RENAME' -and $dest -match '[\\/]') { return (Get-FujiRunError (Get-FujiText 'validate.fileNewNameOnly')) }
+    if (-not [System.IO.Path]::IsPathRooted($src)) { $src = Join-Path $Run.Directory $src }
+    if ($op -ne 'RENAME' -and -not [System.IO.Path]::IsPathRooted($dest)) { $dest = Join-Path $Run.Directory $dest }
+    $request = @{ Op = $op; Source = $src; Dest = $dest; Overwrite = ($Settings['overwrite'] -eq 'YES'); AppDirectory = $Run.Directory }
+    # the Io may hand the list over as one array object: unrolled here
+    try { $done = @(@(& $Run.Io.FileOp $request) | ForEach-Object { $_ }) } catch [System.OperationCanceledException] { throw } catch { return (Get-FujiRunError (Get-FujiText 'run.fileFailed' $what $_.Exception.Message)) }
+    $targets = @($done | ForEach-Object { [string]$_.To })
+    if ($done.Count -eq 1) { Write-FujiRunLog $Run (Get-FujiText 'run.fileDone' $what $done[0].From $done[0].To) }
+    else { Write-FujiRunLog $Run (Get-FujiText 'run.fileDoneMany' $done.Count $what ([System.IO.Path]::GetDirectoryName($targets[0]))) }
+    $var = ([string]$Settings['var']).Trim()
+    if ($var) {
+        # several files: separated by ";" as MAIL attachments take them
+        $Run.Vars[$var] = $targets -join ';'
+        & $Run.Io.Watch
+    }
+    return (Get-FujiRunNext)
 }
 
 # ----------------------------------------------------------------- fields, tables and passwords by UI Automation

@@ -692,7 +692,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true
+        Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true; FileFails = $false
     }
     return @{
         Log = { param($Message, $Level) $script:Fake.Logs.Add($Level + ' ' + $Message) }
@@ -738,6 +738,12 @@ function New-FakeIo {
         TypeSecret = { param($Text) $script:Fake.Calls.Add('SECRET ' + $Text.Length) }
         ForegroundWindow = { return $script:Fake.Front }
         FocusIsPassword = { return $script:Fake.PasswordFocus }
+        FileOp = { param($Request)
+            $script:Fake.Calls.Add(('FILE {0} {1} > {2} {3}' -f $Request.Op, $Request.Source, $Request.Dest, $Request.Overwrite))
+            if ($script:Fake.FileFails) { throw 'locked' }
+            # as the real one: the list as one object
+            if ($Request.Source.Contains('*')) { return , @(@{ From = 'D\in\a.pdf'; To = 'D\out\a.pdf' }, @{ From = 'D\in\b.pdf'; To = 'D\out\b.pdf' }) }
+            return , @(@{ From = $Request.Source; To = $Request.Dest }) }
     }
 }
 
@@ -958,6 +964,55 @@ Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'run: missing reference image'
 $run = New-TestRun -Steps @(@('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A1","value":"{{1}}"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A2","value":"=SUM(B1:B2)"}'), @('EXCEL_WRITE', '{"path":"b.xlsx","sheet":"","cell":"A3","value":"{{2}}"}')) -Rows @(, [string[]]@('=cmd|x', '-12'))
 [void](Invoke-FujiRun -Run $run)
 Assert-Equal "EXCEL True A1 '=cmd|x | EXCEL True A2 =SUM(B1:B2) | EXCEL True A3 -12" (Get-FakeCall 'EXCEL') 'Excel write: inserted formula as text, typed formula kept, number kept'
+# files: copy, move, rename (the Io does the work; paths not starting at a drive are in the app folder)
+$run = New-TestRun -Steps @(@('FILE_OP', '{"op":"COPY","src":"C:\\in\\{{1}}.pdf","dest":"out\\","overwrite":"NO","var":"p"}'), @('FILE_OP', '{"op":"RENAME","src":"C:\\in\\{{1}}.pdf","dest":"done_{{1}}.pdf","overwrite":"YES","var":""}'),
+    @('FILE_OP', '{"op":"MOVE","src":"C:\\in\\*.pdf","dest":"C:\\out","overwrite":"NO","var":"all"}')) -Rows @(, [string[]]@('r1'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'file op: run'
+Assert-Equal ('FILE COPY C:\in\r1.pdf > ' + (Join-Path 'D' 'out\') + ' False | FILE RENAME C:\in\r1.pdf > done_r1.pdf True | FILE MOVE C:\in\*.pdf > C:\out False') (Get-FakeCall 'FILE') 'file op: requests (relative destination in the app folder, rename keeps the name only)'
+Assert-True ($run.Vars['p'] -eq (Join-Path 'D' 'out\') -and $run.Vars['all'] -eq 'D\out\a.pdf;D\out\b.pdf') 'file op: destination paths into the variable (several joined by ;)'
+$run = New-TestRun -Steps @(, @('FILE_OP', '{"op":"RENAME","src":"C:\\in\\a.pdf","dest":"{{1}}","overwrite":"NO","var":""}')) -Rows @(, [string[]]@('..\x.pdf'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'file op: an inserted new name cannot move the file to another folder'
+Assert-Equal '' (Get-FakeCall 'FILE') 'file op: nothing done for a bad new name'
+$run = New-TestRun -Steps @(, @('FILE_OP', '{"op":"COPY","src":"C:\\in\\a.pdf","dest":"C:\\out\\","overwrite":"NO","var":""}'))
+$script:Fake.FileFails = $true
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'file op: a failure stops the run'
+Assert-True (@($script:Fake.Logs | Where-Object { $_ -like ('error*' + (Get-FujiText 'run.fileFailed' (Get-FujiText 'label.fileOpCOPY') 'locked')) }).Count -eq 1) 'file op: failure logged with the reason'
+Assert-Equal 'COPY' (ConvertFrom-FujiStepValue -Cmd 'FILE_OP' -Value '{"op":"zip"}')['op'] 'file op: unknown kind read as copy'
+Assert-True ((Test-FujiStepSetting -Cmd 'FILE_OP' -Settings @{ op = 'RENAME'; src = 'C:\a\*.pdf'; dest = 'b.pdf'; overwrite = 'NO'; var = '' }) -eq (Get-FujiText 'validate.fileRenameWild')) 'file op: no wildcard when renaming'
+Assert-True ((Test-FujiStepSetting -Cmd 'FILE_OP' -Settings @{ op = 'RENAME'; src = 'C:\a\x.pdf'; dest = 'sub\b.pdf'; overwrite = 'NO'; var = '' }) -eq (Get-FujiText 'validate.fileNewNameOnly')) 'file op: a new name only when renaming'
+Assert-True ((Test-FujiStepSetting -Cmd 'FILE_OP' -Settings @{ op = 'MOVE'; src = 'C:\a\x.pdf'; dest = ''; overwrite = 'NO'; var = '' }) -eq (Get-FujiText 'validate.fileDest')) 'file op: destination needed'
+Assert-Equal '' (Test-FujiStepSetting -Cmd 'FILE_OP' -Settings @{ op = 'COPY'; src = 'C:\a\x.pdf'; dest = 'C:\b\'; overwrite = 'NO'; var = '' }) 'file op: settings fine'
+
+# files for real: everything is checked before any file moves
+$fw = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_fileop_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path (Join-Path $fw 'in'))
+try {
+    foreach ($n in @('a.pdf', 'b.PDF', 'c.pdfx', 'd.txt')) { Write-FujiTextFile -Path (Join-Path (Join-Path $fw 'in') $n) -Text $n }
+    $r = Invoke-FujiFileOperation -Op 'COPY' -Source (Join-Path $fw 'in\*.pdf') -Dest (Join-Path $fw 'out\')
+    Assert-Equal 'a.pdf,b.PDF' ((@($r | ForEach-Object { [System.IO.Path]::GetFileName($_.To) }) | Sort-Object) -join ',') 'file op: *.pdf matches .pdf of any case, not .pdfx'
+    Assert-True ((Test-Path -LiteralPath (Join-Path $fw 'out\a.pdf')) -and (Test-Path -LiteralPath (Join-Path $fw 'in\a.pdf'))) 'file op: copy made the folder and kept the original'
+    $msg = ''
+    try { [void](Invoke-FujiFileOperation -Op 'MOVE' -Source (Join-Path $fw 'in\*.pdf') -Dest (Join-Path $fw 'out')) } catch { $msg = $_.Exception.Message }
+    Assert-Equal (Get-FujiText 'run.fileExists' (Join-Path $fw 'out\a.pdf')) $msg 'file op: a file in the way stops the move'
+    Assert-True ((Test-Path -LiteralPath (Join-Path $fw 'in\a.pdf')) -and (Test-Path -LiteralPath (Join-Path $fw 'in\b.PDF'))) 'file op: nothing moved when one target is in the way'
+    Write-FujiTextFile -Path (Join-Path $fw 'in\a.pdf') -Text 'new'
+    [void](Invoke-FujiFileOperation -Op 'MOVE' -Source (Join-Path $fw 'in\a.pdf') -Dest (Join-Path $fw 'out\a.pdf') -Overwrite $true)
+    Assert-True ((Read-FujiUtf8File -Path (Join-Path $fw 'out\a.pdf')) -eq 'new' -and -not (Test-Path -LiteralPath (Join-Path $fw 'in\a.pdf'))) 'file op: move over a file when asked'
+    $r = Invoke-FujiFileOperation -Op 'RENAME' -Source (Join-Path $fw 'in\d.txt') -Dest 'done_d.txt'
+    Assert-True ((Test-Path -LiteralPath (Join-Path $fw 'in\done_d.txt')) -and $r[0].To -eq (Join-Path $fw 'in\done_d.txt')) 'file op: rename in the same folder'
+    [void](Invoke-FujiFileOperation -Op 'RENAME' -Source (Join-Path $fw 'in\done_d.txt') -Dest 'DONE_d.txt')
+    Assert-Equal 'DONE_d.txt' ([System.IO.Path]::GetFileName(@(Get-ChildItem -LiteralPath (Join-Path $fw 'in') -Filter '*_d.txt')[0].FullName)) 'file op: only the case of the name changed'
+    foreach ($bad in @(@('COPY', (Join-Path $fw 'in\none.pdf'), (Join-Path $fw 'out\'), 'run.fileNotFound'), @('MOVE', (Join-Path $fw 'in\*.xls'), (Join-Path $fw 'out\'), 'run.fileNoMatch'),
+            @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'in\c.pdfx'), 'run.fileSame'), @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'fujikyun_macros.json'), 'run.fileProtected'))) {
+        $msg = ''
+        try { [void](Invoke-FujiFileOperation -Op $bad[0] -Source $bad[1] -Dest $bad[2] -AppDirectory $fw) } catch { $msg = $_.Exception.Message }
+        $raw = Get-FujiText $bad[3]
+        Assert-True ($msg -ne '' -and $msg.StartsWith($raw.Substring(0, $raw.IndexOf('{')))) ('file op refused: ' + $bad[3] + ' (' + $msg + ')')
+    }
+} finally {
+    Remove-Item -LiteralPath $fw -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $run = New-TestRun -Steps @(@('MAIL', '{"method":"MAILTO","mode":"DRAFT","to":"{{1}}","cc":"","subject":"s","body":"b","attach":""}')) -Rows @(, [string[]]@('a@x.jp?bcc=evil@y.jp'))
 [void](Invoke-FujiRun -Run $run)
 Assert-True ((Get-FakeCall 'URL').StartsWith('URL mailto:a@x.jp%3Fbcc%3Devil@y.jp?subject=')) 'mailto: an inserted address cannot add fields'
