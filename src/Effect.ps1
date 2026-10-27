@@ -296,3 +296,15 @@ function ConvertTo-FujiEffectTable {
     }
     return , $rows.ToArray()
 }
+
+# Rows of text -> tab-separated lines (pasted into Excel as a table). A cell Excel would take for a
+# formula (a macro named "=...") gets the leading apostrophe, as in every CSV the app writes.
+function ConvertTo-FujiTabText {
+    param([object[]]$Rows)
+    return ((@($Rows | ForEach-Object { (@($_) | ForEach-Object { ConvertTo-FujiSafeCsvValue (([string]$_) -replace '[\t\r\n]+', ' ') }) -join "`t" }) -join "`r`n") + "`r`n")
+}
+
+function ConvertTo-FujiSafeTable {
+    param([object[]]$Rows)
+    return , @($Rows | ForEach-Object { , [string[]]@(@($_) | ForEach-Object { ConvertTo-FujiSafeCsvValue ([string]$_) }) })
+}

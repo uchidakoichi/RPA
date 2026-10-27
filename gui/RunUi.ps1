@@ -222,6 +222,8 @@ function Start-FujiRunUi {
         Show-FujiMessage -Title (Get-FujiText 'run.unbalancedTitle') -Message (Get-FujiText 'run.unbalanced')
         return ''
     }
+    # trying a part (from here, only this) is left to the person making the macro
+    if (-not $Partial -and -not (Confirm-FujiCheckBeforeRun -Unattended:$Unattended)) { return '' }
     $csvRows = $script:Ed.Csv.Rows
     if ($csvRows.Count -eq 0 -and $usesCsv) {
         if ($Unattended) {

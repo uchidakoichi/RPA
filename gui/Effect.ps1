@@ -249,12 +249,6 @@ function Save-FujiEffectSettingUi {
     }
 }
 
-# Rows of text -> tab-separated lines (pasted into Excel as a table)
-function ConvertTo-FujiTabText {
-    param([object[]]$Rows)
-    return ((@($Rows | ForEach-Object { (@($_) | ForEach-Object { ([string]$_) -replace '[\t\r\n]+', ' ' }) -join "`t" }) -join "`r`n") + "`r`n")
-}
-
 function Save-FujiEffectCsvUi {
     $d = $script:Ui.EffectDialog
     $month = Get-FujiEffectMonthChoice
@@ -262,7 +256,7 @@ function Save-FujiEffectCsvUi {
     if ($month) { $suffix = $month.Replace('/', '') }
     $path = Get-FujiEditorPath $script:Ed ('fujikyun_effect_' + $suffix + '.csv')
     try {
-        Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows $d.Table) -Bom
+        Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows (ConvertTo-FujiSafeTable -Rows $d.Table)) -Bom
     } catch {
         Write-FujiUiLog -Message (Get-FujiText 'run.saveFailed' $_.Exception.Message) -Level 'error'
         return

@@ -379,7 +379,8 @@ function New-FujiTopPanel {
     foreach ($b in @(
             @('gui.breakpoint', 'gui.breakpointTip', { Invoke-FujiUi { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } } }),
             @('gui.runFrom', 'gui.runFromTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'from') } }),
-            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } })
+            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } }),
+            @('gui.check', 'gui.checkTip', { Invoke-FujiUi { Invoke-FujiCheckUi } })
         )) {
         $btn = New-FujiButton -Text (Get-FujiText $b[0]) -Tip (Get-FujiText $b[1])
         $btn.Add_Click($b[2])
