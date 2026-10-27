@@ -37,16 +37,20 @@ $script:FujiEvidenceFolder = 'evidence'
 # After the robot's own keys and clicks, input is the robot's for this long (a value set here)
 $script:FujiRobotInputMs = 500
 
-# "Pause when touched": $true when someone used the keyboard or mouse since the last look.
+# "Pause when touched": $true when someone pressed a key or a mouse button since the last look.
 # State: @{ Mark (the last input tick seen, $null: take the next one as it is); RobotUntil };
 # Now and RobotUntil in milliseconds of one clock. Input up to RobotUntil is the robot's own.
+# Pressed: { } -> $true when a key or mouse button is down now. New input with nothing pressed is
+# the cursor moving (a mouse pushed aside, a desk knocked): it does not pause the run.
 function Test-FujiUserInput {
-    param([Parameter(Mandatory)][hashtable]$State, [uint32]$LastInput, [long]$Now)
+    param([Parameter(Mandatory)][hashtable]$State, [uint32]$LastInput, [long]$Now, [Parameter(Mandatory)][scriptblock]$Pressed)
     if ($null -eq $State.Mark -or $Now -lt $State.RobotUntil) {
         $State.Mark = $LastInput
         return $false
     }
-    return ($LastInput -ne [uint32]$State.Mark)
+    if ($LastInput -eq [uint32]$State.Mark) { return $false }
+    $State.Mark = $LastInput
+    return [bool](& $Pressed)
 }
 
 function New-FujiStopException {

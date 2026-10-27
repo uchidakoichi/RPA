@@ -12,6 +12,9 @@
 
 $script:FujiCommands = $null
 $script:FujiBlockEnds = @{}
+# Raised whenever fujikyun_commands.json gets commands or fields the scripts need (2: FILE_OP):
+# an older file is reported at start (its palette would lack the new buttons)
+$script:FujiCommandsVersion = 2
 
 function Import-FujiCommand {
     param([Parameter(Mandatory)][string]$Path)
@@ -20,6 +23,19 @@ function Import-FujiCommand {
     foreach ($start in $script:FujiCommands['blocks']['pairs'].Keys) {
         $script:FujiBlockEnds[$script:FujiCommands['blocks']['pairs'][$start]] = $start
     }
+}
+
+# '' when fujikyun_commands.json is as new as this script, otherwise the message to show
+function Test-FujiCommandsVersion {
+    $have = 0
+    if ($script:FujiCommands.Contains('commandsVersion')) { $have = [int]$script:FujiCommands['commandsVersion'] }
+    if ($have -ge $script:FujiCommandsVersion) { return '' }
+    $message = Get-FujiText 'gui.commandsOld' $have $script:FujiCommandsVersion
+    if ($message -eq 'gui.commandsOld') {
+        # fujikyun_ja.json is old too (it is reported as well)
+        $message = 'fujikyun_commands.json is older than fujikyun.ps1 (version {0}, needed {1}). Please replace fujikyun_commands.json with the latest one.' -f $have, $script:FujiCommandsVersion
+    }
+    return $message
 }
 
 function Get-FujiCommandDef {
