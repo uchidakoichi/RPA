@@ -5,7 +5,10 @@
 # ---------------------------------------------------------------------------------------------
 
 $script:Run = $null
-$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null; InBreak = $false; BreakChoice = 'run' }
+$script:RunCtl = @{ Running = $false; Paused = $false; StopReason = ''; EscSince = $null; Excel = $null; Highlight = -1; Player = $null; AlarmTimer = $null; InBreak = $false; BreakChoice = 'run'
+    # "pause when touched": on for this run, the last input seen (Test-FujiUserInput), a clock for both
+    TouchPause = $false; Input = @{ Mark = $null; RobotUntil = 0 }; Clock = [System.Diagnostics.Stopwatch]::StartNew()
+}
 $script:EscHoldMs = 1000
 $script:FujiSelfElevated = $null
 
@@ -52,6 +55,11 @@ function New-FujiRunBar {
     $alerts = New-FujiButton -Text (Get-FujiText 'gui.alertSettings') -Tip (Get-FujiText 'gui.alertSettingsTip')
     $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
     [void]$row.Controls.Add($alerts)
+    $touch = $false
+    if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
+    $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')
+    $script:Ui.TouchCheck.Add_CheckedChanged({ Invoke-FujiUi { Save-FujiTouchPauseSetting } })
+    [void]$row.Controls.Add($script:Ui.TouchCheck)
     $script:Ui.SafeCheck = New-FujiCheck -Text (Get-FujiText 'gui.safeMode') -Checked $false -Tip (Get-FujiText 'gui.safeModeTip')
     $script:Ui.NotifyCheck = New-FujiCheck -Text (Get-FujiText 'gui.notify') -Checked $true -Tip (Get-FujiText 'gui.notifyTip')
     [void]$row.Controls.Add($script:Ui.SafeCheck)
@@ -112,6 +120,12 @@ function Set-FujiRunUi {
     $script:Ui.StopButton.Enabled = $Running
     $script:Ui.PauseButton.Text = Get-FujiText 'gui.pause'
     foreach ($c in @($script:Ui.StartRow, $script:Ui.EndRow, $script:Ui.Interval)) { $c.Enabled = -not $Running }
+}
+
+# The "pause when touched" box is kept for this PC
+function Save-FujiTouchPauseSetting {
+    Set-FujiUiSetting -Settings $script:Settings -Key 'touchPause' -Value ([string]$script:Ui.TouchCheck.Checked).ToLowerInvariant()
+    try { Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings } catch { Write-FujiUiLog -Message (Get-FujiText 'editor.saveFailed' $_.Exception.Message) -Level 'warn' }
 }
 
 function Test-FujiEditLocked {
@@ -177,6 +191,8 @@ function Invoke-FujiUiBreak {
         }
     } finally {
         $c.InBreak = $false
+        # the clicks on Next / Resume were a person's: the next look starts from here
+        $c.Input.Mark = $null
     }
     if ($c.StopReason) { throw (New-FujiStopException $c.StopReason) }
     return $c.BreakChoice
@@ -257,6 +273,8 @@ function Start-FujiRunUi {
     $c.StopReason = ''
     $c.EscSince = $null
     $c.Highlight = -1
+    $c.TouchPause = $script:Ui.TouchCheck.Checked
+    $c.Input.Mark = $null
     Set-FujiRunUi -Running $true
     Update-FujiRunButton
     Write-FujiUiLog -Message (Get-FujiText 'run.start' $macro.name $rows.Count $rr.Range $interval) -Level 'run'
@@ -290,18 +308,46 @@ function Wait-FujiUiRun {
         [System.Windows.Forms.Application]::DoEvents()
         Test-FujiEscHeld
         if ($c.StopReason) { throw (New-FujiStopException $c.StopReason) }
+        if ($c.TouchPause -and -not $c.Paused) { Test-FujiTouchPause }
         if ($c.Paused) {
             while ($c.Paused -and -not $c.StopReason) {
                 [System.Windows.Forms.Application]::DoEvents()
+                # holding Esc stops a paused run too (Esc pauses it first when "pause when touched" is on)
+                Test-FujiEscHeld
                 Start-Sleep -Milliseconds 30
             }
             if ($c.StopReason) { throw (New-FujiStopException $c.StopReason) }
+            $c.Input.Mark = $null
             return $true
         }
         $left = $Ms - $sw.ElapsedMilliseconds
         if ($left -le 0) { return $false }
         Start-Sleep -Milliseconds ([Math]::Max(1, [Math]::Min(15, $left)))
     }
+}
+
+# Someone used the keyboard or mouse during the run (not the robot): pause, as the Pause button does
+function Test-FujiTouchPause {
+    $c = $script:RunCtl
+    $mem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
+    try {
+        [System.Runtime.InteropServices.Marshal]::WriteInt32($mem, 8)
+        if (-not (Get-FujiNativeType)::GetLastInputInfo($mem)) { return }
+        # the tick count is unsigned (above 2^31 after about 25 days of uptime)
+        $last = [System.BitConverter]::ToUInt32([System.BitConverter]::GetBytes([System.Runtime.InteropServices.Marshal]::ReadInt32($mem, 4)), 0)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($mem)
+    }
+    if (-not (Test-FujiUserInput -State $c.Input -LastInput $last -Now $c.Clock.ElapsedMilliseconds)) { return }
+    Switch-FujiRunPause
+    Write-FujiUiLog -Message (Get-FujiText 'run.touchPaused') -Level 'warn'
+    [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle)
+}
+
+# The robot's own keys and clicks are not someone touching the PC
+function Set-FujiRobotInput {
+    $c = $script:RunCtl
+    $c.Input.RobotUntil = $c.Clock.ElapsedMilliseconds + $script:FujiRobotInputMs
 }
 
 # Esc held for about a second stops the run from any window (a macro's own {ESC} is one short press)
@@ -317,33 +363,50 @@ function Test-FujiEscHeld {
 }
 
 # ----------------------------------------------------------------- the Io for Runner.ps1
+# Io calls that type, click or bring a window up (or show a dialog a person answers) are wrapped,
+# so "pause when touched" does not take them for someone touching the PC
+function Invoke-FujiRobot {
+    param([scriptblock]$Do)
+    Set-FujiRobotInput
+    try { return (& $Do) } finally { Set-FujiRobotInput }
+}
+
+# The step a log line written during a run is about: @{ MacroId; Index } or $null
+function Get-FujiRunLogLink {
+    $r = $script:Run
+    if ($null -eq $r -or -not $script:RunCtl.Running -or $r.StepIndex -lt 0 -or $r.StepIndex -ge $r.Steps.Count) { return $null }
+    $id = [string]$r.Macro.id
+    if ($r.CallStack.Count -gt 0) { $id = [string]$r.CallStack[$r.CallStack.Count - 1].Id }
+    return @{ MacroId = $id; Index = $r.StepIndex }
+}
+
 function New-FujiWinIo {
     return @{
-        Log = { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level }
+        Log = { param($Message, $Level) Write-FujiUiLog -Message $Message -Level $Level -Link (Get-FujiRunLogLink) }
         Wait = { param($Ms) Wait-FujiUiRun -Ms $Ms }
-        Activate = { param($Title) Invoke-FujiActivateTitle -Title $Title }
+        Activate = { param($Title) Invoke-FujiRobot { Invoke-FujiActivateTitle -Title $Title } }
         WindowExists = { param($Title) return ($null -ne (Select-FujiWindow -Windows (Get-FujiTopWindow) -Title $Title)) }
         SelfHasFocus = { Test-FujiSelfForeground }
         InputBlocked = { param($Title) $w = Select-FujiWindow -Windows (Get-FujiTopWindow) -Title $Title; return ($null -ne $w -and (Test-FujiWindowElevated -Handle $w.Handle)) }
-        FocusSelf = { [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle) }
-        SendKeys = { param($Keys) [System.Windows.Forms.SendKeys]::SendWait($Keys) }
+        FocusSelf = { Invoke-FujiRobot { [void](Invoke-FujiWindowActivate -Handle $script:Ui.Form.Handle) } }
+        SendKeys = { param($Keys) Invoke-FujiRobot { [System.Windows.Forms.SendKeys]::SendWait($Keys) } }
         SetClipboard = { param($Text) Set-FujiClipboard -Text $Text }
         GetClipboard = { Get-FujiClipboard }
         ClipboardSeq = { (Get-FujiNativeType)::GetClipboardSequenceNumber() }
         ClipboardReady = { param($Seq) Test-FujiClipboardReady -Seq $Seq }
         Start = { param($CommandLine) Start-FujiCommandLine -CommandLine $CommandLine }
-        ClickAt = { param($X, $Y, $Kind) Invoke-FujiMouseClick -X $X -Y $Y -Kind $Kind }
+        ClickAt = { param($X, $Y, $Kind) Invoke-FujiRobot { Invoke-FujiMouseClick -X $X -Y $Y -Kind $Kind } }
         Screenshot = { param($Path, $Full) Save-FujiScreenshot -Path $Path -Full $Full }
-        ClickName = { param($Name, $WindowTitle) Invoke-FujiNameClick -Name $Name -WindowTitle $WindowTitle }
-        ClickImage = { param($Path, $Threshold) Invoke-FujiImageClick -Path $Path -Threshold $Threshold }
-        Ocr = { param($Settings, $Find, $Nth) Invoke-FujiOcr -Settings $Settings -Find $Find -Nth $Nth }
+        ClickName = { param($Name, $WindowTitle) Invoke-FujiRobot { Invoke-FujiNameClick -Name $Name -WindowTitle $WindowTitle } }
+        ClickImage = { param($Path, $Threshold) Invoke-FujiRobot { Invoke-FujiImageClick -Path $Path -Threshold $Threshold } }
+        Ocr = { param($Settings, $Find, $Nth) Invoke-FujiRobot { Invoke-FujiOcr -Settings $Settings -Find $Find -Nth $Nth } }
         Excel = { param($Request) Invoke-FujiExcelRequest -Request $Request }
         Outlook = { param($Mail) Send-FujiOutlookMail -Mail $Mail }
         OpenUrl = { param($Url) Start-Process -FilePath $Url }
         FileExists = { param($Path) return ([bool]$Path -and (Test-Path -LiteralPath $Path -PathType Leaf)) }
         Now = { Get-Date }
-        Confirm = { param($Caption, $Message) Show-FujiRunConfirm -Caption $Caption -Message $Message }
-        Ask = { param($Caption, $Message, $Default) Show-FujiRunAsk -Caption $Caption -Message $Message -Default $Default }
+        Confirm = { param($Caption, $Message) Invoke-FujiRobot { Show-FujiRunConfirm -Caption $Caption -Message $Message } }
+        Ask = { param($Caption, $Message, $Default) Invoke-FujiRobot { Show-FujiRunAsk -Caption $Caption -Message $Message -Default $Default } }
         Progress = { param($Text) $script:Ui.Progress.Text = $Text }
         Highlight = { param($StepIndex) Set-FujiRunHighlight -Index $StepIndex }
         Watch = { Update-FujiWatchPanel }
@@ -351,12 +414,12 @@ function New-FujiWinIo {
         Notify = { Invoke-FujiNotify }
         EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
-        SetField = { param($Request) Set-FujiUiaField -Request $Request }
+        SetField = { param($Request) Invoke-FujiRobot { Set-FujiUiaField -Request $Request } }
         GetField = { param($Request) Get-FujiUiaField -Request $Request }
         ReadTable = { param($Request) Read-FujiUiaTable -Request $Request }
         SaveText = { param($Path, $Text) Save-FujiRunText -Path $Path -Text $Text }
         GetSecret = { param($Target) Read-FujiCredential -Target $Target }
-        TypeSecret = { param($Text) [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) }
+        TypeSecret = { param($Text) Invoke-FujiRobot { [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) } }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }

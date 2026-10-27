@@ -34,6 +34,20 @@ $script:FujiRunLimits = @{
     PasteSettleMs = 250; ClipboardSettleMs = 150; CopyPollMs = 20; CopyWaitMaxMs = 3000; WindowRetryMax = 3; WindowRetryMs = 1000; CallDepthMax = 10
 }
 $script:FujiEvidenceFolder = 'evidence'
+# After the robot's own keys and clicks, input is the robot's for this long (a value set here)
+$script:FujiRobotInputMs = 500
+
+# "Pause when touched": $true when someone used the keyboard or mouse since the last look.
+# State: @{ Mark (the last input tick seen, $null: take the next one as it is); RobotUntil };
+# Now and RobotUntil in milliseconds of one clock. Input up to RobotUntil is the robot's own.
+function Test-FujiUserInput {
+    param([Parameter(Mandatory)][hashtable]$State, [uint32]$LastInput, [long]$Now)
+    if ($null -eq $State.Mark -or $Now -lt $State.RobotUntil) {
+        $State.Mark = $LastInput
+        return $false
+    }
+    return ($LastInput -ne [uint32]$State.Mark)
+}
 
 function New-FujiStopException {
     param([string]$Reason)

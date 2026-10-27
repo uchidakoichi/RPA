@@ -696,6 +696,8 @@ function New-FujiBottomPanel {
     $log.BorderStyle = [System.Windows.Forms.BorderStyle]::None
     $log.DetectUrls = $false
     $log.HideSelection = $false
+    $script:Ui.ToolTip.SetToolTip($log, (Get-FujiText 'gui.logTip'))
+    $log.Add_MouseDoubleClick({ $at = $_.Location; Invoke-FujiUi { Select-FujiLogStepUi -Point $at } })
     $script:Ui.Log = $log
     $watch = New-Object -TypeName System.Windows.Forms.TextBox
     $watch.Multiline = $true
@@ -826,6 +828,22 @@ function Select-FujiMacroUi {
     $script:Ed.Selected = -1
     Update-FujiAll
     if ($script:Ui.List.Items.Count -gt 0) { $script:Ui.List.TopIndex = 0 }
+}
+
+# A double click on a log line written during a run selects the step it is about
+function Select-FujiLogStepUi {
+    param([System.Drawing.Point]$Point)
+    if ($script:RunCtl.Running) { return }
+    $box = $script:Ui.Log
+    $at = $box.GetCharIndexFromPosition($Point)
+    $line = $script:LogDropped + ([regex]::Matches($box.Text.Substring(0, [Math]::Min($at, $box.TextLength)), "`n")).Count
+    for ($i = $script:LogLinks.Count - 1; $i -ge 0; $i--) {
+        $l = $script:LogLinks[$i]
+        if ($line -ge $l.First -and $line -le $l.Last) {
+            if (-not (Select-FujiStepAt -MacroId $l.MacroId -Index $l.Index)) { Write-FujiUiLog -Message (Get-FujiText 'gui.logStepGone') -Level 'warn' }
+            return
+        }
+    }
 }
 
 # Shows a step of a macro (from a list of step times, a check, a log line): that macro, the step
