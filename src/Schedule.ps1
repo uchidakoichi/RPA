@@ -32,6 +32,8 @@ function Read-FujiSetting {
     }
     # how the app calls a person (Alert.ps1 checks each value when it is used)
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('alerts') -and $s['alerts'] -is [System.Collections.IDictionary]) { $settings['alerts'] = $s['alerts'] }
+    # minutes by hand per macro and pay per hour (Effect.ps1 checks each value when it is used)
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('effect') -and $s['effect'] -is [System.Collections.IDictionary]) { $settings['effect'] = $s['effect'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
             if ($x -isnot [System.Collections.IDictionary] -or -not $x.Contains('id') -or -not $x['id']) { continue }

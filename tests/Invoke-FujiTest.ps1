@@ -1322,6 +1322,100 @@ Assert-True ((Get-FujiPartialRun -Editor $e -Mode 'from').ContainsKey('Error')) 
 $e.Selected = -1
 Assert-True ((Get-FujiPartialRun -Editor $e -Mode 'only').ContainsKey('Error')) 'no partial run without a selection'
 
+# ----------------------------------------------------------------- effect: step times, time a person spent, records, summary
+$run = New-TestRun -Steps @(@('LOOP_START', '{"mode":"COUNT","count":"3"}'), @('KEY', 'a'), @('WAIT', '0', @{ disabled = $true }), @('LOOP_END', ''), @('COMMENT', 'x'), @('CONFIRM', 'ok?')) -Rows @([string[]]@('1'), [string[]]@('2'))
+$script:Fake.Answers.Enqueue('continue'); $script:Fake.Answers.Enqueue('continue')
+$run.Io.Confirm = { param($Caption, $Message) $null = $Caption, $Message; Start-Sleep -Milliseconds 60; return $script:Fake.Answers.Dequeue() }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'step times: run'
+$times = Get-FujiStepTimeRow -Run $run
+$byIndex = @{}
+foreach ($t in $times) { $byIndex[$t.Index] = $t }
+Assert-True ($byIndex[0].Count -eq 8 -and $byIndex[1].Count -eq 6 -and $byIndex[5].Count -eq 2) 'step times: counted per step and row (loop start 4 times a row)'
+Assert-True (-not $byIndex.ContainsKey(2) -and -not $byIndex.ContainsKey(3) -and -not $byIndex.ContainsKey(4)) 'step times: no disabled step, block end or comment'
+Assert-True ($times[0].Index -eq 5 -and $times[0].TotalMs -ge 100 -and [Math]::Abs((@($times | ForEach-Object { $_.Share }) | Measure-Object -Sum).Sum - 100) -lt 0.01) 'step times: longest first, shares add up to 100'
+Assert-True ($run.AttendedMs -ge 100) ('attended time: the confirm waits are a person''s time (' + $run.AttendedMs + ')')
+$text = ConvertTo-FujiStepTimeText -Rows $times
+Assert-True ($text.StartsWith(((Get-FujiText 'steptime.head') -join "`t")) -and ($text -split "`r`n").Count -eq 5) 'step times: tab text with a heading'
+$sub = [ordered]@{ id = 'sub'; name = 'part'; targetWindow = ''; steps = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+$sub.steps.Add([ordered]@{ cmd = 'KEY'; val = 'z'; label = '' })
+$run = New-TestRun -Steps @(, @('CALL_MACRO', '{"id":"sub","name":"part"}')) -Other @($sub)
+[void](Invoke-FujiRun -Run $run)
+Assert-True (@(Get-FujiStepTimeRow -Run $run | Where-Object { $_.MacroId -eq 'sub' -and $_.Macro -eq 'part' -and $_.Index -eq 0 }).Count -eq 1) 'step times: a called macro''s steps under its own name'
+
+$ew = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_effect_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $ew)
+try {
+    $run = New-TestRun -Steps @(, @('KEY', 'a')) -Rows @([string[]]@('1'), [string[]]@('2')) -Header @('name', (Get-FujiText 'editor.csv.resultHeaderName'))
+    [void](Invoke-FujiRun -Run $run)
+    $rec = New-FujiRunRecord -Run $run -How 'manual' -End ($run.StartTime.AddSeconds(42))
+    Assert-True ($rec.done -eq '2' -and $rec.rows -eq '2' -and $rec.seconds -eq '42' -and $rec.how -eq (Get-FujiText 'effect.how.manual') -and $rec.status -eq (Get-FujiText 'effect.status.done') -and $rec.rerun -eq (Get-FujiText 'effect.yes')) 'run record: rows, time, how, a re-run of rows'
+    $run.Macro.name = '=evil'
+    Add-FujiRunRecord -Directory $ew -Record $rec
+    Add-FujiRunRecord -Directory $ew -Record (New-FujiRunRecord -Run $run -How 'test')
+    $back = Read-FujiRunRecord -Directory $ew
+    Assert-True ($back.Count -eq 2 -and $back[0].done -eq '2' -and $back[1].macro -eq '=evil' -and $back[1].how -eq (Get-FujiText 'effect.how.test')) 'run records: appended and read back (a formula-looking name kept as text)'
+    $raw = [System.IO.File]::ReadAllBytes((Join-Path $ew 'fujikyun_runs.csv'))
+    Assert-True ($raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and ([System.Text.Encoding]::UTF8.GetString($raw)).Contains("'=evil")) 'run records: a BOM for Excel, the name neutralised in the file'
+    $bad = New-TestRun -Steps @(, @('SWITCH', 'none'))
+    [void](Invoke-FujiRun -Run $bad)
+    $badRec = New-FujiRunRecord -Run $bad -How 'manual'
+    Assert-True ($badRec.errors -eq '1' -and $badRec.done -eq '0' -and $badRec.status -eq (Get-FujiText 'effect.status.error')) 'run record: an error without CSV counts as an error row'
+    Assert-True (Set-FujiRunRecordAck -Directory $ew -Start $rec.start -MacroId 'main' -Seconds 95) 'run record: alert answer written'
+    Assert-Equal '95' (Read-FujiRunRecord -Directory $ew)[1].waitAck 'run record: the last matching record got it'
+
+    $ed = New-TestEditor @('KEY')
+    $ed.Directory = $ew
+    $ed.LastChangeAt = (Get-Date).AddSeconds(-90)
+    Submit-FujiEditorChange -Editor $ed -Description 'x'
+    $ed.LastChangeAt = (Get-Date).AddSeconds(-600)
+    Submit-FujiEditorChange -Editor $ed -Description 'y'
+    $edit = @($ed.EditTime.Values)[0]
+    Assert-True ($ed.EditTime.Count -eq 1 -and $edit.Seconds -ge 89 -and $edit.Seconds -lt 120) ('edit time: a short gap counts, a long break does not (' + $edit.Seconds + ')')
+    Save-FujiEditTime -Editor $ed
+    $er = Read-FujiEditRecord -Directory $ew
+    Assert-True ($er.Count -eq 1 -and $er[0].macroId -eq 'a' -and [int]$er[0].editSeconds -ge 89 -and $ed.EditTime.Count -eq 0) 'edit time: written per day and macro, then started again'
+} finally {
+    Remove-Item -LiteralPath $ew -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$settings = [ordered]@{}
+Set-FujiEffectSetting -Settings $settings -Key 'hourly' -Value '2000'
+Set-FujiEffectSetting -Settings $settings -Key 'manual' -MacroId 'm1' -Value '4.5'
+Set-FujiEffectSetting -Settings $settings -Key 'manual' -MacroId 'm2' -Value '3'
+Set-FujiEffectSetting -Settings $settings -Key 'manual' -MacroId 'm2' -Value ''
+$eff = Get-FujiEffectSetting -Settings $settings
+Assert-True ($eff.Hourly -eq 2000 -and $eff.Manual['m1'] -eq 4.5 -and -not $eff.Manual.ContainsKey('m2')) 'effect settings: pay per hour, minutes by hand, one removed'
+Assert-Equal 1200 (ConvertTo-FujiEffectNumber ([string][char]0xFF11 + [char]0xFF12 + ',' + '00')) 'effect number: full-width digits and comma'
+Assert-True ($null -eq (ConvertTo-FujiEffectNumber '-1') -and $null -eq (ConvertTo-FujiEffectNumber 'abc') -and $null -eq (ConvertTo-FujiEffectNumber '')) 'effect number: not negative, not text'
+$sw = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_set_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $sw)
+try {
+    Save-FujiSetting -Directory $sw -Settings $settings
+    Assert-True ((Get-FujiEffectSetting -Settings (Read-FujiSetting -Directory $sw)).Manual['m1'] -eq 4.5) 'effect settings: kept in the settings file'
+} finally { Remove-Item -LiteralPath $sw -Recurse -Force -ErrorAction SilentlyContinue }
+
+$hm = Get-FujiText 'effect.how.manual'
+$runsIn = @(
+    [ordered]@{ start = '2026/10/01 09:00:00'; macroId = 'm1'; macro = 'old'; how = $hm; rows = '12'; done = '10'; skipped = '1'; errors = '1'; seconds = '600'; attended = '120'; waitAck = '300' },
+    [ordered]@{ start = '2026/10/02 09:00:00'; macroId = 'm1'; macro = 'old'; how = (Get-FujiText 'effect.how.schedule'); rows = '8'; done = '8'; skipped = '0'; errors = '0'; seconds = '480'; attended = '0'; waitAck = '' },
+    [ordered]@{ start = '2026/10/03 09:00:00'; macroId = 'm1'; macro = 'old'; how = (Get-FujiText 'effect.how.test'); done = '1'; skipped = '0'; errors = '0'; seconds = '60'; attended = '0'; waitAck = '' },
+    [ordered]@{ start = '2026/09/30 09:00:00'; macroId = 'm1'; macro = 'old'; how = $hm; done = '5'; skipped = '0'; errors = '0'; seconds = '300'; attended = '0'; waitAck = '' },
+    [ordered]@{ start = '2026/10/04 09:00:00'; macroId = 'm3'; macro = 'other'; how = $hm; done = '2'; skipped = '0'; errors = '0'; seconds = '60'; attended = '0'; waitAck = '' })
+$editsIn = @([ordered]@{ date = '2026/10/01'; macroId = 'm1'; macro = 'old'; editSeconds = '1800' })
+$macrosIn = New-Object -TypeName 'System.Collections.Generic.List[object]'
+$macrosIn.Add([ordered]@{ id = 'm1'; name = 'Monthly'; targetWindow = ''; steps = @() })
+Assert-Equal '2026/10,2026/09' ((Get-FujiEffectMonth -Runs $runsIn) -join ',') 'effect: months newest first'
+$sum = Get-FujiEffectSummary -Runs $runsIn -Edits $editsIn -Macros $macrosIn -Effect $eff -Month '2026/10'
+$m1 = @($sum.Rows | Where-Object { $_.id -eq 'm1' })[0]
+Assert-True ($m1.macro -eq 'Monthly' -and $m1.runs -eq 2 -and $m1.done -eq 18 -and $m1.errors -eq 1) 'effect: one month, test runs left out, the current macro name'
+Assert-True ([Math]::Abs($m1.savedMin - (18 * 4.5 - 2)) -lt 0.001 -and $m1.yen -eq [Math]::Round((18 * 4.5 - 2) / 60 * 2000) -and $m1.editMin -eq 30 -and $m1.waitMin -eq 5) 'effect: saved = done x minutes by hand - attended; yen; editing; waiting'
+Assert-Equal 5.0 (Get-FujiEffectErrorRate $m1) 'effect: error rate among the rows handled'
+$m3 = @($sum.Rows | Where-Object { $_.id -eq 'm3' })[0]
+Assert-True ($null -eq $m3.savedMin -and $null -eq $m3.yen -and $sum.Total.done -eq 20 -and [Math]::Abs($sum.Total.savedMin - 79) -lt 0.001) 'effect: no minutes by hand, no saving; totals'
+$table = ConvertTo-FujiEffectTable -Summary $sum
+Assert-True ($table.Count -eq 4 -and $table[0][0] -eq (Get-FujiText 'effect.head')[0] -and $table[3][0] -eq (Get-FujiText 'effect.total') -and $table[1][9] -eq '79.0' -and $table[2][9] -eq '') 'effect: table with heading, rows, total'
+Assert-Equal 3 (@((Get-FujiEffectSummary -Runs $runsIn -Edits @() -Macros $macrosIn -Effect $eff -Month '').Rows | Where-Object { $_.id -eq 'm1' })[0].runs) 'effect: every month'
+
 # editor: an Excel book in the CSV box (Excel itself is not here: a stand-in reader)
 $bookDir = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_book_' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $bookDir)
@@ -1391,7 +1485,7 @@ $badDoc = New-Object -TypeName 'System.Collections.Generic.List[string]'
 foreach ($c in Get-FujiCommandName) { $a = Get-FujiCommandDocAnchor -Cmd $c; if (-not $docIds['manual'].ContainsKey($a)) { $badDoc.Add($c + ' -> ' + $a) } }
 Assert-True ($badDoc.Count -eq 0) ('every command explained at a place in the manual page: ' + ($badDoc -join ', '))
 Assert-True ($docIds['manual'].ContainsKey((Get-FujiText 'gui.docCommandAnchor'))) 'the command list anchor exists'
-foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'))) {
+foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'), @('manual', 'effect'), @('manual', 'stepTime'))) {
     Assert-True ($docIds[$pair[0]].ContainsKey((Get-FujiText ('gui.docAnchors.' + $pair[1])))) ('dialog help anchor exists: ' + $pair[1])
 }
 $missingTpl = @(foreach ($t in $templates['templates']) { if (-not $docIds['templates'].ContainsKey([string]$t['id'])) { $t['id'] } })

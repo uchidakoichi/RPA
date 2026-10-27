@@ -71,7 +71,7 @@ function Show-FujiMainForm {
             # a restart for the new text size waits for the next close if this one was called off
             if ($e.Cancel) { $script:RestartAfterClose = $false }
         })
-    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
+    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
                 Restore-FujiSplitPlacement
@@ -217,8 +217,10 @@ function New-FujiTopPanel {
     $script:Ui.ScheduleState = $next
     $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
     $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
+    $effect = New-FujiButton -Text (Get-FujiText 'gui.effect') -Tip (Get-FujiText 'gui.effectTip')
+    $effect.Add_Click({ Invoke-FujiUi { Show-FujiEffectDialog } })
     $zoomLabel = New-FujiLabel -Text (Get-FujiText 'gui.zoom')
-    foreach ($c in @($save, $state, $sched, $diag, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
+    foreach ($c in @($save, $state, $sched, $diag, $effect, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -819,6 +821,24 @@ function Select-FujiMacroUi {
     if ($script:Ui.List.Items.Count -gt 0) { $script:Ui.List.TopIndex = 0 }
 }
 
+# Shows a step of a macro (from a list of step times, a check, a log line): that macro, the step
+# selected and scrolled into view (blocks opened when it is inside a closed one). $false if gone.
+function Select-FujiStepAt {
+    param([string]$MacroId, [int]$Index)
+    $at = -1
+    for ($i = 0; $i -lt $script:Ed.Data.macros.Count; $i++) { if ([string]$script:Ed.Data.macros[$i].id -eq $MacroId) { $at = $i; break } }
+    if ($at -lt 0 -or $Index -lt 0 -or $Index -ge $script:Ed.Data.macros[$at].steps.Count) { return $false }
+    $script:Ed.MacroIndex = $at
+    $script:Ed.Selected = $Index
+    Update-FujiAll
+    if ($script:Ui.List.SelectedIndex -lt 0) {
+        Set-FujiAllCollapsed -Editor $script:Ed -Collapsed $false
+        Update-FujiStepList
+    }
+    Update-FujiInsertHint
+    return $true
+}
+
 function Add-FujiMacroUi {
     $name = Show-FujiInput -Title (Get-FujiText 'gui.newMacroTitle') -Label (Get-FujiText 'gui.macroNameLabel') -Default (Get-FujiText 'editor.newMacro')
     if (-not $name) { return }
@@ -1205,6 +1225,7 @@ function Save-FujiUi {
     $err = Save-FujiEditorData -Editor $script:Ed
     if ($err) { Show-FujiMessage -Title (Get-FujiText 'gui.saveErrorTitle') -Message (Get-FujiText 'gui.saveError' $err) }
     Update-FujiSaveState
+    Save-FujiEditTimeUi
 }
 
 function Confirm-FujiClose {

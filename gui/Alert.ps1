@@ -64,6 +64,7 @@ function Close-FujiAlert {
     foreach ($f in $a.Forms) { if (-not $f.IsDisposed) { $f.Close(); $f.Dispose() } }
     if ($Acknowledged -and -not $a.Test -and $a.Forms.Count -gt 0) {
         Write-FujiUiLog -Message (Get-FujiText 'alert.acknowledged' $a.Since.ToString('HH:mm') (Format-FujiElapsed -Since $a.Since -Now (Get-Date))) -Level 'ok'
+        if ($a.Kind -eq 'error') { Save-FujiRunAckUi -Since $a.Since }
     }
 }
 

@@ -334,6 +334,7 @@ function Submit-FujiEditorChange {
     Add-FujiHistory -Editor $Editor -Description $Description
     $Editor.Dirty = $true
     Save-FujiEditorTemp -Editor $Editor
+    Add-FujiEditTime -Editor $Editor
 }
 
 # ShowMacroIndex: macro to display (undo shows the macro whose change is being undone)

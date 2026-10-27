@@ -59,6 +59,9 @@ function New-FujiRunBar {
     $watch = New-FujiButton -Text (Get-FujiText 'gui.watch') -Tip (Get-FujiText 'gui.watchTip')
     $watch.Add_Click({ Invoke-FujiUi { $script:Ui.Watch.Visible = -not $script:Ui.Watch.Visible; Update-FujiWatchPanel } })
     [void]$row.Controls.Add($watch)
+    $times = New-FujiButton -Text (Get-FujiText 'gui.stepTimes') -Tip (Get-FujiText 'gui.stepTimesTip')
+    $times.Add_Click({ Invoke-FujiUi { Show-FujiStepTimeDialog } })
+    [void]$row.Controls.Add($times)
     $script:Ui.ExportResults = New-FujiButton -Text (Get-FujiText 'gui.exportResults' 0) -Tip (Get-FujiText 'gui.exportResultsTip')
     $script:Ui.ExportResults.Add_Click({ Invoke-FujiUi { Export-FujiRunCsvUi -Kind 'results' } })
     $script:Ui.ExportErrors = New-FujiButton -Text (Get-FujiText 'gui.exportErrors' 0)
@@ -183,9 +186,11 @@ function Invoke-FujiUiBreak {
 # Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
 # ('done', 'stopped', 'error') or '' when it did not start.
 # Stepping: stop before the first step. Partial 'from' / 'only': start at the selected step ('only':
-# just it, for one CSV row). Vars: values handed over by a trigger.
+# just it, for one CSV row). Vars: values handed over by a trigger. How: what started it, for the
+# run record (schedule / trigger; otherwise manual, or test for a partial or stepping run).
 function Start-FujiRunUi {
-    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null)
+    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null,
+        [ValidateSet('', 'schedule', 'trigger')][string]$How = '')
     if ($script:RunCtl.Running) { return '' }
     if ($null -ne $script:Rec) {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
@@ -264,6 +269,9 @@ function Start-FujiRunUi {
         $c.Highlight = -1
         Set-FujiRunUi -Running $false
         $script:Ui.Progress.Text = [string][char]0x25A0 + ' ' + $script:Run.Summary
+        $origin = $How
+        if (-not $origin) { if ($Partial -or $Stepping) { $origin = 'test' } elseif ($Unattended) { $origin = 'schedule' } else { $origin = 'manual' } }
+        Save-FujiRunRecordUi -Run $script:Run -How $origin
         Update-FujiRunButton
         Update-FujiWatchPanel
         $script:Ui.List.Invalidate()
