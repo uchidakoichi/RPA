@@ -466,7 +466,7 @@ function Test-FujiStepSetting {
             $dest = ([string]$s['dest']).Trim()
             if ($s['op'] -eq 'RENAME') {
                 if ($dest -eq '') { return (Get-FujiText 'validate.fileNewName') }
-                if ($dest -match '[\\/]') { return (Get-FujiText 'validate.fileNewNameOnly') }
+                if (-not (Test-FujiPlainFileName $dest)) { return (Get-FujiText 'validate.fileNewNameOnly') }
                 if ((Get-FujiFileName $s['src']) -match '[*?]') { return (Get-FujiText 'validate.fileRenameWild') }
             } elseif ($dest -eq '') {
                 return (Get-FujiText 'validate.fileDest')
@@ -2300,6 +2300,9 @@ function Invoke-FujiFileOperation {
     $pattern = [System.IO.Path]::GetFileName($Source)
     $wild = $pattern -match '[*?]'
     if ($wild -and $Op -eq 'RENAME') { throw (Get-FujiText 'validate.fileRenameWild') }
+    if ($Op -eq 'RENAME' -and -not (Test-FujiPlainFileName $Dest)) { throw (Get-FujiText 'validate.fileNewNameOnly') }
+    # no climbing up with ..: a path means the folder it is written with
+    foreach ($p in @($Source, $Dest)) { if ($p -match '(^|[\\/])\.\.([\\/]|$)') { throw (Get-FujiText 'run.fileDotDot' $p) } }
     $files = New-Object -TypeName 'System.Collections.Generic.List[string]'
     if ($wild) {
         if (-not $folder -or -not [System.IO.Directory]::Exists($folder)) { throw (Get-FujiText 'run.fileNoFolder' $folder) }
@@ -2352,14 +2355,42 @@ function Invoke-FujiFileOperation {
     return , $out.ToArray()
 }
 
-# The app itself, its settings and macros: fujikyun* directly in the app's folder
+# A new name for RENAME: a name only (no folder, drive, stream or . / ..)
+function Test-FujiPlainFileName {
+    param([AllowEmptyString()][string]$Name)
+    $n = ([string]$Name).Trim()
+    return ($n -ne '' -and $n -notmatch '[\\/:]' -and $n -ne '.' -and $n -ne '..')
+}
+
+# The app itself, its settings and macros: fujikyun* directly in the app's folder. Both are
+# compared by their long names (FUJIKY~1.PS1 is fujikyun.ps1 too).
 function Test-FujiAppFile {
     param([string]$Path, [string]$AppDirectory)
     if (-not $AppDirectory) { return $false }
-    $dir = [System.IO.Path]::GetFullPath($AppDirectory).TrimEnd('\', '/')
-    $parent = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($Path))
+    $dir = (Resolve-FujiLongPath $AppDirectory).TrimEnd('\', '/')
+    $full = Resolve-FujiLongPath $Path
+    $parent = [System.IO.Path]::GetDirectoryName($full)
     if (-not [string]::Equals($dir, ([string]$parent).TrimEnd('\', '/'), [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
-    return [System.IO.Path]::GetFileName($Path).StartsWith('fujikyun', [System.StringComparison]::OrdinalIgnoreCase)
+    return [System.IO.Path]::GetFileName($full).StartsWith('fujikyun', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+# The full path with long names for the part that exists (an 8.3 short name becomes the real one)
+function Resolve-FujiLongPath {
+    param([string]$Path)
+    $full = [System.IO.Path]::GetFullPath($Path)
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) { return $full }
+    $leaf = ''
+    $base = $full
+    while ($base -and -not [System.IO.File]::Exists($base) -and -not [System.IO.Directory]::Exists($base)) {
+        $leaf = [System.IO.Path]::Combine([System.IO.Path]::GetFileName($base), $leaf)
+        $base = [System.IO.Path]::GetDirectoryName($base)
+    }
+    if (-not $base) { return $full }
+    $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList 1024
+    $n = (Get-FujiNativeType)::GetLongPathName($base, $sb, [uint32]$sb.Capacity)
+    if ($n -gt 0 -and $n -lt $sb.Capacity) { $base = $sb.ToString() }
+    if ($leaf) { return [System.IO.Path]::Combine($base, $leaf.TrimEnd('\')) }
+    return $base
 }
 
 # The only good copy is never overwritten in place: write a sibling file, read it back, keep the
@@ -2615,6 +2646,7 @@ function Get-FujiNativeType {
         # rect: int[4] left, top, right, bottom (a blittable array is pinned, so it is filled in)
         @($u, 'GetWindowRect', [bool], [type[]]@([IntPtr], [int[]]), $auto),
         @('kernel32.dll', 'GetCurrentThreadId', [uint32], [type[]]@(), $auto),
+        @('kernel32.dll', 'GetLongPathName', [uint32], [type[]]@([string], [System.Text.StringBuilder], [uint32]), $wide),
         # out arguments: pointers to memory the caller allocated
         @('kernel32.dll', 'OpenProcess', [IntPtr], [type[]]@([uint32], [bool], [uint32]), $auto),
         @('kernel32.dll', 'CloseHandle', [bool], [type[]]@([IntPtr]), $auto),
@@ -4244,7 +4276,7 @@ function Invoke-FujiFileOp {
     $dest = (Expand-FujiRunText -Run $Run -Text $Settings['dest']).Trim().Trim('"')
     $what = Get-FujiText ('label.fileOp' + $op)
     if ($src -eq '' -or $dest -eq '') { return (Get-FujiRunError (Get-FujiText 'run.fileEmpty' $what)) }
-    if ($op -eq 'RENAME' -and $dest -match '[\\/]') { return (Get-FujiRunError (Get-FujiText 'validate.fileNewNameOnly')) }
+    if ($op -eq 'RENAME' -and -not (Test-FujiPlainFileName $dest)) { return (Get-FujiRunError (Get-FujiText 'validate.fileNewNameOnly')) }
     if (-not [System.IO.Path]::IsPathRooted($src)) { $src = Join-Path $Run.Directory $src }
     if ($op -ne 'RENAME' -and -not [System.IO.Path]::IsPathRooted($dest)) { $dest = Join-Path $Run.Directory $dest }
     $request = @{ Op = $op; Source = $src; Dest = $dest; Overwrite = ($Settings['overwrite'] -eq 'YES'); AppDirectory = $Run.Directory }
@@ -4255,7 +4287,9 @@ function Invoke-FujiFileOp {
     else { Write-FujiRunLog $Run (Get-FujiText 'run.fileDoneMany' $done.Count $what ([System.IO.Path]::GetDirectoryName($targets[0]))) }
     $var = ([string]$Settings['var']).Trim()
     if ($var) {
-        # several files: separated by ";" as MAIL attachments take them
+        # several files: separated by ";" as MAIL attachments take them, so a name with ";" in it
+        # would be read as two files there: never put into the list
+        foreach ($t in $targets) { if ($t.IndexOfAny([char[]]@(';', [char]0xFF1B)) -ge 0) { return (Get-FujiRunError (Get-FujiText 'run.fileSemicolon' $t)) } }
         $Run.Vars[$var] = $targets -join ';'
         & $Run.Io.Watch
     }

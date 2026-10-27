@@ -1355,7 +1355,7 @@ function Invoke-FujiFileOp {
     $dest = (Expand-FujiRunText -Run $Run -Text $Settings['dest']).Trim().Trim('"')
     $what = Get-FujiText ('label.fileOp' + $op)
     if ($src -eq '' -or $dest -eq '') { return (Get-FujiRunError (Get-FujiText 'run.fileEmpty' $what)) }
-    if ($op -eq 'RENAME' -and $dest -match '[\\/]') { return (Get-FujiRunError (Get-FujiText 'validate.fileNewNameOnly')) }
+    if ($op -eq 'RENAME' -and -not (Test-FujiPlainFileName $dest)) { return (Get-FujiRunError (Get-FujiText 'validate.fileNewNameOnly')) }
     if (-not [System.IO.Path]::IsPathRooted($src)) { $src = Join-Path $Run.Directory $src }
     if ($op -ne 'RENAME' -and -not [System.IO.Path]::IsPathRooted($dest)) { $dest = Join-Path $Run.Directory $dest }
     $request = @{ Op = $op; Source = $src; Dest = $dest; Overwrite = ($Settings['overwrite'] -eq 'YES'); AppDirectory = $Run.Directory }
@@ -1366,7 +1366,9 @@ function Invoke-FujiFileOp {
     else { Write-FujiRunLog $Run (Get-FujiText 'run.fileDoneMany' $done.Count $what ([System.IO.Path]::GetDirectoryName($targets[0]))) }
     $var = ([string]$Settings['var']).Trim()
     if ($var) {
-        # several files: separated by ";" as MAIL attachments take them
+        # several files: separated by ";" as MAIL attachments take them, so a name with ";" in it
+        # would be read as two files there: never put into the list
+        foreach ($t in $targets) { if ($t.IndexOfAny([char[]]@(';', [char]0xFF1B)) -ge 0) { return (Get-FujiRunError (Get-FujiText 'run.fileSemicolon' $t)) } }
         $Run.Vars[$var] = $targets -join ';'
         & $Run.Io.Watch
     }

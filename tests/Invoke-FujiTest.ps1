@@ -973,6 +973,9 @@ Assert-True ($run.Vars['p'] -eq (Join-Path 'D' 'out\') -and $run.Vars['all'] -eq
 $run = New-TestRun -Steps @(, @('FILE_OP', '{"op":"RENAME","src":"C:\\in\\a.pdf","dest":"{{1}}","overwrite":"NO","var":""}')) -Rows @(, [string[]]@('..\x.pdf'))
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'file op: an inserted new name cannot move the file to another folder'
 Assert-Equal '' (Get-FakeCall 'FILE') 'file op: nothing done for a bad new name'
+$run = New-TestRun -Steps @(, @('FILE_OP', '{"op":"COPY","src":"C:\\in\\a;b.pdf","dest":"C:\\out\\a;b.pdf","overwrite":"NO","var":"p"}'))
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'file op: a name with ; is not put into the list variable'
+Assert-True (-not $run.Vars.Contains('p')) 'file op: variable left unset for a name with ;'
 $run = New-TestRun -Steps @(, @('FILE_OP', '{"op":"COPY","src":"C:\\in\\a.pdf","dest":"C:\\out\\","overwrite":"NO","var":""}'))
 $script:Fake.FileFails = $true
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'file op: a failure stops the run'
@@ -1003,12 +1006,22 @@ try {
     [void](Invoke-FujiFileOperation -Op 'RENAME' -Source (Join-Path $fw 'in\done_d.txt') -Dest 'DONE_d.txt')
     Assert-Equal 'DONE_d.txt' ([System.IO.Path]::GetFileName(@(Get-ChildItem -LiteralPath (Join-Path $fw 'in') -Filter '*_d.txt')[0].FullName)) 'file op: only the case of the name changed'
     foreach ($bad in @(@('COPY', (Join-Path $fw 'in\none.pdf'), (Join-Path $fw 'out\'), 'run.fileNotFound'), @('MOVE', (Join-Path $fw 'in\*.xls'), (Join-Path $fw 'out\'), 'run.fileNoMatch'),
-            @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'in\c.pdfx'), 'run.fileSame'), @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'fujikyun_macros.json'), 'run.fileProtected'))) {
+            @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'in\c.pdfx'), 'run.fileSame'), @('COPY', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'fujikyun_macros.json'), 'run.fileProtected'),
+            @('COPY', (Join-Path $fw 'in\..\in\c.pdfx'), (Join-Path $fw 'out\'), 'run.fileDotDot'), @('MOVE', (Join-Path $fw 'in\c.pdfx'), (Join-Path $fw 'out\..\'), 'run.fileDotDot'),
+            @('RENAME', (Join-Path $fw 'in\c.pdfx'), 'c.pdfx:s', 'validate.fileNewNameOnly'), @('RENAME', (Join-Path $fw 'in\c.pdfx'), '..', 'validate.fileNewNameOnly'))) {
         $msg = ''
         try { [void](Invoke-FujiFileOperation -Op $bad[0] -Source $bad[1] -Dest $bad[2] -AppDirectory $fw) } catch { $msg = $_.Exception.Message }
         $raw = Get-FujiText $bad[3]
-        Assert-True ($msg -ne '' -and $msg.StartsWith($raw.Substring(0, $raw.IndexOf('{')))) ('file op refused: ' + $bad[3] + ' (' + $msg + ')')
+        $head = $raw
+        if ($raw.IndexOf('{') -ge 0) { $head = $raw.Substring(0, $raw.IndexOf('{')) }
+        Assert-True ($msg -ne '' -and $msg.StartsWith($head)) ('file op refused: ' + $bad[3] + ' (' + $msg + ')')
     }
+    # the app's own file by its 8.3 short name is the same file
+    Write-FujiTextFile -Path (Join-Path $fw 'fujikyun_settings.json') -Text '{}'
+    $short = (New-Object -ComObject Scripting.FileSystemObject).GetFile((Join-Path $fw 'fujikyun_settings.json')).ShortPath
+    Assert-True (Test-FujiAppFile -Path $short -AppDirectory $fw) ('file op: the app file by its short name is protected (' + $short + ')')
+    $shortDir = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($fw).ShortPath
+    Assert-True (Test-FujiAppFile -Path (Join-Path $shortDir 'fujikyun.ps1') -AppDirectory $fw) 'file op: the app folder by its short name'
 } finally {
     Remove-Item -LiteralPath $fw -Recurse -Force -ErrorAction SilentlyContinue
 }

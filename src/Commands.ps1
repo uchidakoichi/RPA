@@ -333,7 +333,7 @@ function Test-FujiStepSetting {
             $dest = ([string]$s['dest']).Trim()
             if ($s['op'] -eq 'RENAME') {
                 if ($dest -eq '') { return (Get-FujiText 'validate.fileNewName') }
-                if ($dest -match '[\\/]') { return (Get-FujiText 'validate.fileNewNameOnly') }
+                if (-not (Test-FujiPlainFileName $dest)) { return (Get-FujiText 'validate.fileNewNameOnly') }
                 if ((Get-FujiFileName $s['src']) -match '[*?]') { return (Get-FujiText 'validate.fileRenameWild') }
             } elseif ($dest -eq '') {
                 return (Get-FujiText 'validate.fileDest')
