@@ -86,6 +86,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `Vision.ps1` | 画像照合（初回だけコンパイルする小さな C#）と、OCR の結果から文字を探す処理 |
 | `Native.ps1` | Windows API の宣言（C# のコンパイルなし）と、ウィンドウ名の照合 |
 | `Credential.ps1` | Windows の資格情報マネージャー（汎用資格情報）の読み書き。CredReadW などを Native.ps1 と同じ方法で宣言し、CREDENTIALW をオフセットで読み書きする |
+| `Check.ps1` | 実行前チェック（設定の不足・呼び出し先・画像・変数・CSV の列と見出し・この PC に無いファイル） |
 | `Effect.ps1` | 効果測定: 実行の記録（`fujikyun_runs.csv`）、編集時間（`fujikyun_edits.csv`）、手作業の時間・時間単価（設定ファイルの `effect`）、マクロ・月ごとの集計 |
 | `Docs.ps1` | アプリから開く説明書（`fujikyun_manual.html`、全ページで1ファイル）の場所探しと、ページと見出し（#page-…/…）へ飛ぶための転送ページ。コマンドごとの説明の位置は `fujikyun_commands.json` の `doc` |
 | `Editor.ps1` | 編集の操作（起動時の読み込み・一時ファイル・保存・元に戻す・追加・移動・削除・複製・無効化・折りたたみ・取込・書出・テンプレート・CSV の読み込み）。画面から呼ぶだけで、テストできる |
@@ -99,6 +100,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `Vision.ps1` | 画像でクリック・文字認識（OCR）・名前でクリック（UI Automation）。重い処理は別の runspace で動かし、クリックは元のスレッドで行う |
 | `Uia.ps1` | 欄に入力・欄の値を読む・表を読む（UI Automation。欄は名前・ID・すぐ左か上の見出しで探す）、［🎯 部品を指す］［🔍 見つかるか試す］、部品を囲む赤い枠 |
 | `Credential.ps1` | SECRET の［🔑 登録・変更］ダイアログ（パスワードは画面・ログに出さない） |
+| `Check.ps1` | ［✅ チェック］の一覧と、▶ 実行の前の確認（予定・きっかけではログに残すだけ） |
 | `Effect.ps1` | ［📈 効果］の画面、実行後の記録、エラーの知らせを確認するまでの時間、［⏱ 時間］（ステップごとの時間） |
 | `Docs.ps1` | ［📖 説明書］メニュー、F1、各ダイアログの［📖 説明］ボタン |
 | `RunUi.ps1` | 実行ボタンなどの部品と、実行の Io の Windows 版（ウィンドウの前面化・キー送信・クリップボード・クリック・撮影・Excel・Outlook） |

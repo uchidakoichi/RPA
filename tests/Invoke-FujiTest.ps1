@@ -1415,6 +1415,61 @@ Assert-True ($null -eq $m3.savedMin -and $null -eq $m3.yen -and $sum.Total.done 
 $table = ConvertTo-FujiEffectTable -Summary $sum
 Assert-True ($table.Count -eq 4 -and $table[0][0] -eq (Get-FujiText 'effect.head')[0] -and $table[3][0] -eq (Get-FujiText 'effect.total') -and $table[1][9] -eq '79.0' -and $table[2][9] -eq '') 'effect: table with heading, rows, total'
 Assert-Equal 3 (@((Get-FujiEffectSummary -Runs $runsIn -Edits @() -Macros $macrosIn -Effect $eff -Month '').Rows | Where-Object { $_.id -eq 'm1' })[0].runs) 'effect: every month'
+$evil = @([string[]]@('name', 'n'), [string[]]@('=HYPERLINK(1)', '-1.5'))
+Assert-Equal "name`tn`r`n'=HYPERLINK(1)`t-1.5`r`n" (ConvertTo-FujiTabText -Rows $evil) 'effect copy: a formula-looking name as text, numbers kept'
+Assert-Equal "'=HYPERLINK(1)" (ConvertTo-FujiSafeTable -Rows $evil)[1][0] 'effect CSV: a formula-looking name as text'
+$st = ConvertTo-FujiStepTimeText -Rows @(@{ Macro = '@x'; Index = 0; Label = '+y'; Count = 1; TotalMs = 1.0; MaxMs = 1.0; Share = 100.0 })
+Assert-True ($st.Contains("'@x`t1`t'+y")) 'step times copy: formula-looking macro name and label as text'
+
+# ----------------------------------------------------------------- check before a run
+$chk = { param($Cmds, [string[]]$Header = $null, [int]$Columns = -1, [object[]]$Other = @(), [string[]]$Have = @())
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($c in $Cmds) {
+        $step = [ordered]@{ cmd = $c[0]; val = [string]$c[1]; label = '' }
+        if ($c.Count -gt 2) { foreach ($k in $c[2].Keys) { $step[$k] = $c[2][$k] } }
+        $list.Add($step)
+    }
+    $all = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $main = [ordered]@{ id = 'main'; name = 'main'; targetWindow = ''; steps = $list }
+    $all.Add($main)
+    foreach ($o in $Other) { $all.Add($o) }
+    $haveSet = $Have
+    return , (Get-FujiMacroProblem -Macros $all -Macro $main -Directory 'C:\app' -Header $Header -Columns $Columns -PathExists { param($Path, $Folder) $null = $Folder; return ($haveSet -contains $Path) }.GetNewClosure())
+}
+$probSub = [ordered]@{ id = 'sub'; name = 'part'; targetWindow = ''; steps = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+$probSub.steps.Add([ordered]@{ cmd = 'SET_VAR'; val = '{"name":"fromSub","value":"1","mode":"TEXT"}'; label = '' })
+$probSub.steps.Add([ordered]@{ cmd = 'KEY'; val = ''; label = '' })
+$found = & $chk @(@('KEY', ''), @('CALL_MACRO', '{"id":"gone","name":"gone"}'), @('CALL_MACRO', '{"id":"sub","name":"part"}'), @('CLICK_IMG', '{"path":"C:\\img\\a.png","threshold":"0.9"}'),
+    @('TEXT', '{{$fromSub}}{{$never}}{{5}}{{name}}{{place}}{{TODAY}}{{ROW+1}}'), @('KEY', 'a', @{ breakpoint = $true }),
+    @('GROUP_START', 'off', @{ disabled = $true }), @('KEY', ''), @('TEXT', '{{$ghost}}'), @('GROUP_END', ''),
+    @('EXCEL_READ', '{"path":"C:\\book.xlsx","sheet":"1","cell":"A1","name":"v"}'), @('FILE_OP', '{"op":"COPY","src":"in\\a.pdf","dest":"C:\\x\\","overwrite":"NO","var":""}'),
+    @('MAIL', '{"method":"OUTLOOK","mode":"DRAFT","to":"a@b","cc":"","subject":"s","body":"{{$v}}","attach":"C:\\here.pdf;{{$p}}"}')) -Header @('name') -Columns 3 -Other @($probSub) -Have @('C:\here.pdf')
+$show = { param($Level) (@($found | Where-Object { $_.Level -eq $Level } | ForEach-Object { '{0}#{1}:{2}' -f $_.Macro, $_.Index, $_.Message }) -join ' | ') }
+$errors = & $show 'error'
+Assert-Equal ('main#0:' + (Get-FujiText 'check.setting' (Get-FujiText 'validate.key')) + ' | main#1:' + (Get-FujiText 'check.callMissing' 'gone') + ' | main#3:' + (Get-FujiText 'check.imageMissing' 'C:\img\a.png') + ' | part#1:' + (Get-FujiText 'check.setting' (Get-FujiText 'validate.key'))) $errors 'check: missing setting, called macro, image; the called macro checked too'
+$warns = & $show 'warn'
+Assert-Equal ('main#4:' + (Get-FujiText 'check.csvColumn' 5 3) + ' | main#4:' + (Get-FujiText 'check.unknownName' '{{place}}') + ' | main#10:' + (Get-FujiText 'check.fileMissing' 'C:\book.xlsx') + ' | main#11:' + (Get-FujiText 'check.folderMissing' 'C:\app\in') + ' | main#4:' + (Get-FujiText 'check.varNeverSet' 'never') + ' | main#12:' + (Get-FujiText 'check.varNeverSet' 'p')) $warns 'check: CSV column, unknown name, missing file and folder, variables never set (one set in the called macro is fine; disabled block left out)'
+Assert-Equal ('main#5:' + (Get-FujiText 'check.breakpoint')) (& $show 'note') 'check: a breakpoint left in is a note'
+Assert-Equal 2 (Select-FujiSeriousProblem -Problems (& $chk @(@('KEY', 'a', @{ breakpoint = $true }), @('KEY', ''), @('TEXT', '{{$x}}')))).Count 'check: notes do not ask before a run'
+Assert-Equal ('main#0:' + (Get-FujiText 'check.nameNoCsv' '{{name}}')) (@((& $chk @(, @('TEXT', '{{name}}{{3}}'))) | ForEach-Object { '{0}#{1}:{2}' -f $_.Macro, $_.Index, $_.Message }) -join ' | ') 'check: without a CSV, a heading name is a note and a column number is not checked'
+Assert-Equal 0 (& $chk @(@('IF_START', '{"left":"{{$a}}","op":"EQ","right":"1"}'), @('SET_VAR', '{"name":"a","value":"1","mode":"TEXT"}'), @('IF_END', ''))).Count 'check: a variable set later (in a loop) counts as set'
+$bad = New-Object -TypeName 'System.Collections.Generic.List[string]'
+foreach ($t in $templates['templates']) {
+    $tm = [ordered]@{ id = 't'; name = [string]$t['id']; targetWindow = ''; steps = (Get-FujiTemplateStep -Template $t) }
+    $hdr = $null
+    $cols = -1
+    if ($t.Contains('csv') -and $t['csv'] -is [System.Collections.IList] -and $t['csv'].Count -gt 0) { $hdr = [string[]]$t['csv'][0]; $cols = $hdr.Length }
+    $tl = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $tl.Add($tm)
+    foreach ($p in (Get-FujiMacroProblem -Macros $tl -Macro $tm -Directory 'C:\app' -Header $hdr -Columns $cols -PathExists { $true })) {
+        if ($p.Level -ne 'note' -and $p.Message -notlike ((Get-FujiText 'check.callMissing' '*'))) { $bad.Add($t['id'] + '#' + $p.Index + ': ' + $p.Message) }
+    }
+}
+Assert-Equal '' ($bad -join ' / ') 'check: the built-in templates have no errors or warnings'
+$sample = New-FujiSampleData
+$sampleList = New-Object -TypeName 'System.Collections.Generic.List[object]'
+foreach ($sm in $sample.macros) { $sampleList.Add($sm) }
+Assert-Equal 0 (Select-FujiSeriousProblem -Problems (Get-FujiMacroProblem -Macros $sampleList -Macro $sampleList[0] -PathExists { $true })).Count 'check: the sample macro runs without a question'
 
 # editor: an Excel book in the CSV box (Excel itself is not here: a stand-in reader)
 $bookDir = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_book_' + [guid]::NewGuid().ToString('N'))
@@ -1485,7 +1540,7 @@ $badDoc = New-Object -TypeName 'System.Collections.Generic.List[string]'
 foreach ($c in Get-FujiCommandName) { $a = Get-FujiCommandDocAnchor -Cmd $c; if (-not $docIds['manual'].ContainsKey($a)) { $badDoc.Add($c + ' -> ' + $a) } }
 Assert-True ($badDoc.Count -eq 0) ('every command explained at a place in the manual page: ' + ($badDoc -join ', '))
 Assert-True ($docIds['manual'].ContainsKey((Get-FujiText 'gui.docCommandAnchor'))) 'the command list anchor exists'
-foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'), @('manual', 'effect'), @('manual', 'stepTime'))) {
+foreach ($pair in @(@('setup', 'trouble'), @('manual', 'diagnostics'), @('manual', 'schedule'), @('manual', 'secret'), @('manual', 'effect'), @('manual', 'stepTime'), @('manual', 'check'))) {
     Assert-True ($docIds[$pair[0]].ContainsKey((Get-FujiText ('gui.docAnchors.' + $pair[1])))) ('dialog help anchor exists: ' + $pair[1])
 }
 $missingTpl = @(foreach ($t in $templates['templates']) { if (-not $docIds['templates'].ContainsKey([string]$t['id'])) { $t['id'] } })

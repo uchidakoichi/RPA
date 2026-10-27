@@ -130,6 +130,139 @@ function Format-FujiElapsed {
     return (Get-FujiText 'alert.elapsedHours' ([Math]::Floor($mins / 60)) ($mins % 60))
 }
 
+# ===== src/Check.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Check before a run: what would stop it or go wrong, found without running it
+#  The macro and every macro it calls are looked at (disabled steps and blocks are left out).
+#  Each problem: @{ MacroId; Macro; Index (-1: the macro as a whole); Level; Message }
+#    error  the step will fail when it is reached (a setting missing, a called macro or image gone)
+#    warn   it may not do what was meant (a variable never set, a CSV column the CSV lacks,
+#           a file or folder this PC does not have)
+#    note   worth knowing, not a fault (a breakpoint left in)
+# ---------------------------------------------------------------------------------------------
+
+# Macros: every macro (for CALL_MACRO). Header: the loaded CSV's heading or $null. Columns: how many
+# columns the loaded CSV has, -1 when none is loaded. ResolvePath: as the run resolves image paths.
+# PathExists: { param($Path, $Folder) } (a stand-in in tests).
+function Get-FujiMacroProblem {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.IList]$Macros, [Parameter(Mandatory)][System.Collections.IDictionary]$Macro,
+        [string]$Directory = '', [scriptblock]$ResolvePath = $null, [string[]]$Header = $null, [int]$Columns = -1, [scriptblock]$PathExists = $null)
+    if ($null -eq $PathExists) { $PathExists = { param($Path, $Folder) if ($Folder) { return [System.IO.Directory]::Exists($Path) }; return [System.IO.File]::Exists($Path) } }
+    $problems = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $uses = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $defined = @{}
+    foreach ($k in @('data.errorVar', 'data.retryVar', 'data.triggerFileVar', 'data.triggerWindowVar')) { $defined[(Get-FujiText $k)] = $true }
+    $queue = New-Object -TypeName 'System.Collections.Generic.Queue[object]'
+    $seen = @{}
+    $queue.Enqueue($Macro)
+    $seen[[string]$Macro.id] = $true
+    while ($queue.Count -gt 0) {
+        $m = $queue.Dequeue()
+        $add = { param($Index, $Level, $Message) $problems.Add(@{ MacroId = [string]$m.id; Macro = [string]$m.name; Index = $Index; Level = $Level; Message = $Message }) }
+        $steps = $m.steps
+        if (-not (Test-FujiBlockBalanced -Steps $steps)) { & $add -1 'error' (Get-FujiText 'check.unbalanced') }
+        foreach ($n in (Get-FujiDefinedVarName -Steps $steps)) { $defined[$n] = $true }
+        for ($i = 0; $i -lt $steps.Count; $i++) {
+            $s = $steps[$i]
+            $cmd = [string]$s.cmd
+            if ($s.Contains('disabled') -and $s['disabled']) {
+                # a disabled block start leaves out its whole block
+                if (Test-FujiBlockStart $cmd) { $end = Find-FujiBlockEnd -Steps $steps -StartIndex $i; if ($end -gt $i) { $i = $end } }
+                continue
+            }
+            $def = Get-FujiCommandDef -Cmd $cmd
+            if ($null -eq $def -or $cmd -eq 'COMMENT' -or $def['format'] -eq 'none') { continue }
+            if ($s.Contains('breakpoint') -and $s['breakpoint']) { & $add $i 'note' (Get-FujiText 'check.breakpoint') }
+            $p = ConvertFrom-FujiStepValue -Cmd $cmd -Value ([string]$s.val)
+            if ($cmd -ne 'CALL_MACRO') {
+                $err = Test-FujiStepSetting -Cmd $cmd -Settings $p
+                if ($err) { & $add $i 'error' (Get-FujiText 'check.setting' $err) }
+            }
+            switch ($cmd) {
+                'CALL_MACRO' {
+                    $target = $null
+                    foreach ($x in $Macros) { if ($p['id'] -and [string]$x.id -eq $p['id']) { $target = $x; break } }
+                    if ($null -eq $target) { foreach ($x in $Macros) { if ($p['name'] -and [string]$x.name -eq $p['name']) { $target = $x; break } } }
+                    if ($null -eq $target) {
+                        $shown = [string]$p['name']
+                        if (-not $shown) { $shown = [string]$p['id'] }
+                        & $add $i 'error' (Get-FujiText 'check.callMissing' $shown)
+                    } elseif (-not $seen.ContainsKey([string]$target.id)) {
+                        $seen[[string]$target.id] = $true
+                        $queue.Enqueue($target)
+                    }
+                }
+                'CLICK_IMG' {
+                    $path = [string]$p['path']
+                    if ($ResolvePath) { $path = [string](& $ResolvePath $path) }
+                    if ($path -and -not (& $PathExists $path $false)) { & $add $i 'error' (Get-FujiText 'check.imageMissing' $path) }
+                }
+                'CSV' {
+                    $col = Get-FujiInt -Text $s.val -Default 0
+                    if ($Columns -ge 0 -and $col -gt $Columns) { & $add $i 'warn' (Get-FujiText 'check.csvColumn' $col $Columns) }
+                }
+                { $_ -in @('EXCEL_READ', 'EXCEL_WRITE') } { Test-FujiCheckPath -Path $p['path'] -Folder $false -Index $i -Add $add -PathExists $PathExists }
+                'MAIL' { foreach ($a in (Split-FujiPathList ([string]$p['attach']))) { Test-FujiCheckPath -Path $a -Folder $false -Index $i -Add $add -PathExists $PathExists } }
+                'FILE_OP' {
+                    $src = ([string]$p['src']).Trim().Trim('"')
+                    if ($src -and $src -notmatch '\{\{') {
+                        if (-not [System.IO.Path]::IsPathRooted($src) -and $Directory) { $src = Join-Path $Directory $src }
+                        Test-FujiCheckPath -Path ([System.IO.Path]::GetDirectoryName($src)) -Folder $true -Index $i -Add $add -PathExists $PathExists
+                    }
+                }
+            }
+            # placeholders in the fields that take them
+            $texts = @()
+            if ($def['format'] -eq 'text') {
+                if (Test-FujiExpandValue $def) { $texts = @([string]$s.val) }
+            } else {
+                foreach ($f in $def['fields']) { if ($f.Contains('placeholders') -and $f['placeholders'] -and $p.Contains([string]$f['id'])) { $texts += [string]$p[[string]$f['id']] } }
+            }
+            foreach ($t in $texts) {
+                foreach ($pm in $script:FujiPlaceholder.Matches($t)) {
+                    $key = $pm.Groups[1].Value.Trim()
+                    if ($key.StartsWith('$')) { $uses.Add(@{ MacroId = [string]$m.id; Macro = [string]$m.name; Index = $i; Name = $key.Substring(1).Trim() }); continue }
+                    if ($key -match '^[0-9]+$') {
+                        if ($Columns -ge 0 -and [int]$key -gt $Columns) { & $add $i 'warn' (Get-FujiText 'check.csvColumn' $key $Columns) }
+                        continue
+                    }
+                    # a name: a built-in one, or a heading of the loaded CSV (unknown while no CSV is loaded)
+                    if ($Columns -lt 0) { if ($null -eq (Get-FujiPlaceholderValue -Key $key -Context @{})) { & $add $i 'note' (Get-FujiText 'check.nameNoCsv' $pm.Value) }; continue }
+                    $context = @{ Header = $Header; Row = @{ No = 1; Data = [string[]]@() } }
+                    if ($null -eq (Get-FujiPlaceholderValue -Key $key -Context $context)) { & $add $i 'warn' (Get-FujiText 'check.unknownName' $pm.Value) }
+                }
+            }
+        }
+    }
+    # variables: set anywhere in the macros run (the order is not followed: a loop may set it later)
+    $told = @{}
+    foreach ($u in $uses) {
+        if ($defined.ContainsKey($u.Name)) { continue }
+        $k = $u.MacroId + '|' + [string]$u.Index + '|' + $u.Name
+        if ($told.ContainsKey($k)) { continue }
+        $told[$k] = $true
+        $problems.Add(@{ MacroId = $u.MacroId; Macro = $u.Macro; Index = $u.Index; Level = 'warn'; Message = (Get-FujiText 'check.varNeverSet' $u.Name) })
+    }
+    return , $problems.ToArray()
+}
+
+# A path typed in a step (no placeholder in it): warn when this PC does not have it
+function Test-FujiCheckPath {
+    param([AllowEmptyString()][string]$Path, [bool]$Folder, [int]$Index, [scriptblock]$Add, [scriptblock]$PathExists)
+    $t = ([string]$Path).Trim().Trim('"')
+    if (-not $t -or $t -match '\{\{' -or -not [System.IO.Path]::IsPathRooted($t)) { return }
+    if (& $PathExists $t $Folder) { return }
+    $key = 'check.fileMissing'
+    if ($Folder) { $key = 'check.folderMissing' }
+    & $Add $Index 'warn' (Get-FujiText $key $t)
+}
+
+# Errors and warnings (the problems that ask before a run), notes left out
+function Select-FujiSeriousProblem {
+    param([AllowEmptyCollection()][object[]]$Problems)
+    return , @($Problems | Where-Object { $_.Level -ne 'note' })
+}
+
 # ===== src/Commands.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Commands
@@ -2498,6 +2631,18 @@ function ConvertTo-FujiEffectTable {
     return , $rows.ToArray()
 }
 
+# Rows of text -> tab-separated lines (pasted into Excel as a table). A cell Excel would take for a
+# formula (a macro named "=...") gets the leading apostrophe, as in every CSV the app writes.
+function ConvertTo-FujiTabText {
+    param([object[]]$Rows)
+    return ((@($Rows | ForEach-Object { (@($_) | ForEach-Object { ConvertTo-FujiSafeCsvValue (([string]$_) -replace '[\t\r\n]+', ' ') }) -join "`t" }) -join "`r`n") + "`r`n")
+}
+
+function ConvertTo-FujiSafeTable {
+    param([object[]]$Rows)
+    return , @($Rows | ForEach-Object { , [string[]]@(@($_) | ForEach-Object { ConvertTo-FujiSafeCsvValue ([string]$_) }) })
+}
+
 # ===== src/Files.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Files
@@ -3439,7 +3584,7 @@ function ConvertTo-FujiStepTimeText {
     foreach ($r in $Rows) {
         $avg = 0.0
         if ($r.Count -gt 0) { $avg = $r.TotalMs / $r.Count }
-        $lines.Add((@($r.Macro, [string]($r.Index + 1), ($r.Label -replace '[\t\r\n]+', ' '), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
+        $lines.Add((@((ConvertTo-FujiSafeCsvValue ($r.Macro -replace '[\t\r\n]+', ' ')), [string]($r.Index + 1), (ConvertTo-FujiSafeCsvValue ($r.Label -replace '[\t\r\n]+', ' ')), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
                     ($r.MaxMs / 1000.0).ToString('0.00', $inv), $r.Share.ToString('0.0', $inv)) -join "`t"))
     }
     return (($lines.ToArray() -join "`r`n") + "`r`n")
@@ -5505,7 +5650,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27.2'
+$script:FujiAppVersion = '2026.10.27.3'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -6063,6 +6208,117 @@ function Show-FujiAlertTest {
     }
     $title = Get-FujiText ('alert.' + $Kind + 'Title')
     Show-FujiAlert -Kind $Kind -Title $title -Lines @((Get-FujiText 'alert.testLine')) -Config $v -Test
+}
+
+# ===== gui/Check.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Check before a run (rules: src/Check.ps1): the "check" button, and the question before Run
+#  when something is found
+# ---------------------------------------------------------------------------------------------
+
+# The problems of the selected macro, with the loaded CSV and this PC's files
+function Get-FujiUiProblem {
+    $macro = Get-FujiCurrentMacro $script:Ed
+    $columns = -1
+    if ($script:Ed.Csv.Rows.Count -gt 0) {
+        $columns = 0
+        if ($null -ne $script:Ed.Csv.Header) { $columns = $script:Ed.Csv.Header.Length }
+        foreach ($r in $script:Ed.Csv.Rows) { $columns = [Math]::Max($columns, ([string[]]$r).Length) }
+    }
+    return , (Get-FujiMacroProblem -Macros $script:Ed.Data.macros -Macro $macro -Directory $script:Ed.Directory `
+            -ResolvePath { param($Path) Resolve-FujiEditorPath -Editor $script:Ed -Path $Path } -Header $script:Ed.Csv.Header -Columns $columns)
+}
+
+# The check button: the list, or that nothing was found
+function Invoke-FujiCheckUi {
+    $problems = Get-FujiUiProblem
+    if ($problems.Count -eq 0) {
+        Write-FujiUiLog -Message (Get-FujiText 'check.logNone') -Level 'ok'
+        Show-FujiMessage -Title (Get-FujiText 'check.title') -Message (Get-FujiText 'check.none')
+        return
+    }
+    [void](Show-FujiCheckDialog -Problems $problems)
+}
+
+# Before Run: $true to go on. Asked only for errors and warnings; with -Unattended (a schedule)
+# they are written to the log and the run goes on.
+function Confirm-FujiCheckBeforeRun {
+    param([switch]$Unattended)
+    $problems = Get-FujiUiProblem
+    $serious = Select-FujiSeriousProblem -Problems $problems
+    if ($serious.Count -eq 0) { return $true }
+    if ($Unattended) {
+        foreach ($p in $serious) { Write-FujiUiLog -Message (Get-FujiText 'check.logLine' $p.Macro (Get-FujiCheckWhere $p) $p.Message) -Level 'warn' }
+        return $true
+    }
+    if (Show-FujiCheckDialog -Problems $problems -AskRun) {
+        foreach ($p in $serious) { Write-FujiUiLog -Message (Get-FujiText 'check.logLine' $p.Macro (Get-FujiCheckWhere $p) $p.Message) -Level 'warn' }
+        return $true
+    }
+    Write-FujiUiLog -Message (Get-FujiText 'check.stopped') -Level 'warn'
+    return $false
+}
+
+function Get-FujiCheckWhere {
+    param([hashtable]$Problem)
+    if ($Problem.Index -lt 0) { return (Get-FujiText 'check.whole') }
+    return (Get-FujiText 'run.breakWhere' ($Problem.Index + 1))
+}
+
+# The list of problems (errors first). AskRun: buttons to run anyway or stop; returns $true to run.
+# A double click selects that step (and closes the list).
+function Show-FujiCheckDialog {
+    param([object[]]$Problems, [switch]$AskRun)
+    $order = @{ error = 0; warn = 1; note = 2 }
+    $sorted = @($Problems | Sort-Object -Property @{ Expression = { $order[$_.Level] } }, @{ Expression = { $_.Macro } }, @{ Expression = { $_.Index } })
+    $count = @{ error = 0; warn = 0; note = 0 }
+    foreach ($p in $sorted) { $count[$p.Level]++ }
+    $f = New-FujiDialogForm -Title (Get-FujiText 'check.title') -Width (Get-FujiScaled 860) -Height (Get-FujiScaled 460)
+    $f.MaximizeBox = $true
+    $lv = New-FujiListView -Headings (Get-FujiText 'check.head') -Widths @(70, 150, 50, 520) -LeftColumns @(0, 1, 3)
+    foreach ($p in $sorted) {
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList (Get-FujiText ('check.level.' + $p.Level))
+        $no = ''
+        if ($p.Index -ge 0) { $no = [string]($p.Index + 1) }
+        foreach ($v in @($p.Macro, $no, $p.Message)) { [void]$item.SubItems.Add([string]$v) }
+        if ($p.Level -eq 'error') { $item.ForeColor = Get-FujiColor '#c62828' } elseif ($p.Level -eq 'note') { $item.ForeColor = Get-FujiColor '#5e5368' }
+        $item.Tag = @($p.MacroId, $p.Index)
+        [void]$lv.Items.Add($item)
+    }
+    Resize-FujiListColumn -List $lv
+    $text = Get-FujiText 'check.found' $sorted.Count $count.error $count.warn $count.note
+    if ($AskRun) { $text = (Get-FujiText 'check.ask') + "`r`n" + $text }
+    $note = New-FujiLabel -Text $text -MaxWidth (Get-FujiScaled 820)
+    $note.Dock = [System.Windows.Forms.DockStyle]::Top
+    $bar = New-FujiButtonBar
+    $script:Ui.CheckDialog = @{ Run = $false }
+    if ($AskRun) {
+        $stop = New-FujiButton -Text (Get-FujiText 'check.stop')
+        $stop.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        $run = New-FujiButton -Text (Get-FujiText 'check.runAnyway')
+        $run.Add_Click({ $script:Ui.CheckDialog.Run = $true; $this.FindForm().Close() })
+        [void]$bar.Controls.Add($stop)
+        [void]$bar.Controls.Add($run)
+        $f.CancelButton = $stop
+        $f.Add_Shown({ $this.CancelButton.Focus() })
+    } else {
+        $close = New-FujiButton -Text (Get-FujiText 'gui.close')
+        $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+        [void]$bar.Controls.Add($close)
+        $f.CancelButton = $close
+    }
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.check')))
+    $lv.Add_DoubleClick({
+            $at = $this.SelectedItems[0].Tag
+            $form = $this.FindForm()
+            Invoke-FujiUi { if ([int]$at[1] -ge 0) { [void](Select-FujiStepAt -MacroId ([string]$at[0]) -Index ([int]$at[1])) }; $form.Close() }
+        })
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($note)
+    [void]$f.Controls.Add($bar)
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+    return [bool]$script:Ui.CheckDialog.Run
 }
 
 # ===== gui/Common.ps1 =====
@@ -7042,12 +7298,6 @@ function Save-FujiEffectSettingUi {
     }
 }
 
-# Rows of text -> tab-separated lines (pasted into Excel as a table)
-function ConvertTo-FujiTabText {
-    param([object[]]$Rows)
-    return ((@($Rows | ForEach-Object { (@($_) | ForEach-Object { ([string]$_) -replace '[\t\r\n]+', ' ' }) -join "`t" }) -join "`r`n") + "`r`n")
-}
-
 function Save-FujiEffectCsvUi {
     $d = $script:Ui.EffectDialog
     $month = Get-FujiEffectMonthChoice
@@ -7055,7 +7305,7 @@ function Save-FujiEffectCsvUi {
     if ($month) { $suffix = $month.Replace('/', '') }
     $path = Get-FujiEditorPath $script:Ed ('fujikyun_effect_' + $suffix + '.csv')
     try {
-        Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows $d.Table) -Bom
+        Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows (ConvertTo-FujiSafeTable -Rows $d.Table)) -Bom
     } catch {
         Write-FujiUiLog -Message (Get-FujiText 'run.saveFailed' $_.Exception.Message) -Level 'error'
         return
@@ -7447,7 +7697,8 @@ function New-FujiTopPanel {
     foreach ($b in @(
             @('gui.breakpoint', 'gui.breakpointTip', { Invoke-FujiUi { if (Switch-FujiEditorBreakpoint -Editor $script:Ed) { Update-FujiAll } } }),
             @('gui.runFrom', 'gui.runFromTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'from') } }),
-            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } })
+            @('gui.runOnly', 'gui.runOnlyTip', { Invoke-FujiUi { [void](Start-FujiRunUi -Partial 'only') } }),
+            @('gui.check', 'gui.checkTip', { Invoke-FujiUi { Invoke-FujiCheckUi } })
         )) {
         $btn = New-FujiButton -Text (Get-FujiText $b[0]) -Tip (Get-FujiText $b[1])
         $btn.Add_Click($b[2])
@@ -8811,6 +9062,8 @@ function Start-FujiRunUi {
         Show-FujiMessage -Title (Get-FujiText 'run.unbalancedTitle') -Message (Get-FujiText 'run.unbalanced')
         return ''
     }
+    # trying a part (from here, only this) is left to the person making the macro
+    if (-not $Partial -and -not (Confirm-FujiCheckBeforeRun -Unattended:$Unattended)) { return '' }
     $csvRows = $script:Ed.Csv.Rows
     if ($csvRows.Count -eq 0 -and $usesCsv) {
         if ($Unattended) {

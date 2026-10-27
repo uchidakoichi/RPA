@@ -217,7 +217,7 @@ function ConvertTo-FujiStepTimeText {
     foreach ($r in $Rows) {
         $avg = 0.0
         if ($r.Count -gt 0) { $avg = $r.TotalMs / $r.Count }
-        $lines.Add((@($r.Macro, [string]($r.Index + 1), ($r.Label -replace '[\t\r\n]+', ' '), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
+        $lines.Add((@((ConvertTo-FujiSafeCsvValue ($r.Macro -replace '[\t\r\n]+', ' ')), [string]($r.Index + 1), (ConvertTo-FujiSafeCsvValue ($r.Label -replace '[\t\r\n]+', ' ')), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
                     ($r.MaxMs / 1000.0).ToString('0.00', $inv), $r.Share.ToString('0.0', $inv)) -join "`t"))
     }
     return (($lines.ToArray() -join "`r`n") + "`r`n")
