@@ -7,6 +7,10 @@
 $script:Ui = @{}
 $script:LogBuffer = New-Object -TypeName 'System.Collections.Generic.List[object]'
 $script:LogLimit = 500
+# Log lines written during a run, with the step they came from: @{ First; Last (line numbers since
+# start); MacroId; Index }. LogDropped: lines removed from the top so far.
+$script:LogLinks = New-Object -TypeName 'System.Collections.Generic.List[object]'
+$script:LogDropped = 0
 $script:CategoryColors = @{
     input = '#1e88e5'; wait = '#c0a000'; flow = '#fb8c00'; var = '#3949ab'
     mouse = '#00897b'; window = '#8e24aa'; group = '#795548'; note = '#43a047'
@@ -107,8 +111,9 @@ function Write-FujiUnexpectedError {
 }
 
 # ----------------------------------------------------------------- log
+# Link: @{ MacroId; Index } of the step the line is about (a double click on it selects the step)
 function Write-FujiUiLog {
-    param([string]$Message, [string]$Level = 'info')
+    param([string]$Message, [string]$Level = 'info', [hashtable]$Link = $null)
     $fileFailed = Write-FujiLogFile -Message $Message -Level $Level
     # shown once: after a failure the file is not tried again
     if ($fileFailed) { Write-FujiUiLog -Message (Get-FujiText 'gui.logFileFailed' $fileFailed) -Level 'warn' }
@@ -119,11 +124,15 @@ function Write-FujiUiLog {
         $script:LogBuffer.Add(@($line, $Level))
         return
     }
-    Add-FujiLogLine -Box $box -Line $line -Level $Level
+    Add-FujiLogLine -Box $box -Line $line -Level $Level -Link $Link
 }
 
 function Add-FujiLogLine {
-    param($Box, [string]$Line, [string]$Level)
+    param($Box, [string]$Line, [string]$Level, [hashtable]$Link = $null)
+    if ($null -ne $Link) {
+        $first = $script:LogDropped + [Math]::Max(0, $Box.Lines.Length - 1)
+        $script:LogLinks.Add(@{ First = $first; Last = $first + ([regex]::Split($Line, '\r?\n')).Count - 1; MacroId = $Link.MacroId; Index = $Link.Index })
+    }
     $color = $script:LogColors[$Level]
     if (-not $color) { $color = $script:LogColors['info'] }
     $Box.SelectionStart = $Box.TextLength
@@ -132,10 +141,13 @@ function Add-FujiLogLine {
     if ($Level -eq 'error') { $Box.SelectionFont = $script:Ui.BoldFont } else { $Box.SelectionFont = $Box.Font }
     $Box.AppendText($Line + "`n")
     if ($Box.Lines.Length -gt $script:LogLimit + 50) {
+        $removed = $Box.Lines.Length - $script:LogLimit
         $Box.ReadOnly = $false
-        $Box.Select(0, $Box.GetFirstCharIndexFromLine($Box.Lines.Length - $script:LogLimit))
+        $Box.Select(0, $Box.GetFirstCharIndexFromLine($removed))
         $Box.SelectedText = ''
         $Box.ReadOnly = $true
+        $script:LogDropped += $removed
+        $script:LogLinks.RemoveAll([System.Predicate[object]] { param($l) $l.Last -lt $script:LogDropped }) | Out-Null
     }
     $Box.SelectionStart = $Box.TextLength
     $Box.ScrollToCaret()

@@ -38,6 +38,8 @@ function Get-FujiNativeType {
         @($u, 'AttachThreadInput', [bool], [type[]]@([uint32], [uint32], [bool]), $auto),
         @($u, 'keybd_event', [void], [type[]]@([byte], [byte], [uint32], [UIntPtr]), $auto),
         @($u, 'SetCursorPos', [bool], [type[]]@([int], [int]), $auto),
+        # info: LASTINPUTINFO (cbSize 8, then the tick count of the last key or mouse input)
+        @($u, 'GetLastInputInfo', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'mouse_event', [void], [type[]]@([uint32], [uint32], [uint32], [uint32], [UIntPtr]), $auto),
         # rect: int[4] left, top, right, bottom (a blittable array is pinned, so it is filled in)
         @($u, 'GetWindowRect', [bool], [type[]]@([IntPtr], [int[]]), $auto),

@@ -1469,6 +1469,15 @@ $run.WatchRules[0].key = ''
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'watch: stop'
 Assert-True ((Get-FakeCall 'ALARM') -eq 'ALARM' -and (Get-FakeCall 'KEYS') -eq '') 'watch: alarm, no key'
 
+# ----------------------------------------------------------------- pause when touched
+$ts = @{ Mark = $null; RobotUntil = 0 }
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1000)) 'touch: the first look only takes the input as it is'
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 100 -Now 1100)) 'touch: no new input'
+$ts.RobotUntil = 1700
+Assert-True (-not (Test-FujiUserInput -State $ts -LastInput 150 -Now 1200) -and $ts.Mark -eq 150) 'touch: input during the robot''s own keys and clicks is not a person'
+Assert-True (Test-FujiUserInput -State $ts -LastInput 160 -Now 1800) 'touch: new input after that is a person'
+Assert-True (-not (Test-FujiUserInput -State @{ Mark = [uint32]4294967200; RobotUntil = 0 } -LastInput ([uint32]4294967200) -Now 5)) 'touch: tick counts above 2^31'
+
 # ----------------------------------------------------------------- check before a run
 $chk = { param($Cmds, [string[]]$Header = $null, [int]$Columns = -1, [object[]]$Other = @(), [string[]]$Have = @())
     $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
