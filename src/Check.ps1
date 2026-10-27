@@ -23,6 +23,19 @@ function Get-FujiMacroProblem {
     $seen = @{}
     $queue.Enqueue($Macro)
     $seen[[string]$Macro.id] = $true
+    # the macros the watch rules call run too
+    foreach ($r in (Get-FujiWatchRule -Macro $Macro)) {
+        if ($r.action -ne 'CALL') { continue }
+        $target = $null
+        foreach ($x in $Macros) { if ($r.macroId -and [string]$x.id -eq $r.macroId) { $target = $x; break } }
+        if ($null -eq $target) { foreach ($x in $Macros) { if ($r.macroName -and [string]$x.name -eq $r.macroName) { $target = $x; break } } }
+        if ($null -eq $target) {
+            $problems.Add(@{ MacroId = [string]$Macro.id; Macro = [string]$Macro.name; Index = -1; Level = 'error'; Message = (Get-FujiText 'check.watchCall' $r.title $r.macroName) })
+        } elseif (-not $seen.ContainsKey([string]$target.id)) {
+            $seen[[string]$target.id] = $true
+            $queue.Enqueue($target)
+        }
+    }
     while ($queue.Count -gt 0) {
         $m = $queue.Dequeue()
         $add = { param($Index, $Level, $Message) $problems.Add(@{ MacroId = [string]$m.id; Macro = [string]$m.name; Index = $Index; Level = $Level; Message = $Message }) }

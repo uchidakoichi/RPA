@@ -89,7 +89,13 @@ function Copy-FujiMacro {
         foreach ($k in $s.Keys) { $o[$k] = $s[$k] }
         $steps.Add($o)
     }
-    return [ordered]@{ id = $Macro.id; name = $Macro.name; targetWindow = $Macro.targetWindow; steps = $steps }
+    $copy = [ordered]@{ id = $Macro.id; name = $Macro.name; targetWindow = $Macro.targetWindow; steps = $steps }
+    if ($Macro.Contains('watch')) {
+        $rules = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($r in $Macro['watch']) { $rules.Add((Copy-FujiStep -Step $r)) }
+        $copy['watch'] = $rules
+    }
+    return $copy
 }
 
 function Copy-FujiMacroData {
@@ -429,6 +435,19 @@ function Set-FujiTargetWindow {
     Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'editor.history.target' $shown)
     if (-not $value) { $value = Get-FujiText 'editor.targetNone' }
     Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.targetSet' $value)
+}
+
+# The current macro's watch rules (Rules: rules as the dialog gives them; none removes them)
+function Set-FujiMacroWatch {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Edits in-memory data; undo restores it')]
+    param([Parameter(Mandatory)][hashtable]$Editor, [AllowEmptyCollection()][object[]]$Rules)
+    $m = Get-FujiCurrentMacro $Editor
+    if ($null -eq $m) { return }
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($r in $Rules) { $rule = ConvertTo-FujiWatchRule -Source $r; if ($null -ne $rule) { $list.Add($rule) } }
+    if ($list.Count -gt 0) { $m['watch'] = $list } elseif ($m.Contains('watch')) { $m.Remove('watch') }
+    Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'editor.history.watch' $list.Count)
+    Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.watchSet' $m.name $list.Count) -Level 'ok'
 }
 
 # Writes the current macro to macro_export\<name>.json (never overwriting) and returns the path

@@ -259,6 +259,10 @@ function New-FujiTopPanel {
     $wl = New-FujiButton -Text (Get-FujiText 'gui.windowList') -Tip (Get-FujiText 'gui.windowListTip')
     $wl.Add_Click({ Invoke-FujiUi { Select-FujiWindowUi } })
     [void]$row.Controls.Add($wl)
+    $watch = New-FujiButton -Text (Get-FujiText 'gui.watchRules') -Tip (Get-FujiText 'gui.watchRulesTip')
+    $watch.Add_Click({ Invoke-FujiUi { Show-FujiWatchDialog } })
+    $script:Ui.WatchButton = $watch
+    [void]$row.Controls.Add($watch)
     $top.Add((Set-FujiToolbarRow $row))
 
     # CSV
@@ -733,6 +737,8 @@ function Update-FujiMacroSelect {
         $c.SelectedIndex = $script:Ed.MacroIndex
         $m = Get-FujiCurrentMacro $script:Ed
         $script:Ui.Target.Text = [string]$m.targetWindow
+        $count = (Get-FujiWatchRule -Macro $m).Count
+        if ($count -gt 0) { $script:Ui.WatchButton.Text = Get-FujiText 'gui.watchRulesCount' $count } else { $script:Ui.WatchButton.Text = Get-FujiText 'gui.watchRules' }
     } finally {
         $script:Refreshing = $false
     }
@@ -898,6 +904,14 @@ function Import-FujiMacroUi {
 }
 
 function Select-FujiWindowUi {
+    $title = Show-FujiWindowListDialog
+    if (-not $title) { return }
+    $script:Ui.Target.Text = $title
+    Set-FujiTargetWindowUi
+}
+
+# The titles of the open windows to choose from; the chosen one, or '' when cancelled
+function Show-FujiWindowListDialog {
     $titles = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | ForEach-Object { $_.MainWindowTitle } | Sort-Object -Unique)
     $f = New-FujiDialogForm -Title (Get-FujiText 'gui.windowListTitle') -Width (Get-FujiScaled 600) -Height (Get-FujiScaled 440)
     $help = New-FujiLabel -Text (Get-FujiText 'gui.windowListHelp') -MaxWidth (Get-FujiScaled 580)
@@ -924,9 +938,7 @@ function Select-FujiWindowUi {
     $title = ''
     if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $titles.Count -gt 0 -and $lb.SelectedIndex -ge 0) { $title = [string]$lb.SelectedItem }
     $f.Dispose()
-    if (-not $title) { return }
-    $script:Ui.Target.Text = $title
-    Set-FujiTargetWindowUi
+    return $title
 }
 
 # ----------------------------------------------------------------- templates

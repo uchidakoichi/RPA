@@ -443,7 +443,19 @@ $macroInput = ConvertTo-FujiData -InputObject $golden.macroInput
 $norm = ConvertTo-FujiMacroData -Source $macroInput
 Assert-Equal ([string]$golden.macroOutput) (ConvertTo-FujiMacroJson -Data $norm.Data) 'macros file identical to the HTA'
 Assert-True (-not $norm.NewerVersion) 'data version 27 is not newer'
-Assert-True (ConvertTo-FujiMacroData -Source ([ordered]@{ version = 28; macros = @() })).NewerVersion 'data version 28 is newer'
+Assert-True (-not (ConvertTo-FujiMacroData -Source ([ordered]@{ version = 28; macros = @() })).NewerVersion) 'data version 28 is not newer'
+Assert-True (ConvertTo-FujiMacroData -Source ([ordered]@{ version = 29; macros = @() })).NewerVersion 'data version 29 is newer'
+# watch rules: kept through the file, cleaned (no title: dropped; unknown action: stop), copied with the macro
+$wsrc = ConvertFrom-FujiJson -Json '{"version":28,"macros":[{"id":"w","name":"w","targetWindow":"","watch":[{"title":" Timeout ","key":"{ENTER}","action":"call","macroId":"s","macroName":"relogin"},{"title":"","action":"STOP"},{"title":"Err","action":"boom","macroId":"x"}],"steps":[]}]}'
+$wdata = (ConvertTo-FujiMacroData -Source $wsrc).Data
+$wr = Get-FujiWatchRule -Macro $wdata.macros[0]
+Assert-True ($wr.Count -eq 2 -and $wr[0].title -eq 'Timeout' -and $wr[0].action -eq 'CALL' -and $wr[0].macroId -eq 's' -and $wr[1].action -eq 'STOP' -and $wr[1].macroId -eq '') 'watch rules: read and cleaned'
+$wjson = ConvertTo-FujiMacroJson -Data $wdata
+Assert-True ($wjson.Contains('"watch": [') -and -not (ConvertTo-FujiMacroJson -Data $norm.Data).Contains('"watch"')) 'watch rules: written only when there are some'
+Assert-Equal 2 (Get-FujiWatchRule -Macro (ConvertTo-FujiMacroData -Source (ConvertFrom-FujiJson -Json $wjson)).Data.macros[0]).Count 'watch rules: round trip'
+$wcopy = Copy-FujiMacro -Macro $wdata.macros[0]
+$wcopy.watch[0].title = 'changed'
+Assert-Equal 'Timeout' $wdata.macros[0].watch[0].title 'watch rules: a copied macro has its own rules'
 $dup = ConvertTo-FujiMacroData -Source (ConvertFrom-FujiJson -Json '{"macros":[{"id":"x","steps":[]},{"id":"x","steps":[]},{"steps":[]}]}')
 $ids = @($dup.Data.macros | ForEach-Object { $_.id })
 Assert-True ($ids.Count -eq 3 -and @($ids | Select-Object -Unique).Count -eq 3 -and $ids[0] -eq 'x') 'macro ids made unique'
@@ -1421,6 +1433,42 @@ Assert-Equal "'=HYPERLINK(1)" (ConvertTo-FujiSafeTable -Rows $evil)[1][0] 'effec
 $st = ConvertTo-FujiStepTimeText -Rows @(@{ Macro = '@x'; Index = 0; Label = '+y'; Count = 1; TotalMs = 1.0; MaxMs = 1.0; Share = 100.0 })
 Assert-True ($st.Contains("'@x`t1`t'+y")) 'step times copy: formula-looking macro name and label as text'
 
+# ----------------------------------------------------------------- watch rules while running
+$relogin = [ordered]@{ id = 's'; name = 'relogin'; targetWindow = ''; steps = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+$relogin.steps.Add([ordered]@{ cmd = 'KEY'; val = 'login'; label = '' })
+$wrun = { param($Action, [string[]]$Windows, $Rows = @(), $Steps = @(@('KEY', 'a'), @('KEY', 'b')))
+    $r = New-TestRun -Steps $Steps -Rows $Rows -Other @($relogin)
+    $r.WatchRules.Add([ordered]@{ title = 'Timeout'; key = '{ENTER}'; action = $Action; macroId = 's'; macroName = 'relogin' })
+    $script:Fake.Windows = @('App') + $Windows
+    return $r
+}
+# the window appears once (before step 2) and is gone after the key: continue
+$run = & $wrun 'CONTINUE' @()
+$run.Io.SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq 'a') { $script:Fake.Windows = @('App', 'Timeout') } elseif ($Keys -eq '{ENTER}') { $script:Fake.Windows = @('App') } }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'watch: continue after pressing the key'
+Assert-Equal 'KEYS a | KEYS {ENTER} | KEYS b' (Get-FakeCall 'KEYS') 'watch: the key pressed before the next step'
+# call a macro, then the step that was about to run
+$run = & $wrun 'CALL' @()
+$run.Io.SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq 'a') { $script:Fake.Windows = @('App', 'Timeout') } elseif ($Keys -eq 'login') { $script:Fake.Windows = @('App') } }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'watch: call a macro'
+Assert-Equal 'KEYS a | KEYS {ENTER} | KEYS login | KEYS b' (Get-FakeCall 'KEYS') 'watch: the called macro ran, then the step it stopped before'
+# still there after the key: stop instead of pressing it again and again
+$run = & $wrun 'CONTINUE' @('Timeout')
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'watch: a window that stays stops the run'
+Assert-Equal 'KEYS {ENTER} | KEYS a' (Get-FakeCall 'KEYS') 'watch: pressed once, stopped before the next step'
+# skip the row, error caught by "on error", stop
+$run = & $wrun 'SKIP' @('Timeout') @([string[]]@('1'), [string[]]@('2'))
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'watch: skip rows'
+Assert-True ($run.SkippedRows -eq 2 -and $run.ErrorRows.Count -eq 2 -and (Get-FakeCall 'KEYS a') -eq '') 'watch: each row skipped and recorded'
+$run = & $wrun 'ERROR' @() @() @(@('TRY_START', 'try'), @('KEY', 'x'), @('KEY', 'a'), @('CATCH', ''), @('SET_VAR', ('{"name":"seen","value":"{{$' + (Get-FujiText 'data.errorVar') + '}}","mode":"TEXT"}')), @('TRY_END', ''))
+$run.Io.SendKeys = { param($Keys) $script:Fake.Calls.Add('KEYS ' + $Keys); if ($Keys -eq 'x') { $script:Fake.Windows = @('App', 'Timeout') } elseif ($Keys -eq '{ENTER}') { $script:Fake.Windows = @('App') } }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'watch: an error the "on error" block catches'
+Assert-True ($run.Vars['seen'] -like ('*Timeout*') -and (Get-FakeCall 'KEYS') -eq 'KEYS x | KEYS {ENTER}') 'watch: caught, the rest of the try part not run'
+$run = & $wrun 'STOP' @('Timeout')
+$run.WatchRules[0].key = ''
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'watch: stop'
+Assert-True ((Get-FakeCall 'ALARM') -eq 'ALARM' -and (Get-FakeCall 'KEYS') -eq '') 'watch: alarm, no key'
+
 # ----------------------------------------------------------------- check before a run
 $chk = { param($Cmds, [string[]]$Header = $null, [int]$Columns = -1, [object[]]$Other = @(), [string[]]$Have = @())
     $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -1453,6 +1501,15 @@ Assert-Equal ('main#5:' + (Get-FujiText 'check.breakpoint')) (& $show 'note') 'c
 Assert-Equal 2 (Select-FujiSeriousProblem -Problems (& $chk @(@('KEY', 'a', @{ breakpoint = $true }), @('KEY', ''), @('TEXT', '{{$x}}')))).Count 'check: notes do not ask before a run'
 Assert-Equal ('main#0:' + (Get-FujiText 'check.nameNoCsv' '{{name}}')) (@((& $chk @(, @('TEXT', '{{name}}{{3}}'))) | ForEach-Object { '{0}#{1}:{2}' -f $_.Macro, $_.Index, $_.Message }) -join ' | ') 'check: without a CSV, a heading name is a note and a column number is not checked'
 Assert-Equal 0 (& $chk @(@('IF_START', '{"left":"{{$a}}","op":"EQ","right":"1"}'), @('SET_VAR', '{"name":"a","value":"1","mode":"TEXT"}'), @('IF_END', ''))).Count 'check: a variable set later (in a loop) counts as set'
+$wm = [ordered]@{ id = 'main'; name = 'main'; targetWindow = ''; steps = (New-Object -TypeName 'System.Collections.Generic.List[object]'); watch = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+$wm.steps.Add([ordered]@{ cmd = 'TEXT'; val = '{{$fromRelogin}}'; label = '' })
+$wm.watch.Add([ordered]@{ title = 'A'; key = ''; action = 'CALL'; macroId = 'gone'; macroName = 'gone' })
+$wm.watch.Add([ordered]@{ title = 'B'; key = ''; action = 'CALL'; macroId = 'r2'; macroName = 'r2' })
+$r2 = [ordered]@{ id = 'r2'; name = 'r2'; targetWindow = ''; steps = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+$r2.steps.Add([ordered]@{ cmd = 'SET_VAR'; val = '{"name":"fromRelogin","value":"1","mode":"TEXT"}'; label = '' })
+$wl = New-Object -TypeName 'System.Collections.Generic.List[object]'
+$wl.Add($wm); $wl.Add($r2)
+Assert-Equal ('main#-1:' + (Get-FujiText 'check.watchCall' 'A' 'gone')) (@(Get-FujiMacroProblem -Macros $wl -Macro $wm -PathExists { $true } | ForEach-Object { '{0}#{1}:{2}' -f $_.Macro, $_.Index, $_.Message }) -join ' | ') 'check: a watch rule calling a macro that is gone; the macro a rule calls is checked (its variables count)'
 $bad = New-Object -TypeName 'System.Collections.Generic.List[string]'
 foreach ($t in $templates['templates']) {
     $tm = [ordered]@{ id = 't'; name = [string]$t['id']; targetWindow = ''; steps = (Get-FujiTemplateStep -Template $t) }

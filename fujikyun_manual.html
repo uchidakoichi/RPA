@@ -364,7 +364,11 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <blockquote><p>⚠ ロボットは画面を操作するので、実行する時刻に <strong>PCの電源が入っていて、ログインしたまま、画面ロックされていない</strong> 必要があります。Windows に登録したタスクも、ログインしているときだけ動きます。</p></blockquote>
 <hr>
 <h2 id="15-安全装置">15. 安全装置</h2>
-<div class="table-wrap"><table><thead><tr><th>しくみ</th><th>内容</th></tr></thead><tbody><tr><td>ウィンドウ見失い防止</td><td>対象ウィンドウが見つからないときは1秒おきに最大3回探し、だめならアラーム＋停止</td></tr><tr><td>自分への誤入力防止</td><td>入力先がふじキュン自身になりそうなときは、対象ウィンドウに戻すか、戻せなければ停止</td></tr><tr><td>アラーム</td><td>異常停止・タイムアウト時に、Windows のアラーム音（はじめは <code>Alarm01.wav</code>。［🚨 知らせ方］で変えられます）を約12秒鳴らします。鳴らせないときは Windows の警告音にします。［🔔］でテストできます</td></tr><tr><td>画面で知らせる</td><td>異常停止と確認待ちを、画面全体か画面の縁の色で知らせます（［🚨 知らせ方］）</td></tr><tr><td>確認ポイント</td><td>CONFIRM で人の確認をはさめます。登録・送信などの前に入れるのがおすすめです</td></tr><tr><td>Esc で停止</td><td>ふじキュンの画面で Esc を押すと止まります。ほかの画面が前にあるときは <strong>Esc を約1秒長押し</strong>（マクロの KEY {ESC} は一瞬なので反応しません）</td></tr><tr><td>終わらない繰り返しの防止</td><td>繰り返しは上限回数、マクロの呼び出しは10段まで</td></tr><tr><td>自動保存</td><td>編集のたびに一時ファイルへ保存。次回起動時に復元できます</td></tr><tr><td>エラー時の画面</td><td>エラーで止まった瞬間の画面全体を <code>evidence\</code> に自動で保存</td></tr><tr><td>パスワードを書かない</td><td>SECRET（🔑 パスワードを入力）は Windows の資格情報マネージャーから読むので、パスワードがマクロ・CSV・ログ・実行結果に残りません</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>しくみ</th><th>内容</th></tr></thead><tbody><tr><td>ウィンドウ見失い防止</td><td>対象ウィンドウが見つからないときは1秒おきに最大3回探し、だめならアラーム＋停止</td></tr><tr><td>自分への誤入力防止</td><td>入力先がふじキュン自身になりそうなときは、対象ウィンドウに戻すか、戻せなければ停止</td></tr><tr><td>アラーム</td><td>異常停止・タイムアウト時に、Windows のアラーム音（はじめは <code>Alarm01.wav</code>。［🚨 知らせ方］で変えられます）を約12秒鳴らします。鳴らせないときは Windows の警告音にします。［🔔］でテストできます</td></tr><tr><td>画面で知らせる</td><td>異常停止と確認待ちを、画面全体か画面の縁の色で知らせます（［🚨 知らせ方］）</td></tr><tr><td>確認ポイント</td><td>CONFIRM で人の確認をはさめます。登録・送信などの前に入れるのがおすすめです</td></tr><tr><td>見張り</td><td>実行中にいつ出るか分からない画面（「接続が切れました」など）を、ステップの前に毎回見ます（<a href="#見張りいつ出るか分からない画面に対処する">下の説明</a>）</td></tr><tr><td>Esc で停止</td><td>ふじキュンの画面で Esc を押すと止まります。ほかの画面が前にあるときは <strong>Esc を約1秒長押し</strong>（マクロの KEY {ESC} は一瞬なので反応しません）</td></tr><tr><td>終わらない繰り返しの防止</td><td>繰り返しは上限回数、マクロの呼び出しは10段まで</td></tr><tr><td>自動保存</td><td>編集のたびに一時ファイルへ保存。次回起動時に復元できます</td></tr><tr><td>エラー時の画面</td><td>エラーで止まった瞬間の画面全体を <code>evidence\</code> に自動で保存</td></tr><tr><td>パスワードを書かない</td><td>SECRET（🔑 パスワードを入力）は Windows の資格情報マネージャーから読むので、パスワードがマクロ・CSV・ログ・実行結果に残りません</td></tr></tbody></table></div>
+<h3 id="見張りいつ出るか分からない画面に対処する">見張り（いつ出るか分からない画面に対処する）</h3>
+<p>WINDOW_CHECK（ウィンドウ検知）は、置いた場所で1回だけ調べます。「セッションの有効期限が切れました」「サーバーでエラーが発生しました」のように、<strong>いつ出るか分からない画面</strong> には、マクロの段の <strong>［👁 見張り］</strong> で見張りを決めておきます。実行中は、ステップの前に毎回、決めたウィンドウが出ていないかを見ます。</p>
+<div class="table-wrap"><table><thead><tr><th>決めること</th><th>内容</th></tr></thead><tbody><tr><td>ウィンドウのタイトル</td><td>タイトルの一部（<a href="#9-ウィンドウ名の合わせ方">9章</a>と同じ探し方）。差し込みも使えます。［🔍 一覧］で、いま開いているウィンドウから選べます</td></tr><tr><td>出たら押すキー</td><td>例 <code>{ENTER}</code>（OK を押す）・<code>{ESC}</code>（閉じる）。空欄なら押しません</td></tr><tr><td>そのあとの動き</td><td><strong>止める</strong>: アラームを鳴らして緊急停止（エラー時の処理でも受け止めません）&lt;br&gt;<strong>エラーにする</strong>: ふつうのエラーとして扱います（エラー時の処理・うまくいくまでやり直す で受け止められます）&lt;br&gt;<strong>この行を打ち切って次の行へ</strong>: エラー行として記録して、次の行に進みます&lt;br&gt;<strong>キーを押して、そのまま続ける</strong>: ときどき出るお知らせを閉じて続けます&lt;br&gt;<strong>マクロを呼び出してから続ける</strong>: 決めたマクロ（ログインし直す手順など）を実行してから、止まったステップに戻って続けます</td></tr></tbody></table></div>
+<ul><li>見張りはマクロごとに決めて、マクロのファイルに一緒に保存されます（書出・取込でも一緒に渡ります）。決めた数はボタンに「👁 見張り（2）」のように出ます。</li><li>呼び出したマクロの中のステップでも見張ります。見張りで呼び出したマクロを実行しているあいだは見張りません。</li><li>キーを押したり、マクロを呼び出したりしたあとも同じウィンドウが出たままのときは、同じことをくり返さずに止まります。</li><li>見るのはステップとステップのあいだです。WAIT_FOR（ウィンドウ出現待ち）などで待っているあいだは見ません。</li><li>見張りが多いと、ステップごとに少し時間がかかります。本当に必要なものだけにしてください。</li></ul>
 <h3 id="パスワードの扱いsecret">パスワードの扱い（SECRET）</h3>
 <ol><li>「パスワードを入力」のステップを追加し、<strong>登録名</strong>（例 <code>基幹系</code>）を決めます。</li><li><strong>［🔑 登録・変更］</strong> を押して、ユーザー名とパスワードを入れます。</li><li>同じ画面で <strong>入れてよい画面</strong> を決めます。<strong>［🎯 画面を指す（3秒）］</strong> を押して、3秒以内にログインする画面をクリックすると、その画面のタイトルとプログラム（.exe の場所）が入ります。タイトルは、毎回変わらない一部だけに手で直せます。画面を指さないと保存できません。Windows の <strong>資格情報マネージャー</strong> に、<code>FujikyunRPA:登録名</code> という名前で保存されます。</li><li>実行すると、いまの入力欄にパスワード（またはユーザー名）を打ち込みます。ログには「入力した」とだけ出て、値は出ません。</li></ol>
 <ul><li><strong>登録した画面にしか入力しません</strong>。前にある画面のタイトルに登録した文字が入っていて、しかも登録したプログラム（同じ場所の .exe）の画面のときだけ打ち込みます。</li><li><strong>パスワードは、パスワードの欄（入れた文字が ● になる欄）にしか入力しません</strong>。前のステップでパスワードの欄を選んでおきます（例: 「欄に入力（名前で）」で欄を選ぶ）。ユーザー名はふつうの欄にも入れられます。</li><li>条件に合わないときは、何も打ち込まずに止まります。「エラー時の処理」でも受け止めません。取り込んだマクロが、メモ帳やふつうの欄にパスワードを打ち込んで読み取る、といった使い方を防ぐためです。</li><li>登録は、<strong>その PC に、そのユーザーでサインインしたときだけ</strong> 読めます。別の PC や別の人が使うときは、その人が自分で登録します（マクロを書き出しても、パスワードは一緒に渡りません）。</li><li>パスワードを変えたら、もう一度［🔑 登録・変更］で登録し直します。登録を消すときも同じ画面の［登録を消す］を使います。Windows の「資格情報マネージャー」（コントロール パネル）からも確認・削除できます。</li><li>入力はキーを1つずつ送る方法なので、日本語入力（IME）はオフにしておいてください。</li></ul>
@@ -391,12 +395,15 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h2 id="20-マクロファイルの形式">20. マクロファイルの形式</h2>
 <p><code>fujikyun_macros.json</code>（と書き出したマクロ）は、次の形の JSON です。ふつうは編集画面だけで作れるので、読む必要はありません。</p>
 <pre><code>{
-  &quot;version&quot;: 27,
+  &quot;version&quot;: 28,
   &quot;macros&quot;: [
     {
       &quot;id&quot;: &quot;a1b2c3d4&quot;,
       &quot;name&quot;: &quot;見本&quot;,
       &quot;targetWindow&quot;: &quot;メモ帳&quot;,
+      &quot;watch&quot;: [
+        { &quot;title&quot;: &quot;接続が切れました&quot;, &quot;key&quot;: &quot;{ENTER}&quot;, &quot;action&quot;: &quot;CALL&quot;, &quot;macroId&quot;: &quot;e5f6a7b8&quot;, &quot;macroName&quot;: &quot;ログインし直す&quot; }
+      ],
       &quot;steps&quot;: [
         { &quot;cmd&quot;: &quot;CSV&quot;, &quot;val&quot;: &quot;1&quot;, &quot;label&quot;: &quot;CSV 1列目「氏名」を貼付&quot; },
         { &quot;cmd&quot;: &quot;WINDOW_CHECK&quot;, &quot;val&quot;: &quot;{\&quot;title\&quot;:\&quot;エラー\&quot;,\&quot;key\&quot;:\&quot;{ENTER}\&quot;,\&quot;mode\&quot;:\&quot;SKIP\&quot;}&quot;, &quot;label&quot;: &quot;…&quot; },
@@ -405,7 +412,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
     }
   ]
 }</code></pre>
-<ul><li><code>val</code> は、<strong>設定が1つのコマンドはその値そのもの</strong>（KEY・TEXT・CSV・COPY・WAIT・CONFIRM・CLICK_NAME・SWITCH・RUN・GROUP_START・COMMENT など）、<strong>設定が2つ以上のコマンドは JSON</strong>（WAIT_FOR・WINDOW_CHECK・CLICK_POS・CLICK_IMG・SCREENSHOT・CLICK_TEXT・READ_TEXT・MAIL・流れ・変数のコマンド）です。カンマ区切りは使わないので、タイトルやパスにカンマが入っていても大丈夫です。</li><li><code>when</code>（グループの実行タイミング: <code>first</code> / <code>last</code>）と <code>disabled</code>（無効化）、<code>breakpoint</code>（止める所）は、必要なときだけ付きます。</li><li><code>version</code> はデータの版です。この版（27）より新しい版で作られたファイルは、上書きする前に確認が出ます。古い版（26 以前）のコマンド名・値の形には対応していません。</li></ul>
+<ul><li><code>val</code> は、<strong>設定が1つのコマンドはその値そのもの</strong>（KEY・TEXT・CSV・COPY・WAIT・CONFIRM・CLICK_NAME・SWITCH・RUN・GROUP_START・COMMENT など）、<strong>設定が2つ以上のコマンドは JSON</strong>（WAIT_FOR・WINDOW_CHECK・CLICK_POS・CLICK_IMG・SCREENSHOT・CLICK_TEXT・READ_TEXT・MAIL・流れ・変数のコマンド）です。カンマ区切りは使わないので、タイトルやパスにカンマが入っていても大丈夫です。</li><li><code>when</code>（グループの実行タイミング: <code>first</code> / <code>last</code>）と <code>disabled</code>（無効化）、<code>breakpoint</code>（止める所）は、必要なときだけ付きます。</li><li><code>watch</code>（<a href="#見張りいつ出るか分からない画面に対処する">見張り</a>）は、決めたときだけ付きます。<code>action</code> は <code>STOP</code>・<code>ERROR</code>・<code>SKIP</code>・<code>CONTINUE</code>・<code>CALL</code> のどれかです。</li><li><code>version</code> はデータの版です。この版（28）より新しい版で作られたファイルは、上書きする前に確認が出ます。版28で <code>watch</code> が加わりました（27 までのふじキュンで保存すると見張りが消えるので、版を上げています）。古い版（26 以前）のコマンド名・値の形には対応していません。</li></ul>
 <hr>
 <h2 id="21-効果の測りかた-効果">21. 効果の測りかた（📈 効果）</h2>
 <p>ふじキュンは、実行のたびに <strong>どのマクロで何件を処理したか・どれだけ時間がかかったか・人がどれだけ付いていたか</strong> を記録します（<code>fujikyun_runs.csv</code>）。いちばん上の段の <strong>［📈 効果］</strong> を押すと、この記録から、ロボットが引き受けた手作業の時間（削減時間）を、マクロごと・月ごとに一覧にします。</p>
@@ -5988,6 +5995,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h1 id="更新履歴">更新履歴</h1>
 <p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
+<hr>
+<h2 id="202610274">2026.10.27.4</h2>
+<p><strong>新しくなったこと</strong></p>
+<ul><li><strong>見張り</strong> を加えました。マクロの段の <strong>［👁 見張り］</strong> で、実行中にいつ出るか分からない画面（「接続が切れました」など）と、そのときの動き（止める・エラーにする・この行を打ち切る・キーを押して続ける・マクロを呼び出してから続ける）を決めておくと、ステップの前に毎回その画面が出ていないかを見て対処します（<a href="#page-manual/見張りいつ出るか分からない画面に対処する">操作マニュアル 15章</a>）。</li><li>マクロファイルのデータの版を 28 にしました（見張りを保存するため）。この版のふじキュンで保存したファイルを古いふじキュンで開くと、上書きの前に確認が出ます。</li></ul>
 <hr>
 <h2 id="202610273">2026.10.27.3</h2>
 <p><strong>新しくなったこと</strong></p>
