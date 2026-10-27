@@ -174,14 +174,14 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p><strong>コマンド</strong></p>
 <ol start="5"><li><a href="#5-コマンド一覧">コマンド一覧</a></li><li><a href="#6-差し込み">差し込み（{{ }}）</a></li><li><a href="#7-変数繰り返し分岐">変数・繰り返し・分岐</a></li><li><a href="#8-キーの書き方sendkeys">キーの書き方（SendKeys）</a></li><li><a href="#9-ウィンドウ名の合わせ方">ウィンドウ名の合わせ方</a></li><li><a href="#10-クリックと読み取り画面認識の4つの方法">クリックと読み取り（画面認識の4つの方法）</a></li><li><a href="#11-メール">メール</a></li><li><a href="#12-マクロの呼び出し部品化">マクロの呼び出し（部品化）</a></li></ol>
 <p><strong>動かす・管理する</strong></p>
-<ol start="13"><li><a href="#13-実行">実行</a></li><li><a href="#14-スケジュール-予定">スケジュール（⏰ 予定）</a></li><li><a href="#15-安全装置">安全装置</a></li><li><a href="#16-保存されるファイル">保存されるファイル</a></li><li><a href="#17-マクロの共有書出取込">マクロの共有（書出・取込）</a></li><li><a href="#18-環境チェック">環境チェック</a></li><li><a href="#19-キーボードショートカット">キーボードショートカット</a></li><li><a href="#20-マクロファイルの形式">マクロファイルの形式</a></li></ol>
+<ol start="13"><li><a href="#13-実行">実行</a></li><li><a href="#14-スケジュール-予定">スケジュール（⏰ 予定）</a></li><li><a href="#15-安全装置">安全装置</a></li><li><a href="#16-保存されるファイル">保存されるファイル</a></li><li><a href="#17-マクロの共有書出取込">マクロの共有（書出・取込）</a></li><li><a href="#18-環境チェック">環境チェック</a></li><li><a href="#19-キーボードショートカット">キーボードショートカット</a></li><li><a href="#20-マクロファイルの形式">マクロファイルの形式</a></li><li><a href="#21-効果の測りかた-効果">効果の測りかた（📈 効果）</a></li></ol>
 <hr>
 <h2 id="1-動作環境と置き場所">1. 動作環境と置き場所</h2>
 <div class="table-wrap"><table><thead><tr><th>項目</th><th>内容</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 / 11</td></tr><tr><td>必須</td><td>Windows に最初から入っている <strong>Windows PowerShell 5.1</strong>（言語モードが FullLanguage であること）。ほかのソフトのインストールは不要です</td></tr><tr><td>Excel / Outlook</td><td>EXCEL_READ・EXCEL_WRITE は Excel、MAIL の Outlook 送信は Outlook が入っている PC で使えます</td></tr><tr><td>ファイル</td><td><code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code> の5つを <strong>同じフォルダ</strong> に置きます（JSON は UTF-8 で保存。<a href="#page-setup/ファイルを置く">準備</a>）</td></tr><tr><td>置き場所</td><td><strong>書き込みできるフォルダ</strong>に置いてください（例: <code>C:\RPA作業\</code> やドキュメント）。マクロやログはこのフォルダに保存されます</td></tr></tbody></table></div>
 <p>起動したら、まず <strong>［🩺 環境チェック］</strong> を押して、その端末で使える機能を確かめましょう（<a href="#18-環境チェック">18章</a>）。</p>
 <hr>
 <h2 id="2-画面の見かた">2. 画面の見かた</h2>
-<pre><code>┌ 💾本番ファイルに保存  保存状態  ⏰予定  🩺環境チェック  📖説明書  🔠文字の大きさ[▼]  次の予定 ┐
+<pre><code>┌ 💾本番ファイルに保存  保存状態  ⏰予定  🩺環境チェック  📈効果  📖説明書  🔠文字の大きさ[▼]  次の予定 ┐
 │ マクロ [選択▼] ＋新規 ✎名前変更 ⧉複製 🗑削除 📚テンプレート 📤書出 📥取込              │
 │        対象ウィンドウ [      ] 🔍一覧                                                   │
 │ CSV    [パス        ] 📂参照 📥読込 □1行目は見出し [文字コード▼]                        │
@@ -195,7 +195,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 │      整理       ［…］      ┃                                          │
 │ ▶実行 ⏸一時停止 ⏹停止 開始行 終了行 間隔 ┃                          │
 │ □アラーム 🔔 □毎ステップ前面化 □完了音    ┃                          │
-│ 📊変数 ↓実行結果CSV ↓エラー行CSV 進み具合 ┃                          │
+│ 📊変数 ⏱時間 ↓実行結果CSV ↓エラー行CSV 進み具合 ┃                    │
 │ ログ                    │ 変数パネル     ┃                          │
 └───────────────────────────┴─────────────────────────────┘</code></pre>
 <ul><li><strong>左右の境目</strong>（薄い紫の線）はドラッグで動かせます。ウィンドウの大きさを変えると、右のブロック一覧が伸び縮みします。</li><li><strong>ウィンドウの位置・大きさ・左右の境目の位置</strong> は、閉じるときにこの PC に覚えておき、次に開いたときに元に戻ります（最大化していたときも）。そのとき使っていたモニターを外したときは、画面の真ん中に開きます。</li><li><strong>［🔠 文字の大きさ］</strong> で、画面の文字とボタンの大きさを 90%〜200% から選べます。文字が小さくて読みにくいときに大きくします。次に起動したときから変わります（選んだときに「いま起動し直す」も選べます）。この PC だけの設定です。</li><li><strong>［📖 説明書］</strong> で、チュートリアル・操作マニュアル・テンプレート解説・Q&amp;A をブラウザで開けます。<strong>F1</strong> を押すと、選んでいるステップのコマンドの説明が開きます。ステップの編集画面の［📖 このコマンドの説明］、テンプレート選択の［📖 解説を読む］、予定・環境チェック・パスワード登録の画面の［📖 説明］からも、その画面の説明へ直接飛べます。<ul><li>説明書は、<code>fujikyun_manual.html</code> を <code>fujikyun.ps1</code> と同じフォルダに置いておくと、ネットにつながっていなくても開けます（<a href="#page-setup/ファイルを置く">準備</a>）。見つからないときは、GitHub で読むかどうかを聞きます。</li></ul></li><li><strong>保存状態</strong>: 「● 未保存の変更あり」のときは、編集内容が一時ファイルにだけ保存されています。［💾 本番ファイルに保存］（Ctrl+S）で確定します。</li><li><strong>追加</strong>: コマンドのボタンが7つの分類ごとに1行ずつ並んでいます（左側が狭いときは、分類の中で折り返します）。ボタンにマウスを乗せると、コマンド名（KEY など）と説明が出ます。</li><li><strong>ブロック</strong>: 1つのブロックが1つの命令（コマンド）です。左端とコマンド名の色で分類が分かります。</li></ul>
@@ -331,7 +331,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <ul><li><strong>CALL_MACRO</strong>（📞 マクロを呼び出す）で、ほかのマクロを部品（サブルーチン）として実行し、終わったら次の行に戻ってきます。</li><li>ログイン・画面を開く・保存して閉じる など、いくつものマクロで使う手順を1つの「部品マクロ」にしておくと、直すときも1か所で済みます。</li><li>変数（<code>{{$名前}}</code>）と CSV の行は共通なので、値の受け渡しは変数でします。</li><li>部品マクロの途中で <strong>RETURN</strong>（↩ 呼び出し元に戻る）を使うと、そこで戻ります。いちばん外側のマクロで使うと、その行の残りを飛ばして次の行に進みます。</li><li>部品マクロの中でエラーが起きたとき、部品の中に「エラー時の処理」がなければ、呼び出した側の「エラー時の処理」が受け止めます。</li><li>呼び出しは10段まで（自分自身を呼び続ける間違いを防ぐため）。呼び出し先はマクロの名前を変えても切れません。</li></ul>
 <hr>
 <h2 id="13-実行">13. 実行</h2>
-<div class="table-wrap"><table><thead><tr><th>項目</th><th>説明</th></tr></thead><tbody><tr><td>▶ 実行</td><td>選択中のマクロを、CSV の開始行〜終了行について実行します</td></tr><tr><td>開始行・終了行</td><td>データ行の番号（見出しを除いて1から）。全角数字でもOK。数字以外が入っているときは実行しません（終了行は空欄なら最後まで）。<strong>試すときは両方1にして1件だけ</strong></td></tr><tr><td>間隔</td><td>ステップとステップの間の待ち時間（ミリ秒）。画面が追いつかないときは増やします</td></tr><tr><td>⏸ 一時停止</td><td>次のステップの前で止まります。［▶ 再開］で対象ウィンドウに戻ってから続きを実行します</td></tr><tr><td>⏹ 停止</td><td>すぐ止めます。ふじキュンの画面で <strong>Esc</strong> を押しても止まります。ロボットが入力中で別の画面が前にあるときは、<strong>Esc を約1秒長押し</strong> すると、どの画面からでも止まります。名前・文字・画像でのクリックは別の処理で探すので、探している最中でも止められます</td></tr><tr><td>□ アラーム ／ 🔔</td><td>異常停止したときにアラームを鳴らします。🔔 でテスト再生できます</td></tr><tr><td>🚨 知らせ方</td><td>エラーで止まったときと確認を待っているときに、画面全体や画面の縁を色で光らせて知らせます（<a href="#知らせ方エラーと確認待ちを画面で知らせる">下の説明</a>）</td></tr><tr><td>□ 毎ステップ前面化</td><td>入力の前に毎回、対象ウィンドウを前面にします。途中で別の画面が割り込む環境で ON にします</td></tr><tr><td>□ 完了音</td><td>全行が終わったら音で知らせます</td></tr><tr><td>📊 変数</td><td>実行中の変数・繰り返しの回数・この行のCSVの値を、ログの右に表示します（もう一度押すと隠れます）</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>項目</th><th>説明</th></tr></thead><tbody><tr><td>▶ 実行</td><td>選択中のマクロを、CSV の開始行〜終了行について実行します</td></tr><tr><td>開始行・終了行</td><td>データ行の番号（見出しを除いて1から）。全角数字でもOK。数字以外が入っているときは実行しません（終了行は空欄なら最後まで）。<strong>試すときは両方1にして1件だけ</strong></td></tr><tr><td>間隔</td><td>ステップとステップの間の待ち時間（ミリ秒）。画面が追いつかないときは増やします</td></tr><tr><td>⏸ 一時停止</td><td>次のステップの前で止まります。［▶ 再開］で対象ウィンドウに戻ってから続きを実行します</td></tr><tr><td>⏹ 停止</td><td>すぐ止めます。ふじキュンの画面で <strong>Esc</strong> を押しても止まります。ロボットが入力中で別の画面が前にあるときは、<strong>Esc を約1秒長押し</strong> すると、どの画面からでも止まります。名前・文字・画像でのクリックは別の処理で探すので、探している最中でも止められます</td></tr><tr><td>□ アラーム ／ 🔔</td><td>異常停止したときにアラームを鳴らします。🔔 でテスト再生できます</td></tr><tr><td>🚨 知らせ方</td><td>エラーで止まったときと確認を待っているときに、画面全体や画面の縁を色で光らせて知らせます（<a href="#知らせ方エラーと確認待ちを画面で知らせる">下の説明</a>）</td></tr><tr><td>□ 毎ステップ前面化</td><td>入力の前に毎回、対象ウィンドウを前面にします。途中で別の画面が割り込む環境で ON にします</td></tr><tr><td>□ 完了音</td><td>全行が終わったら音で知らせます</td></tr><tr><td>📊 変数</td><td>実行中の変数・繰り返しの回数・この行のCSVの値を、ログの右に表示します（もう一度押すと隠れます）</td></tr><tr><td>⏱ 時間</td><td>いちばん新しい実行で、ステップごとにかかった時間を一覧にします（<a href="#かかった時間-時間">下の説明</a>）</td></tr></tbody></table></div>
 <p>実行中のブロックは黄色で表示されます。実行中はマクロを編集できず、ふじキュンを閉じることもできません（⏹ 停止してから閉じます）。</p>
 <h3 id="実行結果csv">実行結果CSV</h3>
 <p>［↓ 実行結果CSV］を押すと <code>fujikyun_result.csv</code> を保存します。</p>
@@ -339,6 +339,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h3 id="エラー行csv">エラー行CSV</h3>
 <p>［↓ エラー行をCSV保存］を押すと <code>fujikyun_error_list.csv</code> を保存します。元データと同じ列の並びなので、<strong>直してそのまま読み込めば、エラーになった行だけ再実行</strong> できます。</p>
 <ul><li>エラー行CSV（と実行結果CSV）には「元データ行No」列があります。「1行目は見出し」を ON にしてこの列があるCSVを実行すると、<code>{{ROW}}</code> やログの行番号は <strong>元のCSVの行番号</strong> になるので、<code>A{{ROW+1}}</code> のようなセル番地もずれません。</li><li>WINDOW_CHECK の SKIP 以外のエラー（WINDOW_CHECK の STOP、タイムアウト、ウィンドウが見つからない、クリック失敗など）は <strong>実行そのものが止まる</strong>ので、その後ろの行はまだ処理されていません（「エラー時の処理」の中で起きたものを除く）。エラー行を直したら、元のCSVで <strong>開始行</strong> をその次の行にして続きを実行してください。</li></ul>
+<h3 id="かかった時間-時間">かかった時間（⏱ 時間）</h3>
+<p>実行が終わったあとで［⏱ 時間］を押すと、いちばん新しい実行で <strong>ステップごとにかかった時間</strong> を一覧にします。時間のかかっている順に並ぶので、遅いステップ（待ち時間が長すぎる・画面の反応を待っている など）を探すのに使えます。</p>
+<div class="table-wrap"><table><thead><tr><th>列</th><th>内容</th></tr></thead><tbody><tr><td>マクロ・No</td><td>どのマクロの何番目のステップか（呼び出した部品マクロのステップは、そのマクロの名前で出ます）</td></tr><tr><td>回数</td><td>そのステップを実行した回数（CSV の行の数 × 繰り返しの回数）</td></tr><tr><td>合計・平均・最長</td><td>かかった時間（秒）。そのステップの後の待ち（間隔）も入ります</td></tr><tr><td>割合</td><td>実行全体の中で、そのステップが占めた割合</td></tr></tbody></table></div>
+<ul><li>行をダブルクリックすると、そのステップを選びます。</li><li>［📋 表をコピー］で、Excel に貼り付けられる形でコピーできます。</li><li>確認ポイント・値の入力・止める所で人を待っていた時間も、そのステップの時間に入ります（止める所で止まっていた時間は入りません）。</li></ul>
 <h3 id="エラーで止まったときの画面">エラーで止まったときの画面</h3>
 <p>実行がエラーで止まると、<strong>その瞬間の画面全体を自動で保存</strong> します（<code>evidence\日付\エラー_行○_時刻.png</code>）。保存先はログに出て、実行結果CSVの「エラー時の画面」の列にも残ります。止まった原因を、あとから画面で確かめられます。</p>
 <h3 id="知らせ方エラーと確認待ちを画面で知らせる">知らせ方（エラーと確認待ちを画面で知らせる）</h3>
@@ -363,7 +367,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <hr>
 <h2 id="16-保存されるファイル">16. 保存されるファイル</h2>
 <p>すべて <code>fujikyun.bat</code> と同じフォルダに作られます。</p>
-<div class="table-wrap"><table><thead><tr><th>ファイル／フォルダ</th><th>内容</th></tr></thead><tbody><tr><td><code>fujikyun_macros.json</code></td><td>本番のマクロファイル（［💾 本番ファイルに保存］で更新）。保存はいったん別ファイルに書いて読み直してから差し替えるので、途中で失敗しても壊れません</td></tr><tr><td><code>fujikyun_macros_backup.json</code></td><td>1つ前に保存した版。［📥 取込］で戻せます</td></tr><tr><td><code>fujikyun_macros_broken_日時.json</code></td><td>起動時に本番ファイルを読み込めなかったときの控え。このときは本番ファイルへの保存の前に確認が出ます</td></tr><tr><td><code>fujikyun_macros_temp.json</code></td><td>編集中の自動保存。本番保存すると消えます。起動時にあれば復元するか聞かれます</td></tr><tr><td><code>fujikyun_macros_temp_discarded_日時.json</code></td><td>復元しなかった一時ファイルの控え（毎回別の名前で残ります）</td></tr><tr><td><code>fujikyun_settings.json</code></td><td>予定（スケジュール）と、この PC での見た目（文字の大きさ・ウィンドウの位置と大きさ・左右の境目の位置）・知らせ方</td></tr><tr><td><code>fujikyun_error_list.csv</code></td><td>エラー行CSV</td></tr><tr><td><code>fujikyun_result.csv</code></td><td>実行結果CSV</td></tr><tr><td><code>samples\</code></td><td>テンプレートの見本CSV</td></tr><tr><td><code>evidence\日付\</code></td><td>SCREENSHOT の画像と、エラーで止まったときの画面</td></tr><tr><td><code>rpa_images\</code></td><td>CLICK_IMG 用に切り取った画像</td></tr><tr><td><code>macro_export\</code></td><td>書き出したマクロ</td></tr><tr><td><code>fujikyun_logs\</code></td><td>ログ（画面の下のログと同じ内容）。1日1ファイル <code>fujikyun_log_日付.txt</code> で、30日たったものは起動時に消えます。CSV から入力した文字の一部も残るので、扱いは実行結果CSVと同じにしてください</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>ファイル／フォルダ</th><th>内容</th></tr></thead><tbody><tr><td><code>fujikyun_macros.json</code></td><td>本番のマクロファイル（［💾 本番ファイルに保存］で更新）。保存はいったん別ファイルに書いて読み直してから差し替えるので、途中で失敗しても壊れません</td></tr><tr><td><code>fujikyun_macros_backup.json</code></td><td>1つ前に保存した版。［📥 取込］で戻せます</td></tr><tr><td><code>fujikyun_macros_broken_日時.json</code></td><td>起動時に本番ファイルを読み込めなかったときの控え。このときは本番ファイルへの保存の前に確認が出ます</td></tr><tr><td><code>fujikyun_macros_temp.json</code></td><td>編集中の自動保存。本番保存すると消えます。起動時にあれば復元するか聞かれます</td></tr><tr><td><code>fujikyun_macros_temp_discarded_日時.json</code></td><td>復元しなかった一時ファイルの控え（毎回別の名前で残ります）</td></tr><tr><td><code>fujikyun_settings.json</code></td><td>予定（スケジュール）と、この PC での見た目（文字の大きさ・ウィンドウの位置と大きさ・左右の境目の位置）・知らせ方</td></tr><tr><td><code>fujikyun_error_list.csv</code></td><td>エラー行CSV</td></tr><tr><td><code>fujikyun_result.csv</code></td><td>実行結果CSV</td></tr><tr><td><code>samples\</code></td><td>テンプレートの見本CSV</td></tr><tr><td><code>evidence\日付\</code></td><td>SCREENSHOT の画像と、エラーで止まったときの画面</td></tr><tr><td><code>rpa_images\</code></td><td>CLICK_IMG 用に切り取った画像</td></tr><tr><td><code>macro_export\</code></td><td>書き出したマクロ</td></tr><tr><td><code>fujikyun_runs.csv</code></td><td>実行の記録（1回の実行で1行。効果測定に使います。<a href="#21-効果の測りかた-効果">21章</a>）</td></tr><tr><td><code>fujikyun_edits.csv</code></td><td>マクロを編集していた時間の記録（1日・1マクロで1行。効果測定に使います）</td></tr><tr><td><code>fujikyun_effect_年月.csv</code></td><td>［📈 効果］の［💾 CSVに保存］で保存した表</td></tr><tr><td><code>fujikyun_logs\</code></td><td>ログ（画面の下のログと同じ内容）。1日1ファイル <code>fujikyun_log_日付.txt</code> で、30日たったものは起動時に消えます。CSV から入力した文字の一部も残るので、扱いは実行結果CSVと同じにしてください</td></tr></tbody></table></div>
 <p>CSV は Excel で開きやすいように UTF-8（BOM付き）で保存します。</p>
 <p><code>fujikyun_settings.json</code> も、マクロのファイルと同じく、いったん別ファイルに書いてから差し替えます。</p>
 <p><strong>個人情報の扱い</strong>: 実行結果CSV・エラー行CSV・ログには CSV から入力した値が、<code>evidence\</code> の画像には画面に出ていた内容が残ります。住民の情報などを扱うときは、職場の決まりに沿って保管・削除してください。ログは30日で消えますが、CSV と <code>evidence\</code> の画像は自動では消えません。パスワード（SECRET）は、ログにも CSV にも残りません。</p>
@@ -398,6 +402,18 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
   ]
 }</code></pre>
 <ul><li><code>val</code> は、<strong>設定が1つのコマンドはその値そのもの</strong>（KEY・TEXT・CSV・COPY・WAIT・CONFIRM・CLICK_NAME・SWITCH・RUN・GROUP_START・COMMENT など）、<strong>設定が2つ以上のコマンドは JSON</strong>（WAIT_FOR・WINDOW_CHECK・CLICK_POS・CLICK_IMG・SCREENSHOT・CLICK_TEXT・READ_TEXT・MAIL・流れ・変数のコマンド）です。カンマ区切りは使わないので、タイトルやパスにカンマが入っていても大丈夫です。</li><li><code>when</code>（グループの実行タイミング: <code>first</code> / <code>last</code>）と <code>disabled</code>（無効化）、<code>breakpoint</code>（止める所）は、必要なときだけ付きます。</li><li><code>version</code> はデータの版です。この版（27）より新しい版で作られたファイルは、上書きする前に確認が出ます。古い版（26 以前）のコマンド名・値の形には対応していません。</li></ul>
+<hr>
+<h2 id="21-効果の測りかた-効果">21. 効果の測りかた（📈 効果）</h2>
+<p>ふじキュンは、実行のたびに <strong>どのマクロで何件を処理したか・どれだけ時間がかかったか・人がどれだけ付いていたか</strong> を記録します（<code>fujikyun_runs.csv</code>）。いちばん上の段の <strong>［📈 効果］</strong> を押すと、この記録から、ロボットが引き受けた手作業の時間（削減時間）を、マクロごと・月ごとに一覧にします。</p>
+<h3 id="はじめにすること">はじめにすること</h3>
+<ol><li>［📈 効果］を開きます。一度でも実行したマクロが一覧に出ます。</li><li>一覧でマクロを選び、下の <strong>「1件を手でやると ○ 分」</strong> に、そのマクロの作業を <strong>人が手でやったときの1件あたりの時間</strong> を入れて［決める］を押します。<ul><li>1件は CSV の1行です（CSV を使わないマクロは1回の実行）。</li><li>何件か手でやってストップウォッチで計り、その平均を入れるのがおすすめです。小数も使えます（例: <code>4.5</code>）。</li></ul></li><li>人件費に換算したいときは、上の <strong>「時間単価」</strong> に1時間あたりの金額（円）を入れます。</li></ol>
+<p>手作業の時間と時間単価は、<code>fujikyun_settings.json</code> にマクロごとに保存されます。あとから直すと、過去の分も直した値で計算し直します。</p>
+<h3 id="一覧の見かた">一覧の見かた</h3>
+<div class="table-wrap"><table><thead><tr><th>列</th><th>内容</th></tr></thead><tbody><tr><td>実行回数</td><td>その期間に実行した回数（試しの実行は数えません）</td></tr><tr><td>完了件数・エラー件数・エラー率</td><td>最後まで済んだ行の数、エラーで止まった行の数、処理した行のうちエラーで止まった行の割合（スキップした行は、どちらにも数えません）</td></tr><tr><td>ロボットの実行時間</td><td>ロボットが動いていた時間の合計</td></tr><tr><td>人の対応時間</td><td>実行中に人が付いていた時間（確認ポイント・値の入力を待っていた時間、一時停止していた時間）</td></tr><tr><td>エラーで止まっていた時間</td><td>エラーで止まってから、知らせ（［🚨 知らせ方］）を確認するまでの時間。人が気づくまでの待ちなので、削減時間からは引きません</td></tr><tr><td>手作業の時間</td><td>上で決めた1件あたりの分。決めていないマクロは空で、削減時間を計算しません</td></tr><tr><td><strong>削減時間</strong></td><td><strong>完了件数 × 手作業の時間 − 人の対応時間</strong>（分）</td></tr><tr><td>換算額</td><td>削減時間 × 時間単価（時間単価を入れたとき）</td></tr><tr><td>作成・手直しの時間</td><td>その期間にマクロを編集していた時間。マクロを作る手間として、削減時間とくらべるのに使います</td></tr></tbody></table></div>
+<ul><li><strong>期間</strong> で、月ごとか全期間かを選べます。</li><li>［📋 表をコピー］で Excel に貼り付けられる形でコピー、［💾 CSVに保存］で <code>fujikyun_effect_年月.csv</code> に保存できます。報告の資料に使えます。</li><li><strong>試しの実行</strong>（［▶ ここから］［この1つだけ］［⏯ 1ステップずつ］）は数えません。［▶ 実行］・予定・きっかけで動かした実行だけを数えます。</li><li><strong>作成・手直しの時間</strong> は、マクロを編集した操作と操作のあいだの時間を足したものです。5分より長く手が止まっていた間は、休みとして数えません（この5分は、ふじキュンで決めた目安です）。</li></ul>
+<h3 id="記録のファイル">記録のファイル</h3>
+<div class="table-wrap"><table><thead><tr><th>ファイル</th><th>1行の中身</th></tr></thead><tbody><tr><td><code>fujikyun_runs.csv</code></td><td>開始・終了日時、マクロ、起動（手動・予定・きっかけ・試し）、結果、処理した行・完了・スキップ・エラーの数、エラー行の再実行かどうか、実行時間、人の対応時間、エラーで止まっていた時間</td></tr><tr><td><code>fujikyun_edits.csv</code></td><td>日付、マクロ、編集時間</td></tr></tbody></table></div>
+<p>どちらも Excel でそのまま開けます。マクロの名前と件数・時間だけで、CSV の中身（住民の情報など）は入りません。自動では消えないので、いらなくなった古い行は Excel で消してかまいません。</p>
 </section>
 <section class="page" id="page-templates" data-title="テンプレート解説">
 <h1 id="テンプレート解説">テンプレート解説</h1>
@@ -5968,6 +5984,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h1 id="更新履歴">更新履歴</h1>
 <p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
+<hr>
+<h2 id="202610272">2026.10.27.2</h2>
+<p><strong>新しくなったこと</strong></p>
+<ul><li><strong>［📈 効果］</strong> を加えました。実行のたびに記録した件数と時間から、ロボットが引き受けた手作業の時間（削減時間）を、マクロごと・月ごとに一覧にします。マクロごとに「1件を手でやると何分か」を決めると計算し、時間単価を入れると人件費に換算します。表は Excel に貼り付けたり CSV に保存したりできます（<a href="#page-manual/21-効果の測りかた-効果">操作マニュアル 21章</a>）。<ul><li>実行の記録は <code>fujikyun_runs.csv</code>、マクロを編集していた時間は <code>fujikyun_edits.csv</code> に残ります。</li><li>人の対応時間（確認ポイント・値の入力・一時停止で人が付いていた時間）と、エラーで止まってから知らせを確認するまでの時間も記録します。</li></ul></li><li>実行バーに <strong>［⏱ 時間］</strong> を加えました。いちばん新しい実行で、ステップごとにかかった時間（回数・合計・平均・最長・割合）を一覧にします。遅いステップを探すのに使えます（<a href="#page-manual/かかった時間-時間">操作マニュアル 13章</a>）。</li></ul>
 <hr>
 <h2 id="20261027">2026.10.27</h2>
 <p><strong>新しくなったこと</strong></p>

@@ -1459,6 +1459,7 @@ function Submit-FujiEditorChange {
     Add-FujiHistory -Editor $Editor -Description $Description
     $Editor.Dirty = $true
     Save-FujiEditorTemp -Editor $Editor
+    Add-FujiEditTime -Editor $Editor
 }
 
 # ShowMacroIndex: macro to display (undo shows the macro whose change is being undone)
@@ -2195,6 +2196,306 @@ function Get-FujiCaptureRect {
     $hw = [Math]::Max(1, [Math]::Min([Math]::Floor($Width / 2), [Math]::Min($X - $Screen.X, $Screen.X + $Screen.Width - 1 - $X)))
     $hh = [Math]::Max(1, [Math]::Min([Math]::Floor($Height / 2), [Math]::Min($Y - $Screen.Y, $Screen.Y + $Screen.Height - 1 - $Y)))
     return @{ X = [int]($X - $hw); Y = [int]($Y - $hh); Width = [int]($hw * 2); Height = [int]($hh * 2) }
+}
+
+# ===== src/Effect.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Effect: how much hand work the robot took over
+#  Every run adds one line to fujikyun_runs.csv (time, macro, rows done, how long, how long a person
+#  had to answer it). Time spent editing a macro is added up in fujikyun_edits.csv. The summary puts
+#  them together with the minutes one row takes by hand (set per macro, kept in the settings file):
+#    saved = rows done x minutes by hand - minutes a person spent answering the runs
+#  Both files are in the app's folder (UTF-8 with BOM: Excel opens them as they are).
+# ---------------------------------------------------------------------------------------------
+
+$script:FujiRunsFile = 'fujikyun_runs.csv'
+$script:FujiEditsFile = 'fujikyun_edits.csv'
+# Two edits further apart than this are not one sitting: the gap is not counted (a value set here,
+# not a rule from elsewhere)
+$script:FujiEditGapSeconds = 300
+# Keys of the columns of fujikyun_runs.csv; the headings are effect.col.<key>
+$script:FujiRunColumns = @('start', 'end', 'macroId', 'macro', 'how', 'status', 'rows', 'done', 'skipped', 'errors', 'rerun', 'seconds', 'attended', 'waitAck')
+$script:FujiEditColumns = @('date', 'macroId', 'macro', 'editSeconds')
+$script:FujiRecordTimeFormat = 'yyyy/MM/dd HH:mm:ss'
+
+# ----------------------------------------------------------------- run records
+# One finished run -> a record (ordered: column key -> text). How: manual, schedule, trigger or test.
+function New-FujiRunRecord {
+    param([Parameter(Mandatory)][hashtable]$Run, [Parameter(Mandatory)][string]$How, [datetime]$End = (Get-Date))
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    # rows read from an error-row (or result) CSV: a run that does rows again
+    $rerun = $false
+    if ($null -ne $Run.Header) {
+        $marker = Get-FujiText 'editor.csv.resultHeaderName'
+        foreach ($h in $Run.Header) { if ([string]$h.Trim() -ceq $marker) { $rerun = $true } }
+    }
+    # rows that ended in an error (a test run without CSV too, which keeps no error row)
+    $failed = 0
+    $errorText = Get-FujiText 'run.resultError'
+    foreach ($r in $Run.ResultRows) { if ($r.Status -eq $errorText) { $failed++ } }
+    $rows = $Run.ResultRows.Count
+    return [ordered]@{
+        start = $Run.StartTime.ToString($script:FujiRecordTimeFormat, $inv); end = $End.ToString($script:FujiRecordTimeFormat, $inv)
+        macroId = [string]$Run.Macro.id; macro = [string]$Run.Macro.name; how = (Get-FujiText ('effect.how.' + $How)); status = (Get-FujiText ('effect.status.' + [string]$Run.Status))
+        rows = [string]$rows; done = [string]$Run.DoneRows; skipped = [string]$Run.SkippedRows; errors = [string]$failed
+        rerun = $(if ($rerun) { Get-FujiText 'effect.yes' } else { '' })
+        seconds = [string][int][Math]::Round(($End - $Run.StartTime).TotalSeconds)
+        attended = [string][int][Math]::Round($Run.AttendedMs / 1000.0)
+        waitAck = ''
+    }
+}
+
+function Get-FujiRecordHeader {
+    param([string[]]$Keys)
+    return [string[]]@($Keys | ForEach-Object { Get-FujiText ('effect.col.' + $_) })
+}
+
+# Adds a record at the end of fujikyun_runs.csv (made with its heading line when missing)
+function Add-FujiRunRecord {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][System.Collections.IDictionary]$Record)
+    Add-FujiRecordLine -Path (Join-Path $Directory $script:FujiRunsFile) -Keys $script:FujiRunColumns -Record $Record
+}
+
+function Add-FujiRecordLine {
+    param([string]$Path, [string[]]$Keys, [System.Collections.IDictionary]$Record)
+    $values = [string[]]@($Keys | ForEach-Object { ConvertTo-FujiSafeCsvValue ([string]$Record[$_]) })
+    $text = ConvertTo-FujiCsvText -Rows @(, $values)
+    $enc = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $true
+    try {
+        if (-not [System.IO.File]::Exists($Path)) {
+            [System.IO.File]::WriteAllText($Path, (ConvertTo-FujiCsvText -Rows @(, (Get-FujiRecordHeader $Keys))) + $text, $enc)
+        } else {
+            # appending adds no BOM
+            [System.IO.File]::AppendAllText($Path, $text, $enc)
+        }
+    } catch {
+        if (Test-FujiFileBusy -Exception $_.Exception) { throw (Get-FujiText 'data.fileBusy' $Path) }
+        throw
+    }
+}
+
+# The records of a file as ordered dictionaries (column key -> text). Columns are found by their
+# headings, so a file with columns moved in Excel still reads. A missing file: no records.
+function Read-FujiRecordFile {
+    param([string]$Path, [string[]]$Keys)
+    $out = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    if (-not [System.IO.File]::Exists($Path)) { return , $out.ToArray() }
+    $records = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $Path).Text).Records
+    if ($records.Count -eq 0) { return , $out.ToArray() }
+    $head = Get-FujiRecordHeader $Keys
+    $at = @{}
+    for ($i = 0; $i -lt $records[0].Length; $i++) {
+        $k = [Array]::IndexOf($head, $records[0][$i].Trim())
+        if ($k -ge 0) { $at[$Keys[$k]] = $i }
+    }
+    for ($r = 1; $r -lt $records.Count; $r++) {
+        $row = $records[$r]
+        if (Test-FujiBlankRow -Row $row) { continue }
+        $rec = [ordered]@{}
+        foreach ($k in $Keys) {
+            $v = ''
+            if ($at.ContainsKey($k) -and $at[$k] -lt $row.Length) { $v = $row[$at[$k]] }
+            # a value written with the apostrophe that keeps Excel from reading it as a formula
+            if ($v.StartsWith("'")) { $v = $v.Substring(1) }
+            $rec[$k] = $v
+        }
+        $out.Add($rec)
+    }
+    return , $out.ToArray()
+}
+
+function Read-FujiRunRecord {
+    param([Parameter(Mandatory)][string]$Directory)
+    return , (Read-FujiRecordFile -Path (Join-Path $Directory $script:FujiRunsFile) -Keys $script:FujiRunColumns)
+}
+
+# How long the stop of a run waited until someone answered the alert: written into its record
+# (the last one with that start and macro). $false when the record was not found.
+function Set-FujiRunRecordAck {
+    param([Parameter(Mandatory)][string]$Directory, [string]$Start, [string]$MacroId, [int]$Seconds)
+    $path = Join-Path $Directory $script:FujiRunsFile
+    if (-not [System.IO.File]::Exists($path)) { return $false }
+    $parsed = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $path).Text).Records
+    if ($parsed.Count -lt 2) { return $false }
+    $head = Get-FujiRecordHeader $script:FujiRunColumns
+    $col = @{}
+    for ($i = 0; $i -lt $parsed[0].Length; $i++) { $col[$parsed[0][$i].Trim()] = $i }
+    $cStart = $col[$head[0]]
+    $cId = $col[$head[2]]
+    $cAck = $col[$head[13]]
+    if ($null -eq $cStart -or $null -eq $cId -or $null -eq $cAck) { return $false }
+    for ($r = $parsed.Count - 1; $r -ge 1; $r--) {
+        $row = $parsed[$r]
+        if ($row.Length -gt [Math]::Max($cStart, $cId) -and $row[$cStart] -eq $Start -and $row[$cId] -eq $MacroId) {
+            $cells = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $cells.AddRange([string[]]$row)
+            while ($cells.Count -le $cAck) { $cells.Add('') }
+            $cells[$cAck] = [string]$Seconds
+            $parsed[$r] = $cells.ToArray()
+            Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows $parsed.ToArray()) -Bom
+            return $true
+        }
+    }
+    return $false
+}
+
+# ----------------------------------------------------------------- time spent editing
+# Called on every change: the time since the previous change counts for this macro when it is no
+# longer than FujiEditGapSeconds (a longer gap is a break). Kept in the editor until Save-FujiEditTime.
+function Add-FujiEditTime {
+    param([Parameter(Mandatory)][hashtable]$Editor, [datetime]$Now = (Get-Date))
+    $m = Get-FujiCurrentMacro $Editor
+    $last = $null
+    if ($Editor.ContainsKey('LastChangeAt')) { $last = $Editor.LastChangeAt }
+    $Editor.LastChangeAt = $Now
+    if ($null -eq $m -or $null -eq $last) { return }
+    $gap = ($Now - [datetime]$last).TotalSeconds
+    if ($gap -le 0 -or $gap -gt $script:FujiEditGapSeconds) { return }
+    if (-not $Editor.ContainsKey('EditTime')) { $Editor.EditTime = [ordered]@{} }
+    $key = $Now.ToString('yyyy/MM/dd', [System.Globalization.CultureInfo]::InvariantCulture) + '|' + [string]$m.id
+    if (-not $Editor.EditTime.Contains($key)) { $Editor.EditTime[$key] = @{ Date = $key.Split('|')[0]; Id = [string]$m.id; Name = [string]$m.name; Seconds = 0.0 } }
+    $Editor.EditTime[$key].Seconds += $gap
+    $Editor.EditTime[$key].Name = [string]$m.name
+}
+
+# Adds the time counted so far to fujikyun_edits.csv (one line per day and macro) and starts again
+function Save-FujiEditTime {
+    param([Parameter(Mandatory)][hashtable]$Editor)
+    if (-not $Editor.ContainsKey('EditTime') -or $Editor.EditTime.Count -eq 0) { return }
+    $path = Join-Path $Editor.Directory $script:FujiEditsFile
+    foreach ($e in @($Editor.EditTime.Values)) {
+        $sec = [int][Math]::Round($e.Seconds)
+        if ($sec -le 0) { continue }
+        Add-FujiRecordLine -Path $path -Keys $script:FujiEditColumns -Record ([ordered]@{ date = $e.Date; macroId = $e.Id; macro = $e.Name; editSeconds = [string]$sec })
+    }
+    $Editor.EditTime = [ordered]@{}
+}
+
+function Read-FujiEditRecord {
+    param([Parameter(Mandatory)][string]$Directory)
+    return , (Read-FujiRecordFile -Path (Join-Path $Directory $script:FujiEditsFile) -Keys $script:FujiEditColumns)
+}
+
+# ----------------------------------------------------------------- settings: minutes by hand, pay per hour
+# settings.effect = { hourly: '2000', manual: { <macro id>: '4.5' } }
+function Get-FujiEffectSetting {
+    param([System.Collections.IDictionary]$Settings)
+    $e = $null
+    if ($null -ne $Settings -and $Settings.Contains('effect') -and $Settings['effect'] -is [System.Collections.IDictionary]) { $e = $Settings['effect'] }
+    $out = @{ Hourly = $null; Manual = @{} }
+    if ($null -eq $e) { return $out }
+    if ($e.Contains('hourly')) { $out.Hourly = ConvertTo-FujiEffectNumber ([string]$e['hourly']) }
+    if ($e.Contains('manual') -and $e['manual'] -is [System.Collections.IDictionary]) {
+        foreach ($k in $e['manual'].Keys) {
+            $n = ConvertTo-FujiEffectNumber ([string]$e['manual'][$k])
+            if ($null -ne $n) { $out.Manual[[string]$k] = $n }
+        }
+    }
+    return $out
+}
+
+# Value: '' removes it
+function Set-FujiEffectSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [ValidateSet('hourly', 'manual')][string]$Key, [string]$MacroId = '', [AllowEmptyString()][string]$Value)
+    if (-not $Settings.Contains('effect') -or $Settings['effect'] -isnot [System.Collections.IDictionary]) { $Settings['effect'] = [ordered]@{} }
+    $e = $Settings['effect']
+    if ($Key -eq 'hourly') { $e['hourly'] = $Value; return }
+    if (-not $e.Contains('manual') -or $e['manual'] -isnot [System.Collections.IDictionary]) { $e['manual'] = [ordered]@{} }
+    if ($Value -eq '') { if ($e['manual'].Contains($MacroId)) { $e['manual'].Remove($MacroId) } } else { $e['manual'][$MacroId] = $Value }
+}
+
+# A number of 0 or more as typed (full-width digits, commas); $null when it is not one
+function ConvertTo-FujiEffectNumber {
+    param([AllowEmptyString()][string]$Text)
+    $t = (ConvertTo-FujiHalfWidthDigit -Text ([string]$Text)).Trim().Replace(',', '').Replace([string][char]0xFF0E, '.')
+    $n = 0.0
+    if ($t -notmatch '^[0-9]+(\.[0-9]+)?$' -or -not [double]::TryParse($t, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$n)) { return $null }
+    return $n
+}
+
+# ----------------------------------------------------------------- the summary
+# Months found in the records, newest first ('2026/10' ...)
+function Get-FujiEffectMonth {
+    param([AllowEmptyCollection()][object[]]$Runs)
+    $set = New-Object -TypeName 'System.Collections.Generic.SortedSet[string]'
+    foreach ($r in $Runs) { if ([string]$r['start'] -match '^(\d{4}/\d{2})') { [void]$set.Add($Matches[1]) } }
+    $list = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($m in $set) { $list.Insert(0, $m) }
+    return , $list.ToArray()
+}
+
+# Per macro for one month ('2026/10') or every month (''). Test runs (run from here, one step,
+# stepping) are left out. Macros: the current list (names); Effect: Get-FujiEffectSetting.
+# Returns @{ Rows = @(ordered per macro); Total = ordered } with numbers (minutes, yen) or $null
+# where no minutes by hand are set.
+function Get-FujiEffectSummary {
+    param([AllowEmptyCollection()][object[]]$Runs, [AllowEmptyCollection()][object[]]$Edits, [AllowEmptyCollection()][System.Collections.IList]$Macros,
+        [hashtable]$Effect, [AllowEmptyString()][string]$Month = '')
+    $by = [ordered]@{}
+    $names = @{}
+    foreach ($m in $Macros) { $names[[string]$m.id] = [string]$m.name }
+    $get = {
+        param($Id, $Name)
+        if (-not $by.Contains($Id)) {
+            $shown = $Name
+            if ($names.ContainsKey($Id)) { $shown = $names[$Id] }
+            $by[$Id] = [ordered]@{ id = $Id; macro = $shown; runs = 0; done = 0; errors = 0; handled = 0; robotMin = 0.0; attendedMin = 0.0; waitMin = 0.0; manualMin = $null; savedMin = $null; yen = $null; editMin = 0.0 }
+        }
+        return $by[$Id]
+    }
+    foreach ($r in $Runs) {
+        if ($Month -and -not ([string]$r['start']).StartsWith($Month + '/')) { continue }
+        if ($r['how'] -eq (Get-FujiText 'effect.how.test')) { continue }
+        $s = & $get ([string]$r['macroId']) ([string]$r['macro'])
+        $s.runs++
+        $s.done += (Get-FujiInt -Text $r['done'] -Default 0)
+        $s.errors += (Get-FujiInt -Text $r['errors'] -Default 0)
+        $s.handled += (Get-FujiInt -Text $r['rows'] -Default 0)
+        $s.robotMin += (Get-FujiInt -Text $r['seconds'] -Default 0) / 60.0
+        $s.attendedMin += (Get-FujiInt -Text $r['attended'] -Default 0) / 60.0
+        $s.waitMin += (Get-FujiInt -Text $r['waitAck'] -Default 0) / 60.0
+    }
+    foreach ($e in $Edits) {
+        if ($Month -and -not ([string]$e['date']).StartsWith($Month + '/')) { continue }
+        $s = & $get ([string]$e['macroId']) ([string]$e['macro'])
+        $s.editMin += (Get-FujiInt -Text $e['editSeconds'] -Default 0) / 60.0
+    }
+    $total = [ordered]@{ id = ''; macro = (Get-FujiText 'effect.total'); runs = 0; done = 0; errors = 0; handled = 0; robotMin = 0.0; attendedMin = 0.0; waitMin = 0.0; manualMin = $null; savedMin = $null; yen = $null; editMin = 0.0 }
+    foreach ($s in $by.Values) {
+        if ($Effect.Manual.ContainsKey($s.id)) {
+            $s.manualMin = $Effect.Manual[$s.id]
+            $s.savedMin = $s.done * $s.manualMin - $s.attendedMin
+            if ($null -ne $Effect.Hourly) { $s.yen = [Math]::Round($s.savedMin / 60.0 * $Effect.Hourly) }
+            if ($null -eq $total.savedMin) { $total.savedMin = 0.0 }
+            $total.savedMin += $s.savedMin
+            if ($null -ne $s.yen) { if ($null -eq $total.yen) { $total.yen = 0.0 }; $total.yen += $s.yen }
+        }
+        foreach ($k in @('runs', 'done', 'errors', 'handled', 'robotMin', 'attendedMin', 'waitMin', 'editMin')) { $total[$k] += $s[$k] }
+    }
+    return @{ Rows = @($by.Values); Total = $total }
+}
+
+# Error rate in percent (rows that ended in an error among the rows handled), $null with no rows
+function Get-FujiEffectErrorRate {
+    param([System.Collections.IDictionary]$Row)
+    if ($Row.handled -le 0) { return $null }
+    return [Math]::Round(100.0 * $Row.errors / $Row.handled, 1)
+}
+
+# The summary as rows of text: heading, one row per macro, the total (minutes with one decimal)
+function ConvertTo-FujiEffectTable {
+    param([Parameter(Mandatory)][hashtable]$Summary)
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $fmt = { param($v, $f) if ($null -eq $v) { return '' }; return ([double]$v).ToString($f, $inv) }
+    $rows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $rows.Add([string[]](Get-FujiText 'effect.head'))
+    foreach ($s in @($Summary.Rows) + @($Summary.Total)) {
+        $rows.Add([string[]]@(
+                [string]$s.macro, [string]$s.runs, [string]$s.done, [string]$s.errors, (& $fmt (Get-FujiEffectErrorRate $s) '0.0'),
+                (& $fmt $s.robotMin '0.0'), (& $fmt $s.attendedMin '0.0'), (& $fmt $s.waitMin '0.0'), (& $fmt $s.manualMin '0.##'),
+                (& $fmt $s.savedMin '0.0'), (& $fmt $s.yen '0'), (& $fmt $s.editMin '0.0')))
+    }
+    return , $rows.ToArray()
 }
 
 # ===== src/Files.ps1 =====
@@ -3047,6 +3348,8 @@ function New-FujiRun {
         CurrentResult = $null; ErrorRows = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         ResultRows = (New-Object -TypeName 'System.Collections.Generic.List[object]'); ResultColumns = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Running = $false; Status = ''; StartTime = (Get-Date); Summary = ''
+        # time a person spent on the run (confirm, ask, pause, breakpoints), and per step how long it took
+        AttendedMs = 0.0; StepTimes = [ordered]@{}; TimingOpen = $null
     }
 }
 
@@ -3058,8 +3361,88 @@ function Write-FujiRunLog {
 
 function Wait-FujiRun {
     param([hashtable]$Run, [int]$Ms)
-    $resumed = & $Run.Io.Wait ([Math]::Max(0, $Ms))
+    $resumed = Invoke-FujiRunWait -Run $Run -Ms $Ms
     if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run }
+}
+
+# Io.Wait; when the run was paused meanwhile, the time beyond the wait asked for was a person's
+function Invoke-FujiRunWait {
+    param([hashtable]$Run, [int]$Ms)
+    $Ms = [Math]::Max(0, $Ms)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $resumed = & $Run.Io.Wait $Ms
+    if ($resumed -eq $true) { $Run.AttendedMs += [Math]::Max(0.0, $sw.Elapsed.TotalMilliseconds - $Ms) }
+    return $resumed
+}
+
+# Io calls that wait for a person (confirm, ask, a breakpoint): their time is counted as attended
+function Invoke-FujiRunAttended {
+    param([hashtable]$Run, [scriptblock]$Call)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try { return (& $Call) } finally { $Run.AttendedMs += $sw.Elapsed.TotalMilliseconds }
+}
+
+# ----------------------------------------------------------------- how long each step took
+# Started before a step runs, stopped before the next one (so the wait after a step is its own)
+function Start-FujiStepTiming {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    Stop-FujiStepTiming -Run $Run
+    if (-not (Test-FujiBreakableStep -Step $Step)) { return }
+    $name = [string]$Run.Macro.name
+    $id = [string]$Run.Macro.id
+    if ($Run.CallStack.Count -gt 0) {
+        $f = $Run.CallStack[$Run.CallStack.Count - 1]
+        $name = [string]$f.Name
+        $id = [string]$f.Id
+    }
+    $label = [string]$Step.label
+    if (-not $label) { $label = Get-FujiStepLabel -Cmd $Step.cmd -Value $Step.val }
+    $Run.TimingOpen = @{ Key = ($id + '|' + $Run.StepIndex); Macro = $name; MacroId = $id; Index = $Run.StepIndex; Cmd = [string]$Step.cmd; Label = $label; Watch = [System.Diagnostics.Stopwatch]::StartNew() }
+}
+
+function Stop-FujiStepTiming {
+    param([hashtable]$Run)
+    $t = $Run.TimingOpen
+    if ($null -eq $t) { return }
+    $Run.TimingOpen = $null
+    $ms = $t.Watch.Elapsed.TotalMilliseconds
+    if (-not $Run.StepTimes.Contains($t.Key)) {
+        $Run.StepTimes[$t.Key] = @{ Macro = $t.Macro; MacroId = $t.MacroId; Index = $t.Index; Cmd = $t.Cmd; Label = $t.Label; Count = 0; TotalMs = 0.0; MaxMs = 0.0 }
+    }
+    $e = $Run.StepTimes[$t.Key]
+    $e.Count++
+    $e.TotalMs += $ms
+    $e.MaxMs = [Math]::Max($e.MaxMs, $ms)
+}
+
+# The step times as rows, longest total first: @(@{ Macro; MacroId; Index; Label; Count; TotalMs; MaxMs; Share }, ...)
+function Get-FujiStepTimeRow {
+    param([Parameter(Mandatory)][hashtable]$Run)
+    $all = 0.0
+    foreach ($e in $Run.StepTimes.Values) { $all += $e.TotalMs }
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($e in $Run.StepTimes.Values) {
+        $share = 0.0
+        if ($all -gt 0) { $share = 100.0 * $e.TotalMs / $all }
+        $list.Add(@{ Macro = $e.Macro; MacroId = $e.MacroId; Index = $e.Index; Cmd = $e.Cmd; Label = $e.Label; Count = $e.Count; TotalMs = $e.TotalMs; MaxMs = $e.MaxMs; Share = $share })
+    }
+    $sorted = @($list | Sort-Object -Property @{ Expression = { $_.TotalMs }; Descending = $true }, @{ Expression = { $_.Index }; Descending = $false })
+    return , $sorted
+}
+
+# Tab-separated text of the step times (pasted into Excel as a table), seconds with two decimals
+function ConvertTo-FujiStepTimeText {
+    param([AllowEmptyCollection()][object[]]$Rows)
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $lines.Add(((Get-FujiText 'steptime.head') -join "`t"))
+    foreach ($r in $Rows) {
+        $avg = 0.0
+        if ($r.Count -gt 0) { $avg = $r.TotalMs / $r.Count }
+        $lines.Add((@($r.Macro, [string]($r.Index + 1), ($r.Label -replace '[\t\r\n]+', ' '), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
+                    ($r.MaxMs / 1000.0).ToString('0.00', $inv), $r.Share.ToString('0.0', $inv)) -join "`t"))
+    }
+    return (($lines.ToArray() -join "`r`n") + "`r`n")
 }
 
 # After a pause the user may have clicked elsewhere: give the input target the focus again
@@ -3340,7 +3723,7 @@ function Invoke-FujiPaste {
     # after a pause the user may have copied something: the clipboard is written again
     do {
         if (-not (& $Run.Io.SetClipboard $Text)) { return (Get-FujiRunError (Get-FujiText 'run.clipboardFailed')) }
-        $resumed = & $Run.Io.Wait $script:FujiRunLimits.ClipboardSettleMs
+        $resumed = Invoke-FujiRunWait -Run $Run -Ms $script:FujiRunLimits.ClipboardSettleMs
         if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run }
     } while ($resumed -eq $true)
     & $Run.Io.SendKeys '^v'
@@ -3468,7 +3851,9 @@ function Invoke-FujiRun {
             Wait-FujiRun -Run $Run -Ms 100
         }
         while ($Run.RowPos -lt $Run.Rows.Count) {
-            if (-not (Invoke-FujiRunRow -Run $Run)) { return $Run.Status }
+            $ok = Invoke-FujiRunRow -Run $Run
+            Stop-FujiStepTiming -Run $Run
+            if (-not $ok) { return $Run.Status }
             $Run.RowPos++
             if ($Run.RowPos -lt $Run.Rows.Count) { Wait-FujiRun -Run $Run -Ms ([Math]::Max($Run.Interval, 300)) }
         }
@@ -3491,6 +3876,7 @@ function Invoke-FujiRun {
             Stop-FujiRunWithError -Run $Run -Result (Get-FujiRunError $message)
         }
     } finally {
+        Stop-FujiStepTiming -Run $Run
         if ($Run.Running) { Complete-FujiRun -Run $Run -Status 'error' }
         & $Run.Io.EndRun
     }
@@ -3567,7 +3953,7 @@ function Invoke-FujiRunBreak {
     $message = Get-FujiText $key $where (Format-FujiShort $label 40)
     Write-FujiRunLog $Run $message 'warn'
     & $Run.Io.Watch
-    $choice = & $Run.Io.Break $message
+    $choice = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Break $message }
     $Run.Stepping = ($choice -eq 'step')
     Resume-FujiRunTarget -Run $Run
 }
@@ -3630,7 +4016,9 @@ function Invoke-FujiRunRow {
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
         $current = $Run.Steps[$Run.StepIndex]
+        Stop-FujiStepTiming -Run $Run
         if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+        Start-FujiStepTiming -Run $Run -Step $current
         $res = Invoke-FujiRunStep -Run $Run -Step $current
         switch ($res.Action) {
             'skipRow' {
@@ -3763,7 +4151,7 @@ function Invoke-FujiRunCommand {
                 & $Run.Io.SendKeys '^c'
                 $resumed = $false
                 for ($waited = 0; $waited -lt $script:FujiRunLimits.CopyWaitMaxMs -and -not (& $Run.Io.ClipboardReady $seq); $waited += $script:FujiRunLimits.CopyPollMs) {
-                    $resumed = & $Run.Io.Wait $script:FujiRunLimits.CopyPollMs
+                    $resumed = Invoke-FujiRunWait -Run $Run -Ms $script:FujiRunLimits.CopyPollMs
                     if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run; break }
                 }
             } while ($resumed -eq $true)
@@ -4026,7 +4414,8 @@ function Invoke-FujiConfirm {
     param([hashtable]$Run, [string]$Message)
     Update-FujiRunProgress -Run $Run -Extra (Get-FujiText 'run.confirmWait')
     Write-FujiRunLog $Run (Get-FujiText 'run.confirmLog') 'warn'
-    $choice = & $Run.Io.Confirm (Get-FujiText 'run.confirmTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))) $Message
+    $caption = Get-FujiText 'run.confirmTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))
+    $choice = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Confirm $caption $Message }
     if ($choice -eq 'continue') {
         Write-FujiRunLog $Run (Get-FujiText 'run.confirmOk') 'run'
         return (Restore-FujiRunTarget -Run $Run -FailKey 'run.backFailed')
@@ -4046,7 +4435,8 @@ function Invoke-FujiAsk {
     $initial = Expand-FujiRunText -Run $Run -Text $Settings['defaultValue']
     Update-FujiRunProgress -Run $Run -Extra (Get-FujiText 'run.askWait')
     Write-FujiRunLog $Run (Get-FujiText 'run.askLog' $name) 'warn'
-    $answer = & $Run.Io.Ask (Get-FujiText 'run.askTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))) $message $initial
+    $caption = Get-FujiText 'run.askTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))
+    $answer = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Ask $caption $message $initial }
     if ($answer.Choice -eq 'continue') {
         $Run.Vars[$name] = [string]$answer.Value
         Write-FujiRunLog $Run (Get-FujiText 'run.asked' $name (Format-FujiShort ([string]$answer.Value) 40))
@@ -4109,7 +4499,7 @@ function Invoke-FujiCallMacro {
     }
     if ($Run.CallStack.Count -ge $script:FujiRunLimits.CallDepthMax) { return (Get-FujiRunError (Get-FujiText 'run.callDepth' $script:FujiRunLimits.CallDepthMax)) }
     if (-not (Test-FujiBlockBalanced -Steps $target.steps)) { return (Get-FujiRunError (Get-FujiText 'run.callUnbalanced' $target.name)) }
-    $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = $Run.StepIndex; LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name })
+    $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = $Run.StepIndex; LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name; Id = [string]$target.id })
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($s in $target.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
     $Run.Steps = $steps
@@ -4433,6 +4823,8 @@ function Read-FujiSetting {
     }
     # how the app calls a person (Alert.ps1 checks each value when it is used)
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('alerts') -and $s['alerts'] -is [System.Collections.IDictionary]) { $settings['alerts'] = $s['alerts'] }
+    # minutes by hand per macro and pay per hour (Effect.ps1 checks each value when it is used)
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('effect') -and $s['effect'] -is [System.Collections.IDictionary]) { $settings['effect'] = $s['effect'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
             if ($x -isnot [System.Collections.IDictionary] -or -not $x.Contains('id') -or -not $x['id']) { continue }
@@ -5113,7 +5505,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27'
+$script:FujiAppVersion = '2026.10.27.2'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -5380,6 +5772,7 @@ function Close-FujiAlert {
     foreach ($f in $a.Forms) { if (-not $f.IsDisposed) { $f.Close(); $f.Dispose() } }
     if ($Acknowledged -and -not $a.Test -and $a.Forms.Count -gt 0) {
         Write-FujiUiLog -Message (Get-FujiText 'alert.acknowledged' $a.Since.ToString('HH:mm') (Format-FujiElapsed -Since $a.Since -Now (Get-Date))) -Level 'ok'
+        if ($a.Kind -eq 'error') { Save-FujiRunAckUi -Since $a.Since }
     }
 }
 
@@ -6397,6 +6790,281 @@ function Open-FujiContextDoc {
     }
 }
 
+# ===== gui/Effect.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  Effect (rules: src/Effect.ps1): the record written after every run, the "effect" dialog (hand
+#  work taken over per macro and month), and the step times of the last run
+# ---------------------------------------------------------------------------------------------
+
+# The record of the last run, until its error alert is answered: @{ Start; MacroId; Acked }
+$script:LastRunRecord = $null
+
+# After a run: one line in fujikyun_runs.csv. A file that cannot be written only gets a log line.
+function Save-FujiRunRecordUi {
+    param([Parameter(Mandatory)][hashtable]$Run, [Parameter(Mandatory)][string]$How)
+    $rec = New-FujiRunRecord -Run $Run -How $How
+    try {
+        Add-FujiRunRecord -Directory $script:Ed.Directory -Record $rec
+        $script:LastRunRecord = @{ Start = $rec.start; MacroId = $rec.macroId; Acked = ($Run.Status -ne 'error') }
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'effect.recordFailed' $_.Exception.Message) -Level 'warn'
+    }
+}
+
+# The error alert of the last run was answered: how long the stop waited goes into its record
+function Save-FujiRunAckUi {
+    param([datetime]$Since)
+    $r = $script:LastRunRecord
+    if ($null -eq $r -or $r.Acked) { return }
+    $r.Acked = $true
+    try {
+        [void](Set-FujiRunRecordAck -Directory $script:Ed.Directory -Start $r.Start -MacroId $r.MacroId -Seconds ([int][Math]::Round(((Get-Date) - $Since).TotalSeconds)))
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'effect.recordFailed' $_.Exception.Message) -Level 'warn'
+    }
+}
+
+# The editing time counted so far into fujikyun_edits.csv (on save, on close, before the dialog)
+function Save-FujiEditTimeUi {
+    try { Save-FujiEditTime -Editor $script:Ed } catch { Write-FujiUiLog -Message (Get-FujiText 'effect.recordFailed' $_.Exception.Message) -Level 'warn' }
+}
+
+# ----------------------------------------------------------------- step times of the last run
+function Show-FujiStepTimeDialog {
+    $title = Get-FujiText 'steptime.title'
+    if ($null -eq $script:Run -or $script:Run.StepTimes.Count -eq 0) { Show-FujiMessage -Title $title -Message (Get-FujiText 'steptime.none'); return }
+    $rows = Get-FujiStepTimeRow -Run $script:Run
+    $f = New-FujiDialogForm -Title $title -Width (Get-FujiScaled 900) -Height (Get-FujiScaled 520)
+    $f.MaximizeBox = $true
+    $lv = New-FujiListView -Headings (Get-FujiText 'steptime.head') -Widths @(160, 50, 330, 60, 80, 80, 80, 60) -LeftColumns @(0, 2)
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    foreach ($r in $rows) {
+        $avg = 0.0
+        if ($r.Count -gt 0) { $avg = $r.TotalMs / $r.Count }
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList ([string]$r.Macro)
+        foreach ($v in @([string]($r.Index + 1), [string]$r.Label, [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv), ($r.MaxMs / 1000.0).ToString('0.00', $inv), $r.Share.ToString('0.0', $inv))) { [void]$item.SubItems.Add($v) }
+        $item.Tag = @($r.MacroId, $r.Index)
+        [void]$lv.Items.Add($item)
+    }
+    Resize-FujiListColumn -List $lv
+    $lv.Add_DoubleClick({ $at = $this.SelectedItems[0].Tag; Invoke-FujiUi { [void](Select-FujiStepAt -MacroId ([string]$at[0]) -Index ([int]$at[1])) } })
+    $note = New-FujiLabel -Text (Get-FujiText 'steptime.note' (Format-FujiShort ([string]$script:Run.Macro.name) 40) $script:Run.Summary) -MaxWidth (Get-FujiScaled 860)
+    $note.Dock = [System.Windows.Forms.DockStyle]::Top
+    $bar = New-FujiButtonBar
+    $close = New-FujiButton -Text (Get-FujiText 'gui.close')
+    $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    [void]$bar.Controls.Add($close)
+    $copy = New-FujiButton -Text (Get-FujiText 'steptime.copy') -Tip (Get-FujiText 'steptime.copyTip') -Tag (ConvertTo-FujiStepTimeText -Rows $rows)
+    $copy.Add_Click({ $t = [string]$this.Tag; Invoke-FujiUi { Copy-FujiTextUi -Text $t } })
+    [void]$bar.Controls.Add($copy)
+    [void]$bar.Controls.Add((New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.stepTime')))
+    $f.CancelButton = $close
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($note)
+    [void]$f.Controls.Add($bar)
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+}
+
+# LeftColumns: columns of text (the others hold numbers and are right-aligned)
+function New-FujiListView {
+    param([object[]]$Headings, [int[]]$Widths, [int[]]$LeftColumns = @(0))
+    $lv = New-Object -TypeName System.Windows.Forms.ListView
+    $lv.View = [System.Windows.Forms.View]::Details
+    $lv.FullRowSelect = $true
+    $lv.HideSelection = $false
+    $lv.MultiSelect = $false
+    $lv.Dock = [System.Windows.Forms.DockStyle]::Fill
+    for ($i = 0; $i -lt $Headings.Count; $i++) {
+        $w = 90
+        if ($i -lt $Widths.Count) { $w = $Widths[$i] }
+        $align = [System.Windows.Forms.HorizontalAlignment]::Right
+        if ($LeftColumns -contains $i) { $align = [System.Windows.Forms.HorizontalAlignment]::Left }
+        [void]$lv.Columns.Add([string]$Headings[$i], (Get-FujiScaled $w), $align)
+    }
+    $lv.Tag = [int[]]@($lv.Columns | ForEach-Object { $_.Width })
+    return $lv
+}
+
+# Every column as wide as its heading or its widest value, whichever is wider (headings never cut
+# off), and at least the width it was made with: text with an emoji is measured too narrow
+function Resize-FujiListColumn {
+    param([Parameter(Mandatory)][System.Windows.Forms.ListView]$List)
+    $least = [int[]]$List.Tag
+    $List.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::ColumnContent)
+    $content = @($List.Columns | ForEach-Object { $_.Width })
+    $List.AutoResizeColumns([System.Windows.Forms.ColumnHeaderAutoResizeStyle]::HeaderSize)
+    for ($i = 0; $i -lt $List.Columns.Count; $i++) {
+        $List.Columns[$i].Width = [Math]::Max([Math]::Max($content[$i], $List.Columns[$i].Width) + (Get-FujiScaled 8), $least[$i])
+    }
+}
+
+function Copy-FujiTextUi {
+    param([string]$Text)
+    if (Set-FujiClipboard -Text $Text) { Write-FujiUiLog -Message (Get-FujiText 'effect.copied') -Level 'ok' } else { Write-FujiUiLog -Message (Get-FujiText 'diag.copyFailed') -Level 'warn' }
+}
+
+# ----------------------------------------------------------------- the effect dialog
+function Show-FujiEffectDialog {
+    Save-FujiEditTimeUi
+    try {
+        $runs = Read-FujiRunRecord -Directory $script:Ed.Directory
+        $edits = Read-FujiEditRecord -Directory $script:Ed.Directory
+    } catch {
+        Show-FujiMessage -Title (Get-FujiText 'effect.title') -Message (Get-FujiText 'effect.readFailed' $_.Exception.Message)
+        return
+    }
+    $f = New-FujiDialogForm -Title (Get-FujiText 'effect.title') -Width (Get-FujiScaled 1100) -Height (Get-FujiScaled 600)
+    $f.MaximizeBox = $true
+    $top = New-FujiFlow
+    $top.Dock = [System.Windows.Forms.DockStyle]::Top
+    $months = Get-FujiEffectMonth -Runs $runs
+    $labels = @((Get-FujiText 'effect.allMonths')) + @($months | ForEach-Object { Get-FujiText 'effect.month' $_ })
+    $values = @('') + @($months)
+    $period = New-FujiComboBox -Items $labels -Values $values -Width (Get-FujiScaled 160)
+    $period.SelectedIndex = 0
+    if ($months.Count -gt 0) { $period.SelectedIndex = 1 }
+    $effect = Get-FujiEffectSetting -Settings $script:Settings
+    $hourlyText = ''
+    if ($null -ne $effect.Hourly) { $hourlyText = $effect.Hourly.ToString([System.Globalization.CultureInfo]::InvariantCulture) }
+    $hourly = New-FujiTextBox -Text $hourlyText -Width (Get-FujiScaled 90)
+    $script:Ui.ToolTip.SetToolTip($hourly, (Get-FujiText 'effect.hourlyTip'))
+    foreach ($c in @((New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'effect.period')), $period)), (New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'effect.hourly')), $hourly, (New-FujiLabel -Text (Get-FujiText 'effect.yen')))))) { [void]$top.Controls.Add($c) }
+    $lv = New-FujiListView -Headings (Get-FujiText 'effect.head') -Widths @(200, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40)
+    $edit = New-FujiFlow
+    $edit.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $manual = New-FujiTextBox -Width (Get-FujiScaled 70)
+    $set = New-FujiButton -Text (Get-FujiText 'effect.setManual')
+    $selected = New-FujiLabel -Text (Get-FujiText 'effect.pickMacro')
+    $selected.Font = $script:Ui.BoldFont
+    foreach ($c in @($selected, (New-FujiGlued @((New-FujiLabel -Text (Get-FujiText 'effect.manual')), $manual, (New-FujiLabel -Text (Get-FujiText 'effect.minutes')), $set)))) { [void]$edit.Controls.Add($c) }
+    $note = New-FujiLabel -Text (Get-FujiText 'effect.note' $script:FujiEditGapSeconds) -MaxWidth (Get-FujiScaled 1060)
+    $note.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $note.ForeColor = Get-FujiColor '#5e5368'
+    $bar = New-FujiButtonBar
+    $close = New-FujiButton -Text (Get-FujiText 'gui.close')
+    $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $copy = New-FujiButton -Text (Get-FujiText 'effect.copy') -Tip (Get-FujiText 'effect.copyTip')
+    $save = New-FujiButton -Text (Get-FujiText 'effect.save') -Tip (Get-FujiText 'effect.saveTip')
+    foreach ($c in @($close, $copy, $save, (New-FujiDocButton -Page 'manual' -Anchor (Get-FujiText 'gui.docAnchors.effect')))) { [void]$bar.Controls.Add($c) }
+    $script:Ui.EffectDialog = @{ Runs = $runs; Edits = $edits; Period = $period; Hourly = $hourly; List = $lv; Manual = $manual; Selected = $selected; Table = $null; PickedId = '' }
+    $period.Add_SelectedIndexChanged({ Invoke-FujiUi { Update-FujiEffectList } })
+    $hourly.Add_Leave({ Invoke-FujiUi { Set-FujiEffectHourlyUi } })
+    $hourly.Add_KeyDown({ $e = $_; if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) { $e.SuppressKeyPress = $true; Invoke-FujiUi { Set-FujiEffectHourlyUi } } })
+    $lv.Add_SelectedIndexChanged({ Invoke-FujiUi { Select-FujiEffectMacroUi } })
+    $set.Add_Click({ Invoke-FujiUi { Set-FujiEffectManualUi } })
+    $manual.Add_KeyDown({ $e = $_; if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) { $e.SuppressKeyPress = $true; Invoke-FujiUi { Set-FujiEffectManualUi } } })
+    $copy.Add_Click({ Invoke-FujiUi { Copy-FujiTextUi -Text (ConvertTo-FujiTabText -Rows $script:Ui.EffectDialog.Table) } })
+    $save.Add_Click({ Invoke-FujiUi { Save-FujiEffectCsvUi } })
+    $f.CancelButton = $close
+    [void]$f.Controls.Add($lv)
+    [void]$f.Controls.Add($top)
+    [void]$f.Controls.Add($edit)
+    [void]$f.Controls.Add($note)
+    [void]$f.Controls.Add($bar)
+    Update-FujiEffectList
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+    $script:Ui.EffectDialog = $null
+}
+
+function Get-FujiEffectMonthChoice {
+    $p = $script:Ui.EffectDialog.Period
+    if ($p.SelectedIndex -lt 0) { return '' }
+    return [string]([object[]]$p.Tag)[$p.SelectedIndex]
+}
+
+function Update-FujiEffectList {
+    $d = $script:Ui.EffectDialog
+    $summary = Get-FujiEffectSummary -Runs $d.Runs -Edits $d.Edits -Macros $script:Ed.Data.macros -Effect (Get-FujiEffectSetting -Settings $script:Settings) -Month (Get-FujiEffectMonthChoice)
+    $d.Table = ConvertTo-FujiEffectTable -Summary $summary
+    $ids = @($summary.Rows | ForEach-Object { [string]$_.id }) + @('')
+    $lv = $d.List
+    $lv.BeginUpdate()
+    $lv.Items.Clear()
+    for ($r = 1; $r -lt $d.Table.Count; $r++) {
+        $cells = $d.Table[$r]
+        $item = New-Object -TypeName System.Windows.Forms.ListViewItem -ArgumentList $cells[0]
+        for ($c = 1; $c -lt $cells.Count; $c++) { [void]$item.SubItems.Add($cells[$c]) }
+        $item.Tag = $ids[$r - 1]
+        if ($r -eq $d.Table.Count - 1) { $item.Font = $script:Ui.BoldFont; $item.BackColor = Get-FujiColor '#f3e5f5' }
+        elseif ($cells[8] -eq '') { $item.ForeColor = Get-FujiColor '#8a7f94' }
+        [void]$lv.Items.Add($item)
+        if ($d.PickedId -and $item.Tag -eq $d.PickedId) { $item.Selected = $true }
+    }
+    Resize-FujiListColumn -List $lv
+    $lv.EndUpdate()
+}
+
+function Select-FujiEffectMacroUi {
+    $d = $script:Ui.EffectDialog
+    if ($null -eq $d -or $d.List.SelectedItems.Count -eq 0) { return }
+    $id = [string]$d.List.SelectedItems[0].Tag
+    if (-not $id) { return }
+    $d.PickedId = $id
+    $d.Selected.Text = Get-FujiText 'effect.picked' (Format-FujiShort $d.List.SelectedItems[0].Text 30)
+    $m = (Get-FujiEffectSetting -Settings $script:Settings).Manual
+    if ($m.ContainsKey($id)) { $d.Manual.Text = $m[$id].ToString([System.Globalization.CultureInfo]::InvariantCulture) } else { $d.Manual.Text = '' }
+}
+
+function Set-FujiEffectManualUi {
+    $d = $script:Ui.EffectDialog
+    if (-not $d.PickedId) { Write-FujiUiLog -Message (Get-FujiText 'effect.pickMacro') -Level 'warn'; return }
+    $text = $d.Manual.Text.Trim()
+    if ($text -ne '' -and $null -eq (ConvertTo-FujiEffectNumber $text)) { Show-FujiMessage -Title (Get-FujiText 'effect.title') -Message (Get-FujiText 'effect.badNumber' $text); return }
+    $value = ''
+    if ($text -ne '') { $value = (ConvertTo-FujiEffectNumber $text).ToString([System.Globalization.CultureInfo]::InvariantCulture) }
+    Set-FujiEffectSetting -Settings $script:Settings -Key 'manual' -MacroId $d.PickedId -Value $value
+    if (Save-FujiEffectSettingUi) { Update-FujiEffectList }
+}
+
+function Set-FujiEffectHourlyUi {
+    $d = $script:Ui.EffectDialog
+    $text = $d.Hourly.Text.Trim()
+    if ($text -ne '' -and $null -eq (ConvertTo-FujiEffectNumber $text)) { Show-FujiMessage -Title (Get-FujiText 'effect.title') -Message (Get-FujiText 'effect.badNumber' $text); return }
+    $value = ''
+    if ($text -ne '') { $value = (ConvertTo-FujiEffectNumber $text).ToString([System.Globalization.CultureInfo]::InvariantCulture) }
+    $now = Get-FujiEffectSetting -Settings $script:Settings
+    $old = ''
+    if ($null -ne $now.Hourly) { $old = $now.Hourly.ToString([System.Globalization.CultureInfo]::InvariantCulture) }
+    if ($old -eq $value) { return }
+    Set-FujiEffectSetting -Settings $script:Settings -Key 'hourly' -Value $value
+    if (Save-FujiEffectSettingUi) { Update-FujiEffectList }
+}
+
+function Save-FujiEffectSettingUi {
+    try {
+        Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
+        return $true
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'editor.saveFailed' $_.Exception.Message) -Level 'error'
+        return $false
+    }
+}
+
+# Rows of text -> tab-separated lines (pasted into Excel as a table)
+function ConvertTo-FujiTabText {
+    param([object[]]$Rows)
+    return ((@($Rows | ForEach-Object { (@($_) | ForEach-Object { ([string]$_) -replace '[\t\r\n]+', ' ' }) -join "`t" }) -join "`r`n") + "`r`n")
+}
+
+function Save-FujiEffectCsvUi {
+    $d = $script:Ui.EffectDialog
+    $month = Get-FujiEffectMonthChoice
+    $suffix = 'all'
+    if ($month) { $suffix = $month.Replace('/', '') }
+    $path = Get-FujiEditorPath $script:Ed ('fujikyun_effect_' + $suffix + '.csv')
+    try {
+        Write-FujiTextFile -Path $path -Text (ConvertTo-FujiCsvText -Rows $d.Table) -Bom
+    } catch {
+        Write-FujiUiLog -Message (Get-FujiText 'run.saveFailed' $_.Exception.Message) -Level 'error'
+        return
+    }
+    Write-FujiUiLog -Message (Get-FujiText 'effect.saved' $path) -Level 'ok'
+    $answer = Show-FujiChoice -Title (Get-FujiText 'effect.title') -Message (Get-FujiText 'effect.savedAsk' $path) -Buttons @((Get-FujiText 'gui.openFolder'), (Get-FujiText 'gui.close'))
+    if ($answer -eq 0) { Open-FujiFolder -Path $path }
+}
+
 # ===== gui/MainForm.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  Main window: macro and CSV toolbars; below them commands and log (left) and the step list (right)
@@ -6471,7 +7139,7 @@ function Show-FujiMainForm {
             # a restart for the new text size waits for the next close if this one was called off
             if ($e.Cancel) { $script:RestartAfterClose = $false }
         })
-    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
+    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
                 Restore-FujiSplitPlacement
@@ -6617,8 +7285,10 @@ function New-FujiTopPanel {
     $script:Ui.ScheduleState = $next
     $diag = New-FujiButton -Text (Get-FujiText 'gui.diagnostics') -Tip (Get-FujiText 'gui.diagnosticsTip')
     $diag.Add_Click({ Invoke-FujiUi { Show-FujiDiagnostic } })
+    $effect = New-FujiButton -Text (Get-FujiText 'gui.effect') -Tip (Get-FujiText 'gui.effectTip')
+    $effect.Add_Click({ Invoke-FujiUi { Show-FujiEffectDialog } })
     $zoomLabel = New-FujiLabel -Text (Get-FujiText 'gui.zoom')
-    foreach ($c in @($save, $state, $sched, $diag, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
+    foreach ($c in @($save, $state, $sched, $diag, $effect, (New-FujiDocMenuButton), (New-FujiGlued @($zoomLabel, (New-FujiZoomCombo))), $next)) { [void]$row.Controls.Add($c) }
     $top.Add((Set-FujiToolbarRow $row))
 
     # macro
@@ -7219,6 +7889,24 @@ function Select-FujiMacroUi {
     if ($script:Ui.List.Items.Count -gt 0) { $script:Ui.List.TopIndex = 0 }
 }
 
+# Shows a step of a macro (from a list of step times, a check, a log line): that macro, the step
+# selected and scrolled into view (blocks opened when it is inside a closed one). $false if gone.
+function Select-FujiStepAt {
+    param([string]$MacroId, [int]$Index)
+    $at = -1
+    for ($i = 0; $i -lt $script:Ed.Data.macros.Count; $i++) { if ([string]$script:Ed.Data.macros[$i].id -eq $MacroId) { $at = $i; break } }
+    if ($at -lt 0 -or $Index -lt 0 -or $Index -ge $script:Ed.Data.macros[$at].steps.Count) { return $false }
+    $script:Ed.MacroIndex = $at
+    $script:Ed.Selected = $Index
+    Update-FujiAll
+    if ($script:Ui.List.SelectedIndex -lt 0) {
+        Set-FujiAllCollapsed -Editor $script:Ed -Collapsed $false
+        Update-FujiStepList
+    }
+    Update-FujiInsertHint
+    return $true
+}
+
 function Add-FujiMacroUi {
     $name = Show-FujiInput -Title (Get-FujiText 'gui.newMacroTitle') -Label (Get-FujiText 'gui.macroNameLabel') -Default (Get-FujiText 'editor.newMacro')
     if (-not $name) { return }
@@ -7605,6 +8293,7 @@ function Save-FujiUi {
     $err = Save-FujiEditorData -Editor $script:Ed
     if ($err) { Show-FujiMessage -Title (Get-FujiText 'gui.saveErrorTitle') -Message (Get-FujiText 'gui.saveError' $err) }
     Update-FujiSaveState
+    Save-FujiEditTimeUi
 }
 
 function Confirm-FujiClose {
@@ -7959,6 +8648,9 @@ function New-FujiRunBar {
     $watch = New-FujiButton -Text (Get-FujiText 'gui.watch') -Tip (Get-FujiText 'gui.watchTip')
     $watch.Add_Click({ Invoke-FujiUi { $script:Ui.Watch.Visible = -not $script:Ui.Watch.Visible; Update-FujiWatchPanel } })
     [void]$row.Controls.Add($watch)
+    $times = New-FujiButton -Text (Get-FujiText 'gui.stepTimes') -Tip (Get-FujiText 'gui.stepTimesTip')
+    $times.Add_Click({ Invoke-FujiUi { Show-FujiStepTimeDialog } })
+    [void]$row.Controls.Add($times)
     $script:Ui.ExportResults = New-FujiButton -Text (Get-FujiText 'gui.exportResults' 0) -Tip (Get-FujiText 'gui.exportResultsTip')
     $script:Ui.ExportResults.Add_Click({ Invoke-FujiUi { Export-FujiRunCsvUi -Kind 'results' } })
     $script:Ui.ExportErrors = New-FujiButton -Text (Get-FujiText 'gui.exportErrors' 0)
@@ -8083,9 +8775,11 @@ function Invoke-FujiUiBreak {
 # Unattended: started by a schedule, so nothing is asked before the run. Returns the run status
 # ('done', 'stopped', 'error') or '' when it did not start.
 # Stepping: stop before the first step. Partial 'from' / 'only': start at the selected step ('only':
-# just it, for one CSV row). Vars: values handed over by a trigger.
+# just it, for one CSV row). Vars: values handed over by a trigger. How: what started it, for the
+# run record (schedule / trigger; otherwise manual, or test for a partial or stepping run).
 function Start-FujiRunUi {
-    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null)
+    param([switch]$Unattended, [switch]$Stepping, [ValidateSet('', 'from', 'only')][string]$Partial = '', [System.Collections.IDictionary]$Vars = $null,
+        [ValidateSet('', 'schedule', 'trigger')][string]$How = '')
     if ($script:RunCtl.Running) { return '' }
     if ($null -ne $script:Rec) {
         Write-FujiUiLog -Message (Get-FujiText 'rec.busy') -Level 'warn'
@@ -8164,6 +8858,9 @@ function Start-FujiRunUi {
         $c.Highlight = -1
         Set-FujiRunUi -Running $false
         $script:Ui.Progress.Text = [string][char]0x25A0 + ' ' + $script:Run.Summary
+        $origin = $How
+        if (-not $origin) { if ($Partial -or $Stepping) { $origin = 'test' } elseif ($Unattended) { $origin = 'schedule' } else { $origin = 'manual' } }
+        Save-FujiRunRecordUi -Run $script:Run -How $origin
         Update-FujiRunButton
         Update-FujiWatchPanel
         $script:Ui.List.Invalidate()
@@ -8956,7 +9653,9 @@ function Invoke-FujiSchedule {
     $script:Ui.StartRow.Text = '1'
     $script:Ui.EndRow.Text = ''
     Write-FujiUiLog -Message (Get-FujiText 'schedule.starting' $macro.name) -Level 'run'
-    $status = Start-FujiRunUi -Unattended -Vars $Vars
+    $how = 'trigger'
+    if ((Get-FujiScheduleKind $Schedule) -eq 'TIME') { $how = 'schedule' }
+    $status = Start-FujiRunUi -Unattended -Vars $Vars -How $how
     Update-FujiScheduleState
     return $status
 }

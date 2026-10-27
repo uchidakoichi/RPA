@@ -126,6 +126,8 @@ function New-FujiRun {
         CurrentResult = $null; ErrorRows = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         ResultRows = (New-Object -TypeName 'System.Collections.Generic.List[object]'); ResultColumns = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Running = $false; Status = ''; StartTime = (Get-Date); Summary = ''
+        # time a person spent on the run (confirm, ask, pause, breakpoints), and per step how long it took
+        AttendedMs = 0.0; StepTimes = [ordered]@{}; TimingOpen = $null
     }
 }
 
@@ -137,8 +139,88 @@ function Write-FujiRunLog {
 
 function Wait-FujiRun {
     param([hashtable]$Run, [int]$Ms)
-    $resumed = & $Run.Io.Wait ([Math]::Max(0, $Ms))
+    $resumed = Invoke-FujiRunWait -Run $Run -Ms $Ms
     if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run }
+}
+
+# Io.Wait; when the run was paused meanwhile, the time beyond the wait asked for was a person's
+function Invoke-FujiRunWait {
+    param([hashtable]$Run, [int]$Ms)
+    $Ms = [Math]::Max(0, $Ms)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $resumed = & $Run.Io.Wait $Ms
+    if ($resumed -eq $true) { $Run.AttendedMs += [Math]::Max(0.0, $sw.Elapsed.TotalMilliseconds - $Ms) }
+    return $resumed
+}
+
+# Io calls that wait for a person (confirm, ask, a breakpoint): their time is counted as attended
+function Invoke-FujiRunAttended {
+    param([hashtable]$Run, [scriptblock]$Call)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try { return (& $Call) } finally { $Run.AttendedMs += $sw.Elapsed.TotalMilliseconds }
+}
+
+# ----------------------------------------------------------------- how long each step took
+# Started before a step runs, stopped before the next one (so the wait after a step is its own)
+function Start-FujiStepTiming {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Step)
+    Stop-FujiStepTiming -Run $Run
+    if (-not (Test-FujiBreakableStep -Step $Step)) { return }
+    $name = [string]$Run.Macro.name
+    $id = [string]$Run.Macro.id
+    if ($Run.CallStack.Count -gt 0) {
+        $f = $Run.CallStack[$Run.CallStack.Count - 1]
+        $name = [string]$f.Name
+        $id = [string]$f.Id
+    }
+    $label = [string]$Step.label
+    if (-not $label) { $label = Get-FujiStepLabel -Cmd $Step.cmd -Value $Step.val }
+    $Run.TimingOpen = @{ Key = ($id + '|' + $Run.StepIndex); Macro = $name; MacroId = $id; Index = $Run.StepIndex; Cmd = [string]$Step.cmd; Label = $label; Watch = [System.Diagnostics.Stopwatch]::StartNew() }
+}
+
+function Stop-FujiStepTiming {
+    param([hashtable]$Run)
+    $t = $Run.TimingOpen
+    if ($null -eq $t) { return }
+    $Run.TimingOpen = $null
+    $ms = $t.Watch.Elapsed.TotalMilliseconds
+    if (-not $Run.StepTimes.Contains($t.Key)) {
+        $Run.StepTimes[$t.Key] = @{ Macro = $t.Macro; MacroId = $t.MacroId; Index = $t.Index; Cmd = $t.Cmd; Label = $t.Label; Count = 0; TotalMs = 0.0; MaxMs = 0.0 }
+    }
+    $e = $Run.StepTimes[$t.Key]
+    $e.Count++
+    $e.TotalMs += $ms
+    $e.MaxMs = [Math]::Max($e.MaxMs, $ms)
+}
+
+# The step times as rows, longest total first: @(@{ Macro; MacroId; Index; Label; Count; TotalMs; MaxMs; Share }, ...)
+function Get-FujiStepTimeRow {
+    param([Parameter(Mandatory)][hashtable]$Run)
+    $all = 0.0
+    foreach ($e in $Run.StepTimes.Values) { $all += $e.TotalMs }
+    $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($e in $Run.StepTimes.Values) {
+        $share = 0.0
+        if ($all -gt 0) { $share = 100.0 * $e.TotalMs / $all }
+        $list.Add(@{ Macro = $e.Macro; MacroId = $e.MacroId; Index = $e.Index; Cmd = $e.Cmd; Label = $e.Label; Count = $e.Count; TotalMs = $e.TotalMs; MaxMs = $e.MaxMs; Share = $share })
+    }
+    $sorted = @($list | Sort-Object -Property @{ Expression = { $_.TotalMs }; Descending = $true }, @{ Expression = { $_.Index }; Descending = $false })
+    return , $sorted
+}
+
+# Tab-separated text of the step times (pasted into Excel as a table), seconds with two decimals
+function ConvertTo-FujiStepTimeText {
+    param([AllowEmptyCollection()][object[]]$Rows)
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $lines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $lines.Add(((Get-FujiText 'steptime.head') -join "`t"))
+    foreach ($r in $Rows) {
+        $avg = 0.0
+        if ($r.Count -gt 0) { $avg = $r.TotalMs / $r.Count }
+        $lines.Add((@($r.Macro, [string]($r.Index + 1), ($r.Label -replace '[\t\r\n]+', ' '), [string]$r.Count, ($r.TotalMs / 1000.0).ToString('0.00', $inv), ($avg / 1000.0).ToString('0.00', $inv),
+                    ($r.MaxMs / 1000.0).ToString('0.00', $inv), $r.Share.ToString('0.0', $inv)) -join "`t"))
+    }
+    return (($lines.ToArray() -join "`r`n") + "`r`n")
 }
 
 # After a pause the user may have clicked elsewhere: give the input target the focus again
@@ -419,7 +501,7 @@ function Invoke-FujiPaste {
     # after a pause the user may have copied something: the clipboard is written again
     do {
         if (-not (& $Run.Io.SetClipboard $Text)) { return (Get-FujiRunError (Get-FujiText 'run.clipboardFailed')) }
-        $resumed = & $Run.Io.Wait $script:FujiRunLimits.ClipboardSettleMs
+        $resumed = Invoke-FujiRunWait -Run $Run -Ms $script:FujiRunLimits.ClipboardSettleMs
         if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run }
     } while ($resumed -eq $true)
     & $Run.Io.SendKeys '^v'
@@ -547,7 +629,9 @@ function Invoke-FujiRun {
             Wait-FujiRun -Run $Run -Ms 100
         }
         while ($Run.RowPos -lt $Run.Rows.Count) {
-            if (-not (Invoke-FujiRunRow -Run $Run)) { return $Run.Status }
+            $ok = Invoke-FujiRunRow -Run $Run
+            Stop-FujiStepTiming -Run $Run
+            if (-not $ok) { return $Run.Status }
             $Run.RowPos++
             if ($Run.RowPos -lt $Run.Rows.Count) { Wait-FujiRun -Run $Run -Ms ([Math]::Max($Run.Interval, 300)) }
         }
@@ -570,6 +654,7 @@ function Invoke-FujiRun {
             Stop-FujiRunWithError -Run $Run -Result (Get-FujiRunError $message)
         }
     } finally {
+        Stop-FujiStepTiming -Run $Run
         if ($Run.Running) { Complete-FujiRun -Run $Run -Status 'error' }
         & $Run.Io.EndRun
     }
@@ -646,7 +731,7 @@ function Invoke-FujiRunBreak {
     $message = Get-FujiText $key $where (Format-FujiShort $label 40)
     Write-FujiRunLog $Run $message 'warn'
     & $Run.Io.Watch
-    $choice = & $Run.Io.Break $message
+    $choice = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Break $message }
     $Run.Stepping = ($choice -eq 'step')
     Resume-FujiRunTarget -Run $Run
 }
@@ -709,7 +794,9 @@ function Invoke-FujiRunRow {
         Update-FujiRunProgress -Run $Run
         & $Run.Io.Watch
         $current = $Run.Steps[$Run.StepIndex]
+        Stop-FujiStepTiming -Run $Run
         if (Test-FujiRunBreakAt -Run $Run -Step $current) { Invoke-FujiRunBreak -Run $Run -Step $current }
+        Start-FujiStepTiming -Run $Run -Step $current
         $res = Invoke-FujiRunStep -Run $Run -Step $current
         switch ($res.Action) {
             'skipRow' {
@@ -842,7 +929,7 @@ function Invoke-FujiRunCommand {
                 & $Run.Io.SendKeys '^c'
                 $resumed = $false
                 for ($waited = 0; $waited -lt $script:FujiRunLimits.CopyWaitMaxMs -and -not (& $Run.Io.ClipboardReady $seq); $waited += $script:FujiRunLimits.CopyPollMs) {
-                    $resumed = & $Run.Io.Wait $script:FujiRunLimits.CopyPollMs
+                    $resumed = Invoke-FujiRunWait -Run $Run -Ms $script:FujiRunLimits.CopyPollMs
                     if ($resumed -eq $true) { Resume-FujiRunTarget -Run $Run; break }
                 }
             } while ($resumed -eq $true)
@@ -1105,7 +1192,8 @@ function Invoke-FujiConfirm {
     param([hashtable]$Run, [string]$Message)
     Update-FujiRunProgress -Run $Run -Extra (Get-FujiText 'run.confirmWait')
     Write-FujiRunLog $Run (Get-FujiText 'run.confirmLog') 'warn'
-    $choice = & $Run.Io.Confirm (Get-FujiText 'run.confirmTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))) $Message
+    $caption = Get-FujiText 'run.confirmTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))
+    $choice = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Confirm $caption $Message }
     if ($choice -eq 'continue') {
         Write-FujiRunLog $Run (Get-FujiText 'run.confirmOk') 'run'
         return (Restore-FujiRunTarget -Run $Run -FailKey 'run.backFailed')
@@ -1125,7 +1213,8 @@ function Invoke-FujiAsk {
     $initial = Expand-FujiRunText -Run $Run -Text $Settings['defaultValue']
     Update-FujiRunProgress -Run $Run -Extra (Get-FujiText 'run.askWait')
     Write-FujiRunLog $Run (Get-FujiText 'run.askLog' $name) 'warn'
-    $answer = & $Run.Io.Ask (Get-FujiText 'run.askTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))) $message $initial
+    $caption = Get-FujiText 'run.askTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))
+    $answer = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.Ask $caption $message $initial }
     if ($answer.Choice -eq 'continue') {
         $Run.Vars[$name] = [string]$answer.Value
         Write-FujiRunLog $Run (Get-FujiText 'run.asked' $name (Format-FujiShort ([string]$answer.Value) 40))
@@ -1188,7 +1277,7 @@ function Invoke-FujiCallMacro {
     }
     if ($Run.CallStack.Count -ge $script:FujiRunLimits.CallDepthMax) { return (Get-FujiRunError (Get-FujiText 'run.callDepth' $script:FujiRunLimits.CallDepthMax)) }
     if (-not (Test-FujiBlockBalanced -Steps $target.steps)) { return (Get-FujiRunError (Get-FujiText 'run.callUnbalanced' $target.name)) }
-    $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = $Run.StepIndex; LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name })
+    $Run.CallStack.Add(@{ Steps = $Run.Steps; Index = $Run.StepIndex; LoopStack = $Run.LoopStack; TryStack = $Run.TryStack; Name = [string]$target.name; Id = [string]$target.id })
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($s in $target.steps) { $steps.Add((Copy-FujiStep -Step $s)) }
     $Run.Steps = $steps

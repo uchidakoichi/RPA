@@ -12,3 +12,8 @@ check/fujikyun_check_result.txt
 # logs and copies of unreadable settings the app writes when it runs from this folder
 fujikyun_logs/
 fujikyun_settings_broken_*.json
+
+# effect records and saved tables
+fujikyun_runs.csv
+fujikyun_edits.csv
+fujikyun_effect_*.csv

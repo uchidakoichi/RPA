@@ -211,7 +211,9 @@ function Invoke-FujiSchedule {
     $script:Ui.StartRow.Text = '1'
     $script:Ui.EndRow.Text = ''
     Write-FujiUiLog -Message (Get-FujiText 'schedule.starting' $macro.name) -Level 'run'
-    $status = Start-FujiRunUi -Unattended -Vars $Vars
+    $how = 'trigger'
+    if ((Get-FujiScheduleKind $Schedule) -eq 'TIME') { $how = 'schedule' }
+    $status = Start-FujiRunUi -Unattended -Vars $Vars -How $how
     Update-FujiScheduleState
     return $status
 }
