@@ -333,6 +333,31 @@ try {
     }
     $script:FujiLogFile = $null
 
+    # started by a scheduled task: the last time's temp file is left for after the run, never written over
+    foreach ($restore in @($true, $false)) {
+        $dir = Join-Path $tmp ('later ' + $restore)
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        $e = New-FujiEditor -Directory $dir
+        Initialize-FujiEditorData -Editor $e -AskRestoreTemp { $true }
+        Add-FujiMacro -Editor $e -Name 'saved'
+        [void](Save-FujiEditorData -Editor $e)
+        Add-FujiMacro -Editor $e -Name 'unsaved'
+        $tempPath = Join-Path $dir 'fujikyun_macros_temp.json'
+        $tempText = Read-FujiUtf8File -Path $tempPath
+        $e = New-FujiEditor -Directory $dir
+        Initialize-FujiEditorData -Editor $e -AskRestoreTemp { 'later' }
+        Assert-True ($e.TempPending -and -not $e.Dirty -and @($e.Data.macros | Where-Object { $_.name -eq 'unsaved' }).Count -eq 0) 'scheduled start: the saved macros, the temp file waits'
+        Add-FujiMacro -Editor $e -Name 'during'
+        [void](Save-FujiEditorData -Editor $e)
+        Assert-Equal $tempText (Read-FujiUtf8File -Path $tempPath) 'scheduled start: the waiting temp file is not written over or removed'
+        Assert-Equal $restore (Resolve-FujiEditorTemp -Editor $e -Restore $restore) ('scheduled start: answered after the run (' + $restore + ')')
+        if ($restore) {
+            Assert-True ($e.Dirty -and @($e.Data.macros | Where-Object { $_.name -eq 'unsaved' }).Count -eq 1 -and -not $e.TempPending) 'scheduled start: the unsaved work restored after the run'
+        } else {
+            Assert-True (-not (Test-Path -LiteralPath $tempPath) -and @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_macros_temp_discarded_*.json').Count -eq 1) 'scheduled start: not restored, the temp file moved aside'
+        }
+    }
+
     # JSON that is not a macros file is kept like a broken one, never read as "no macros"
     foreach ($case in @(@('empty', ''), @('null', 'null'), @('array', '[]'), @('string', '"x"'), @('object', '{}'), @('macros not a list', '{"macros":{}}'), @('cut short', '{"macros":[{"name":"a"'))) {
         $dir = Join-Path $tmp ('broken ' + $case[0])

@@ -80,7 +80,8 @@ function Show-FujiMainForm {
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
                 Write-FujiStartupTime
                 Start-FujiAutoRun
-                if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
+                # a scheduled start shows them after its run (a dialog open now would hold the run up)
+                if (-not $script:AutoRunId) { Show-FujiStartNotice }
                 $script:Ui.List.Focus()
             }
         })
@@ -1259,6 +1260,14 @@ function Save-FujiUi {
     Save-FujiEditTimeUi
 }
 
+function Show-FujiStartNotice {
+    if ($script:Ed.Notices.Count -eq 0) { return }
+    $text = $script:Ed.Notices -join "`r`n`r`n"
+    $script:Ed.Notices.Clear()
+    Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message $text
+}
+
+# Unsaved changes: save and close, close without saving (the temp file keeps them), or stay
 function Confirm-FujiClose {
     param([Parameter(Mandatory)]$CloseEvent)
     if ($script:RunCtl.Running) {
@@ -1268,8 +1277,20 @@ function Confirm-FujiClose {
     }
     if ($null -ne $script:Rec) { [FujiRecorder]::StopRequested = $true }
     if (-not $script:Ed.Dirty) { return }
-    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message (Get-FujiText 'gui.closeDirty') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
-    if ($answer -ne 0) { $CloseEvent.Cancel = $true }
+    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message ((Get-FujiText 'gui.closeDirty') + (Get-FujiTaskSaveNote)) -Buttons @((Get-FujiText 'gui.saveAndClose'), (Get-FujiText 'gui.closeNoSave'), (Get-FujiText 'gui.cancel'))
+    if ($answer -eq 0) {
+        Save-FujiUi
+        # not saved (refused or failed): stay open
+        if ($script:Ed.Dirty) { $CloseEvent.Cancel = $true }
+        return
+    }
+    if ($answer -ne 1) { $CloseEvent.Cancel = $true }
+}
+
+# Said when there are unsaved changes and schedules registered with Windows (they read the saved file)
+function Get-FujiTaskSaveNote {
+    foreach ($s in $script:Settings.schedules) { if (Get-FujiScheduleValue $s 'taskName') { return (Get-FujiText 'gui.taskSaveNote') } }
+    return ''
 }
 
 function Invoke-FujiShortcut {

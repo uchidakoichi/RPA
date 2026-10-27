@@ -1363,6 +1363,9 @@ function New-FujiEditor {
         SaveBlockReason = ''
         Notices         = (New-Object -TypeName 'System.Collections.Generic.List[string]')
         Csv             = (New-FujiCsvState)
+        # a temp file left from the last time, not asked about yet (start by a scheduled task): it is
+        # neither read nor written over until Restore-FujiEditorTemp / Move-FujiTempFileAside
+        TempPending     = $false
     }
 }
 
@@ -1553,13 +1556,19 @@ function Copy-FujiUnreadableFile {
 }
 
 # Startup (the HTA's loadInitialData). AskRestoreTemp: { $true = restore the temp file }
+# AskRestoreTemp: $true restore the temp file, $false move it aside, 'later' leave it for now
+# (a scheduled run runs the saved macros and asks after it)
 function Initialize-FujiEditorData {
     param([Parameter(Mandatory)][hashtable]$Editor, [Parameter(Mandatory)][scriptblock]$AskRestoreTemp)
     $loaded = $null
     $tempPath = Get-FujiEditorPath $Editor $script:FujiFileNames.Temp
     $mainPath = Get-FujiEditorPath $Editor $script:FujiFileNames.Macro
     if (Test-Path -LiteralPath $tempPath -PathType Leaf) {
-        if (& $AskRestoreTemp) {
+        $answer = & $AskRestoreTemp
+        if ($answer -is [string] -and $answer -eq 'later') {
+            $Editor.TempPending = $true
+            Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.tempLater' $script:FujiFileNames.Macro) -Level 'warn'
+        } elseif ($answer) {
             $loaded = Read-FujiMacroFile -Editor $Editor -Path $tempPath
             if ($null -ne $loaded) {
                 $Editor.Dirty = $true
@@ -1611,8 +1620,32 @@ function Initialize-FujiEditorData {
     Add-FujiHistory -Editor $Editor -Description (Get-FujiText 'editor.historyStart')
 }
 
+# The temp file left from the last time, asked about after a scheduled run: restore it ($true when
+# it was read) or move it aside
+function Resolve-FujiEditorTemp {
+    param([Parameter(Mandatory)][hashtable]$Editor, [bool]$Restore)
+    if (-not $Editor.TempPending) { return $false }
+    $Editor.TempPending = $false
+    if (-not $Restore) { [void](Move-FujiTempFileAside -Editor $Editor); return $false }
+    $loaded = Read-FujiMacroFile -Editor $Editor -Path (Get-FujiEditorPath $Editor $script:FujiFileNames.Temp)
+    if ($null -eq $loaded) { return $false }
+    $Editor.Data = (ConvertTo-FujiMacroData -Source $loaded).Data
+    $Editor.MacroIndex = 0
+    $Editor.Selected = -1
+    Initialize-FujiMacroList -Editor $Editor
+    $Editor.History.Clear()
+    $Editor.HistoryPos = -1
+    Add-FujiHistory -Editor $Editor -Description (Get-FujiText 'editor.historyStart')
+    $Editor.Dirty = $true
+    Test-FujiEditorDataVersion -Editor $Editor -Source $loaded -What (Get-FujiText 'editor.whatTemp')
+    Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.tempRestored') -Level 'ok'
+    return $true
+}
+
 function Save-FujiEditorTemp {
     param([Parameter(Mandatory)][hashtable]$Editor)
+    # the last time's unsaved work is still to be asked about: never written over
+    if ($Editor.TempPending) { return }
     try {
         Write-FujiTextFile -Path (Get-FujiEditorPath $Editor $script:FujiFileNames.Temp) -Text (ConvertTo-FujiMacroJson -Data $Editor.Data)
     } catch {
@@ -1632,7 +1665,8 @@ function Save-FujiEditorData {
         return $msg
     }
     $temp = Get-FujiEditorPath $Editor $script:FujiFileNames.Temp
-    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    # the last time's unsaved work, not asked about yet, is not this session's temp file: kept
+    if (-not $Editor.TempPending -and (Test-Path -LiteralPath $temp)) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
     $Editor.Dirty = $false
     Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'editor.saved' $script:FujiFileNames.Macro $script:FujiFileNames.Backup) -Level 'ok'
     return ''
@@ -5454,7 +5488,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 10
+$script:FujiTextVersion = 11
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -5823,7 +5857,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27.6'
+$script:FujiAppVersion = '2026.10.27.7'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -7583,7 +7617,8 @@ function Show-FujiMainForm {
                 Write-FujiUiLog -Message (Get-FujiText 'gui.welcome') -Level 'ok'
                 Write-FujiStartupTime
                 Start-FujiAutoRun
-                if ($script:Ed.Notices.Count -gt 0) { Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message ($script:Ed.Notices -join "`r`n`r`n") }
+                # a scheduled start shows them after its run (a dialog open now would hold the run up)
+                if (-not $script:AutoRunId) { Show-FujiStartNotice }
                 $script:Ui.List.Focus()
             }
         })
@@ -8762,6 +8797,14 @@ function Save-FujiUi {
     Save-FujiEditTimeUi
 }
 
+function Show-FujiStartNotice {
+    if ($script:Ed.Notices.Count -eq 0) { return }
+    $text = $script:Ed.Notices -join "`r`n`r`n"
+    $script:Ed.Notices.Clear()
+    Show-FujiMessage -Title (Get-FujiText 'gui.noticeTitle') -Message $text
+}
+
+# Unsaved changes: save and close, close without saving (the temp file keeps them), or stay
 function Confirm-FujiClose {
     param([Parameter(Mandatory)]$CloseEvent)
     if ($script:RunCtl.Running) {
@@ -8771,8 +8814,20 @@ function Confirm-FujiClose {
     }
     if ($null -ne $script:Rec) { [FujiRecorder]::StopRequested = $true }
     if (-not $script:Ed.Dirty) { return }
-    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message (Get-FujiText 'gui.closeDirty') -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))
-    if ($answer -ne 0) { $CloseEvent.Cancel = $true }
+    $answer = Show-FujiChoice -Title (Get-FujiText 'gui.closeDirtyTitle') -Message ((Get-FujiText 'gui.closeDirty') + (Get-FujiTaskSaveNote)) -Buttons @((Get-FujiText 'gui.saveAndClose'), (Get-FujiText 'gui.closeNoSave'), (Get-FujiText 'gui.cancel'))
+    if ($answer -eq 0) {
+        Save-FujiUi
+        # not saved (refused or failed): stay open
+        if ($script:Ed.Dirty) { $CloseEvent.Cancel = $true }
+        return
+    }
+    if ($answer -ne 1) { $CloseEvent.Cancel = $true }
+}
+
+# Said when there are unsaved changes and schedules registered with Windows (they read the saved file)
+function Get-FujiTaskSaveNote {
+    foreach ($s in $script:Settings.schedules) { if (Get-FujiScheduleValue $s 'taskName') { return (Get-FujiText 'gui.taskSaveNote') } }
+    return ''
 }
 
 function Invoke-FujiShortcut {
@@ -10210,6 +10265,7 @@ function Start-FujiAutoRun {
     foreach ($x in $script:Settings.schedules) { if ($x.id -eq $script:AutoRunId) { $s = $x } }
     if ($null -eq $s) {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.autoMissing' $script:AutoRunId) -Level 'warn'
+        Complete-FujiAutoRunStart
         return
     }
     Write-FujiUiLog -Message (Get-FujiText 'schedule.autoStart') -Level 'run'
@@ -10222,13 +10278,26 @@ function Start-FujiAutoRun {
             Invoke-FujiUi {
                 if ($script:RunCtl.Running -or (Test-FujiDialogOpen)) {
                     Write-FujiUiLog -Message (Get-FujiText 'schedule.autoBusy') -Level 'warn'
+                    Complete-FujiAutoRunStart
                     return
                 }
                 $status = Invoke-FujiSchedule -Schedule $sched
-                if ($status -eq 'done' -and [bool](Get-FujiScheduleValue $sched 'closeAfter' $false)) { Start-FujiAutoClose }
+                if ($status -eq 'done' -and [bool](Get-FujiScheduleValue $sched 'closeAfter' $false)) { Start-FujiAutoClose } else { Complete-FujiAutoRunStart }
             }
         })
     $t.Start()
+}
+
+# After the scheduled run (the window stays open): what the start held back so nobody had to answer
+# it first - the last time's unsaved work, and the start notices
+function Complete-FujiAutoRunStart {
+    if ($script:Ed.TempPending) {
+        $ask = (Get-FujiText 'editor.tempAskAfterRun') + "`r`n`r`n" + (Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp)
+        $restore = (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
+        [void](Resolve-FujiEditorTemp -Editor $script:Ed -Restore $restore)
+        Update-FujiAll
+    }
+    Show-FujiStartNotice
 }
 
 # Closes the app 10 seconds after a scheduled run finished, unless someone clicks meanwhile
@@ -10245,6 +10314,8 @@ function Start-FujiAutoClose {
                 if ([System.Windows.Forms.Control]::MouseButtons -ne [System.Windows.Forms.MouseButtons]::None) {
                     $a.Enabled = $false
                     $this.Stop()
+                    # someone is at the PC and keeps the window: now the questions held back
+                    Invoke-FujiUi { Complete-FujiAutoRunStart }
                     return
                 }
                 $a.Elapsed += 250
@@ -10268,6 +10339,16 @@ function Register-FujiScheduleTask {
     if ((Get-FujiScheduleKind $Schedule) -ne 'TIME') {
         Write-FujiUiLog -Message (Get-FujiText 'schedule.registerTimeOnly') -Level 'warn'
         return
+    }
+    # the task starts the app, which reads the saved macros: unsaved changes would not be in the run
+    if ($script:Ed.Dirty) {
+        $answer = Show-FujiChoice -Title (Get-FujiText 'schedule.saveTitle') -Message (Get-FujiText 'schedule.saveAsk') -Buttons @((Get-FujiText 'schedule.saveAndRegister'), (Get-FujiText 'schedule.registerNoSave'), (Get-FujiText 'gui.cancel'))
+        if ($answer -eq 0) {
+            Save-FujiUi
+            if ($script:Ed.Dirty) { return }
+        } elseif ($answer -ne 1) {
+            return
+        }
     }
     $name = Get-FujiTaskName -Schedule $Schedule
     try {
@@ -11940,6 +12021,8 @@ function Show-FujiWatchRuleDialog {
         }
     }
     Initialize-FujiEditorData -Editor $script:Ed -AskRestoreTemp {
+        # started by a scheduled task: nobody may be at the PC, so the run is not held up by a question
+        if ($script:AutoRunId) { return 'later' }
         $ask = Get-FujiText 'editor.tempAsk' $script:FujiFileNames.Macro $script:FujiFileNames.DiscardedTemp
         (Show-FujiChoice -Title (Get-FujiText 'gui.tempTitle') -Message $ask -Buttons @((Get-FujiText 'gui.yes'), (Get-FujiText 'gui.no'))) -eq 0
     }
