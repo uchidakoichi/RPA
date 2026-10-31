@@ -67,7 +67,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <main>
 <section class="page" id="page-index" data-title="ドキュメント">
 <h1 id="ドキュメント">ドキュメント</h1>
-<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>準備したい</td><td><a href="#page-setup">準備</a> — 5つのファイルの置き方・起動のしくみ・困ったとき</td></tr><tr><td>とにかく動かしてみたい</td><td><a href="#page-tutorial">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="#page-templates">テンプレート解説</a> — 381種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="#page-manual">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="#page-faq">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr><tr><td>版ごとに何が変わったか知りたい</td><td><a href="#page-changes">更新履歴</a> — バージョンの確かめ方と、版ごとの変更</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>読みたいこと</th><th>ドキュメント</th></tr></thead><tbody><tr><td>準備したい</td><td><a href="#page-setup">準備</a> — ファイルの置き方・起動のしくみ・困ったとき</td></tr><tr><td>とにかく動かしてみたい</td><td><a href="#page-tutorial">チュートリアル</a> — メモ帳と電卓で練習して、職場のシステムに向けるまで</td></tr><tr><td>お手本マクロ（テンプレート）の中身を知りたい</td><td><a href="#page-templates">テンプレート解説</a> — 381種類の目的・準備・ステップ・応用のヒント</td></tr><tr><td>機能を詳しく調べたい</td><td><a href="#page-manual">操作マニュアル</a> — 全コマンド、差し込み、キーの書き方、保存ファイル</td></tr><tr><td>困っている</td><td><a href="#page-faq">Q&amp;A</a> — 動かない・止まる・音が鳴らない など</td></tr><tr><td>版ごとに何が変わったか知りたい</td><td><a href="#page-changes">更新履歴</a> — バージョンの確かめ方と、版ごとの変更</td></tr></tbody></table></div>
 <p>見本のCSVは <a href="samples"><code>samples</code></a> フォルダにあります。ツールの［📚 テンプレート］から作ると、同じCSVが自動で用意されます。</p>
 <h2 id="ライセンス">ライセンス</h2>
 <p>ふじキュン♡のおしごとロボットは MIT License で公開しています。自由に使用・改変・再配布できます（著作権表示とライセンス文を残してください。<code>fujikyun.ps1</code> の先頭にも書いてあります）。無保証です。業務システムへ自動入力する前に、必ず少ない件数で動作を確認してください。</p>
@@ -78,10 +78,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h1 id="準備">準備</h1>
 <p>ふじキュン♡のおしごとロボットは、Windows に最初から入っている <strong>Windows PowerShell 5.1</strong> と Windows Forms だけで動きます。ほかのソフトのインストールは不要です。</p>
 <h2 id="ファイルを置く">ファイルを置く</h2>
-<ol><li>次の5つのファイルを、書き込みできる <strong>同じフォルダ</strong>（例: <code>C:\RPA作業\</code>）に置きます。<ul><li><code>fujikyun.bat</code></li><li><code>fujikyun.ps1</code></li><li><code>fujikyun_ja.json</code></li><li><code>fujikyun_commands.json</code></li><li><code>fujikyun_templates.json</code></li></ul>
-<p>GitHub の RAW 表示をメモ帳に貼り付けて保存する場合は、ファイル名をこのとおりにし、<strong>JSON は文字コード「UTF-8」で保存</strong> します（GitHub のリポジトリ直下にあります）。自治体セキュリティクラウドのダウンロード機能では、ファイルが壊れることがあるのでダウンロードしないでください。</p></li><li>説明書（このページ）をアプリの［📖 説明書］や F1 で開けるようにするときは、<code>fujikyun_manual.html</code> も同じフォルダに置きます。<p>コードと同じく RAW 表示をメモ帳に貼り付け、このファイル名で <strong>文字コード「UTF-8」で保存</strong> します（GitHub のリポジトリ直下にあります）。HTML も <strong>ダウンロードしないでください</strong>。セキュリティクラウドの無害化でスクリプトやリンクが消され、ページが切り替わらなくなります。</p></li><li><code>fujikyun.bat</code> をダブルクリックします。</li><li><strong>［🩺 環境チェック］</strong> で、この端末で使える機能を確認します。</li><li><strong>［📚 テンプレート］</strong> からお手本マクロを作って、動かしてみましょう（<a href="#page-tutorial">チュートリアル</a>）。</li></ol>
+<ol><li>書き込みできるフォルダ（例: <code>C:\RPA作業\</code>）を作ります。</li><li>GitHub のリポジトリの <code>dist</code> フォルダにある次の2つを、RAW 表示からメモ帳に貼り付け、このフォルダに同じ名前で保存します。自治体セキュリティクラウドのダウンロード機能では、ファイルが壊れることがあるのでダウンロードしないでください。<ul><li><code>fujikyun.b64.txt</code>（アプリ一式を文字にしたもの。約80万文字あります。Ctrl+A で全部選んでコピーします）</li><li><code>fujikyun-restore.bat</code>（元に戻すためのバッチ）。保存の画面で「ファイルの種類」を「すべてのファイル」にします（「テキスト文書」のままだと末尾に <code>.txt</code> が付きます）。</li></ul></li><li><code>fujikyun-restore.bat</code> をダブルクリックします。同じフォルダに、アプリのファイル（<code>fujikyun.bat</code>・<code>fujikyun.ps1</code>・<code>fujikyun_ja.json</code>・<code>fujikyun_commands.json</code>・<code>fujikyun_templates.json</code>・説明書 <code>fujikyun_manual.html</code>・<code>LICENSE</code>）ができます。<p>貼り付けが途中で切れていたり、2つの版が違ったりすると、何も書き換えずに「内容が一致しません」と出て止まります。そのときは2つとも貼り付け直します。</p></li><li><code>fujikyun.bat</code> をダブルクリックします。</li><li><strong>［🩺 環境チェック］</strong> で、この端末で使える機能を確認します。</li><li><strong>［📚 テンプレート］</strong> からお手本マクロを作って、動かしてみましょう（<a href="#page-tutorial">チュートリアル</a>）。</li></ol>
 <p>マクロのファイル（<code>fujikyun_macros.json</code>）・見本CSV（<code>samples</code>）・参照画像（<code>rpa_images</code>）・証跡（<code>evidence</code>）・書き出したマクロ（<code>macro_export</code>）・予定（<code>fujikyun_settings.json</code>）は、このフォルダに作られます。別の PC に移るときは、フォルダごとコピーします。</p>
-<p>新しい版に入れ替えるときは、5つのファイル（説明書を置いているときは <code>fujikyun_manual.html</code> も）を <strong>まとめて</strong> 置き換えます（<code>fujikyun.ps1</code> だけを新しくすると、起動時に「<code>fujikyun_ja.json</code> が古い」とお知らせが出ます）。</p>
+<p>新しい版に入れ替えるときも同じ手順です。2つを同じフォルダに上書き保存して <code>fujikyun-restore.bat</code> を実行すると、アプリのファイルだけがまとめて新しくなります。マクロ・設定・ログ・記録はそのまま残ります。ふじキュンを開いていたときは、一度閉じて開き直します。</p>
+<p>アプリのファイルを1つずつ RAW 表示から貼り付けて置くこともできます（リポジトリ直下にあります）。そのときはファイル名をこのとおりにし、<strong>JSON と HTML は文字コード「UTF-8」で保存</strong> して、<strong>まとめて</strong> 置き換えます（<code>fujikyun.ps1</code> だけを新しくすると、起動時に「<code>fujikyun_ja.json</code> が古い」とお知らせが出ます）。</p>
 <h3 id="起動のしくみ">起動のしくみ</h3>
 <p><code>fujikyun.bat</code> は、PowerShell 5.1 を STA モード（Windows Forms に必要）・コンソールなしで起動します。<code>-ExecutionPolicy Bypass</code> の指定はその1回の起動にだけ効き、端末の設定は変えません。グループポリシーで実行ポリシーが決められている端末では、ポリシーの方が優先されます。</p>
 <h3 id="安全のための動き">安全のための動き</h3>
@@ -5880,7 +5880,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h3 id="q-使っているふじキュンのバージョンを知りたい">Q. 使っているふじキュンのバージョンを知りたい</h3>
 <p>タイトルバーの「（バージョン 2026.10.22）」のように、名前の後ろに出ています。<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」でも確かめられます。数字はその版を出した日付（年.月.日）です。版ごとの変更は <a href="#page-changes">更新履歴</a> にあります。</p>
 <h3 id="q-アプリの中から説明書を読みたい">Q. アプリの中から説明書を読みたい</h3>
-<p><strong>［📖 説明書］</strong> から開けます。F1 キーで、選んでいるステップのコマンドの説明が開きます。「説明書が見つからない」と出るときは、GitHub のリポジトリ直下にある <code>fujikyun_manual.html</code> を RAW 表示からメモ帳に貼り付けて、<code>fujikyun.ps1</code> と同じフォルダに UTF-8 で保存してください（<a href="#page-setup/ファイルを置く">準備</a>）。</p>
+<p><strong>［📖 説明書］</strong> から開けます。F1 キーで、選んでいるステップのコマンドの説明が開きます。「説明書が見つからない」と出るときは、<code>fujikyun-restore.bat</code> で入れ直すと、<code>fujikyun.ps1</code> と同じフォルダに説明書もできます（<a href="#page-setup/ファイルを置く">準備</a>）。</p>
 <h3 id="q-説明書のページが切り替わらない全部のページが続けて出る">Q. 説明書のページが切り替わらない・全部のページが続けて出る</h3>
 <p><code>fujikyun_manual.html</code> を、自治体セキュリティクラウドのダウンロード（無害化）を通して入手すると、中のスクリプトやリンクが消されてこうなります。GitHub の RAW 表示からメモ帳に貼り付けて、UTF-8 で保存し直してください。</p>
 <h2 id="音アラーム">音・アラーム</h2>

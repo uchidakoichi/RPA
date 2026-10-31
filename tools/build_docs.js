@@ -1,6 +1,7 @@
 // Builds the browser-readable manuals and the download package (maintainers only, needs Node.js):
 //   powershell -File build\Build-FujiTemplateDoc.ps1   (regenerates samples/ and docs/src/templates.md)
-//   node tools/build_docs.js        (docs/src/*.md -> fujikyun_manual.html, then dist/fujikyun_samples.zip)
+//   node tools/build_docs.js        (docs/src/*.md -> fujikyun_manual.html, then dist/fujikyun_samples.zip,
+//                                    dist/fujikyun.b64.txt and dist/fujikyun-restore.bat)
 // No external packages: a small Markdown converter for the subset the docs use, and a ZIP writer
 // on top of Node's zlib, so the result opens offline in any browser on a municipal PC.
 "use strict";
@@ -414,3 +415,31 @@ for (const f of fs.readdirSync(path.join(root, "samples")).filter(f => f.endsWit
 fs.mkdirSync(path.join(root, "dist"), { recursive: true });
 fs.writeFileSync(path.join(root, "dist", "fujikyun_samples.zip"), makeZip(entries));
 console.log("built", MANUAL, "(" + PAGES.length + " pages) and dist/fujikyun_samples.zip (" + entries.length + " files)");
+
+// ---------------------------------------------------------------- paste-only package
+// Two text files people paste from GitHub's Raw view instead of the separate app files:
+//   dist/fujikyun.b64.txt       the app files as a ZIP in base64 (extracted next to the .bat, no top folder)
+//   dist/fujikyun-restore.bat   decodes it with certutil, checks the SHA-256 and extracts it with tar
+// The ZIP holds only files the app never writes, so restoring over an old copy keeps the user's data.
+// Run this after the VM build, so fujikyun.ps1 is the current one.
+const APP_FILES = ["fujikyun.bat", "fujikyun.ps1", "fujikyun_ja.json", "fujikyun_commands.json",
+    "fujikyun_templates.json", MANUAL, "LICENSE"];
+const version = /\$script:FujiAppVersion\s*=\s*'([^']+)'/.exec(fs.readFileSync(path.join(root, "src", "Version.ps1"), "utf8"))[1];
+const appZip = makeZip(APP_FILES.map(f => ({ name: f, data: fs.readFileSync(path.join(root, f)) })));
+const b64 = appZip.toString("base64").match(/.{1,76}/g).join("\r\n") + "\r\n";
+// cmd misreads a .bat that has LF-only line endings (a paste can lose the CR) and non-ASCII text, so
+// the Japanese "msg" lines become PowerShell calls with \uXXXX escapes and the .bat stays ASCII
+const msgLine = (m, indent, text) => indent + 'powershell -NoProfile -Command "Write-Host ([regex]::Unescape(\'' +
+    Array.from(text.replace(/\\n/g, "\n")).map(ch => {
+        const c = ch.codePointAt(0);
+        return c >= 0x20 && c < 0x7f && !"\\'\"%()^&|<>!".includes(ch) ? ch : "\\u" + c.toString(16).padStart(4, "0");
+    }).join("") + '\'))"';
+const bat = fs.readFileSync(path.join(root, "tools", "restore-template.bat"), "utf8").replace(/\r\n/g, "\n")
+    .replace(/@VERSION@/g, version)
+    .replace(/@SHA256@/g, require("crypto").createHash("sha256").update(appZip).digest("hex"))
+    .replace(/^( *)msg (.*)$/gm, msgLine)
+    .replace(/\n/g, "\r\n");
+if (/[^\x00-\x7f]/.test(bat)) { throw new Error("fujikyun-restore.bat must be ASCII only"); }
+fs.writeFileSync(path.join(root, "dist", "fujikyun.b64.txt"), b64, "ascii");
+fs.writeFileSync(path.join(root, "dist", "fujikyun-restore.bat"), bat, "ascii");
+console.log("built dist/fujikyun.b64.txt (" + version + ", ZIP " + appZip.length + " bytes, base64 " + b64.length + " chars) and dist/fujikyun-restore.bat");
