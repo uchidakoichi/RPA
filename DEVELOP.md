@@ -55,6 +55,7 @@ Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として
 | `fujikyun.ps1` | アプリ本体（1ファイル）。`build/Build-FujiBundle.ps1` が `build/Main.ps1`・`src`・`gui` から作る。**直接編集しない** |
 | `build/Main.ps1` | 起動処理（`fujikyun.ps1` のもと） |
 | `build/Build-FujiBundle.ps1` | 保守用: `fujikyun.ps1` を作り直す。`src`・`gui` を変えたら実行（テストが古いままを検出） |
+| `tools/build_docs.js` | 保守用: 説明書 `fujikyun_manual.html` と、貼り付けで配る `dist/fujikyun.b64.txt`・`dist/fujikyun-restore.bat`（ひな形は `tools/restore-template.bat`）を作り直す。`fujikyun.ps1` を作り直したあと・JSON や説明書を変えたあとに実行（テストが古いままを検出） |
 | `check/` | 事前チェックツール |
 | `src/*.ps1` | 画面のない中核部分（英数字だけ） |
 | `gui/*.ps1` | Windows Forms の画面（英数字だけ） |

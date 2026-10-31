@@ -12,12 +12,27 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 
 ## ダウンロードと起動
 
-1. リポジトリ直下の次の5つを、ローカルの**同じフォルダ**に置きます。説明書 `fujikyun_manual.html` も同じフォルダに置くと、アプリの［📖 説明書］と F1 で開けます。
-   - `fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json`
+自治体セキュリティクラウドのダウンロード機能では**ダウンロードしないでください**（ファイルが壊れることがあります。HTML はスクリプトやリンクが消され、説明書が動かなくなります）。代わりに、文字のコピー＆ペーストで受け取れる2つのファイルを用意しています。
 
-   自治体セキュリティクラウドのダウンロード機能では**ダウンロードしないでください**（ファイルが壊れることがあります。HTML はスクリプトやリンクが消され、説明書が動かなくなります）。GitHub で RAW 表示したコードを丸ごとメモ帳などに貼り付け、このファイル名で保存します。**JSON と HTML は文字コード「UTF-8」で保存**してください。
-2. `fujikyun.bat` をダブルクリックで起動し、**［🩺 環境チェック］** で使える機能を確認します。
-3. **［📚 テンプレート］** からお手本マクロを作って、動かしてみましょう。
+| ファイル | 中身 |
+| --- | --- |
+| [`dist/fujikyun.b64.txt`](dist/fujikyun.b64.txt) | アプリ一式（`fujikyun.bat`・`fujikyun.ps1`・`fujikyun_ja.json`・`fujikyun_commands.json`・`fujikyun_templates.json`・説明書 `fujikyun_manual.html`・`LICENSE`）の ZIP を base64 にしたもの（約80万文字） |
+| [`dist/fujikyun-restore.bat`](dist/fujikyun-restore.bat) | 上を ZIP に戻して、同じフォルダに展開する復元用のバッチ |
+
+1. ずっと置いておけるフォルダ（例: `C:\RPA作業`）を作ります。
+2. 2つのファイルを GitHub の **Raw** 表示で開き、それぞれ全部（Ctrl+A）コピーしてメモ帳に貼り付け、そのフォルダに**同じ名前**で保存します。bat は保存の画面で「ファイルの種類」を「すべてのファイル」にします（「テキスト文書」のままだと末尾に `.txt` が付きます）。
+3. `fujikyun-restore.bat` をダブルクリックすると、同じフォルダにアプリのファイルができます。
+4. `fujikyun.bat` をダブルクリックで起動し、**［🩺 環境チェック］** で使える機能を確認します。
+5. **［📚 テンプレート］** からお手本マクロを作って、動かしてみましょう。
+
+新しい版に入れ替えるときも同じ手順で、2つを同じフォルダに上書き保存して `fujikyun-restore.bat` を実行します。アプリのファイルだけがまとめて新しくなり、マクロ・設定・ログ・記録はそのまま残ります。ふじキュンを開いていたときは、一度閉じて開き直します。
+
+復元用のバッチの動き:
+
+- Windows に最初から入っている `certutil` で base64 を ZIP に戻し、生成時に埋め込んだ SHA-256 と照らし合わせてから、`tar` で展開します。貼り付けが途中で切れていたり、2つの版が違ったりすると、何も書き換えずに「内容が一致しません」と表示して止まります（Raw 表示が古いままのときも、ここで分かります）。
+- 改行が LF だけで保存されたバッチは、日本語を1文字でも含むと読み違えます。そのためバッチは英数字だけで書き、日本語の案内は PowerShell で表示します。元のひな形は `tools/restore-template.bat` です。
+
+アプリのファイルを1つずつ、リポジトリ直下の Raw 表示から貼り付けて置くこともできます（JSON と HTML は文字コード「UTF-8」で保存し、まとめて置き換えます）。
 
 詳しくは [準備](docs/src/setup.md) を見てください。
 
@@ -53,7 +68,7 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 ## 説明書と見本CSV
 
 - 説明書は **`fujikyun_manual.html`** の1ファイルです（目次・準備・チュートリアル・操作マニュアル・テンプレート解説・Q&A・更新履歴）。上のメニューでページを切り替えて読みます。
-  コードと同じく RAW 表示から貼り付けて UTF-8 で保存し、5つのファイルと同じフォルダに置きます。ダブルクリックすると、ネット接続なしでブラウザで読めます。
+  `fujikyun-restore.bat` で復元するとアプリと同じフォルダにでき、アプリの［📖 説明書］と F1 で開けます。ダブルクリックすると、ネット接続なしでブラウザで読めます。
 - 見本CSV は **[dist/fujikyun_samples.zip](dist/fujikyun_samples.zip)** にまとめています（［📚 テンプレート］から作ると同じCSVが自動で用意されるので、なくても使えます）。ふじキュンのフォルダで展開すると `samples` フォルダになります。
 - GitHub 上で読む場合: [チュートリアル](docs/src/tutorial.md)・[テンプレート解説](docs/src/templates.md)・[操作マニュアル](docs/src/manual.md)・[Q&A](docs/src/faq.md)
 
@@ -67,9 +82,11 @@ Windows のオフライン環境で動く RPA（パソコン作業の自動化�
 | `src/`・`gui/`・`build/`・`tests/` | 保守用: ソース・組み立て・テスト（説明は [DEVELOP.md](DEVELOP.md)） |
 | `samples/` | テンプレート用の見本CSV（すべて架空のデータ） |
 | `docs/src/` | ドキュメントの原稿（Markdown） |
+| `dist/fujikyun.b64.txt`・`dist/fujikyun-restore.bat` | 貼り付けで受け取る配布ファイル（アプリ一式の base64 と復元用のバッチ） |
 | `dist/fujikyun_samples.zip` | 見本CSVのまとめ |
 | `build/Build-FujiTemplateDoc.ps1` | 保守用: `fujikyun_templates.json` から `samples/` と `docs/src/templates.md` を生成 |
-| `tools/build_docs.js` | 保守用: `docs/src/*.md` から `fujikyun_manual.html` と zip を生成（Node.js が必要。利用者には不要） |
+| `tools/build_docs.js` | 保守用: `docs/src/*.md` から `fujikyun_manual.html` と zip を生成し、続けて `dist/fujikyun.b64.txt`・`dist/fujikyun-restore.bat` を作る（Node.js が必要。利用者には不要。`fujikyun.ps1` を組み立てたあとに実行） |
+| `tools/restore-template.bat` | 保守用: 復元用のバッチのひな形 |
 
 ## ライセンス
 

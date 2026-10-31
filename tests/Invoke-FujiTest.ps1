@@ -1698,6 +1698,33 @@ $built = & (Join-Path $psRoot 'build/Build-FujiBundle.ps1') -PassThru
 $current = ([System.IO.File]::ReadAllText((Join-Path $psRoot 'fujikyun.ps1'))) -replace "`r`n", "`n"
 Assert-True ($current -ceq ($built -replace "`r`n", "`n")) 'fujikyun.ps1 is up to date (run build/Build-FujiBundle.ps1)'
 
+# The paste-only package (dist/fujikyun.b64.txt + fujikyun-restore.bat) must hold the current app files
+# (skipped when dist/ was not copied)
+$distB64 = Join-Path $psRoot 'dist/fujikyun.b64.txt'
+$distBat = Join-Path $psRoot 'dist/fujikyun-restore.bat'
+if ((Test-Path -LiteralPath $distB64) -and (Test-Path -LiteralPath $distBat)) {
+    Add-Type -AssemblyName System.IO.Compression
+    $zipBytes = [System.Convert]::FromBase64String(([System.IO.File]::ReadAllText($distB64) -replace '\s', ''))
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $hash = -join ($sha.ComputeHash($zipBytes) | ForEach-Object { $_.ToString('x2') })
+    $batText = [System.IO.File]::ReadAllText($distBat)
+    Assert-True ($batText.Contains('set "EXPECTED=' + $hash + '"')) 'fujikyun-restore.bat checks the SHA-256 of fujikyun.b64.txt'
+    Assert-True ($batText.Contains('Fujikyun ' + $script:FujiAppVersion + ' restore')) 'fujikyun-restore.bat shows the app version'
+    Assert-True ($batText -notmatch '[^\x00-\x7f]') 'fujikyun-restore.bat is ASCII only'
+    $zip = New-Object -TypeName System.IO.Compression.ZipArchive -ArgumentList (New-Object -TypeName System.IO.MemoryStream -ArgumentList (, $zipBytes))
+    $names = @()
+    foreach ($entry in $zip.Entries) {
+        $names += $entry.FullName
+        $ms = New-Object -TypeName System.IO.MemoryStream
+        $es = $entry.Open(); $es.CopyTo($ms); $es.Dispose()
+        $repoFile = Join-Path $psRoot $entry.FullName
+        $same = (Test-Path -LiteralPath $repoFile) -and ([System.Convert]::ToBase64String($ms.ToArray()) -ceq [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes($repoFile)))
+        Assert-True $same ('dist/fujikyun.b64.txt holds the current ' + $entry.FullName + ' (run tools/build_docs.js)')
+    }
+    $zip.Dispose()
+    Assert-Equal 'fujikyun.bat,fujikyun.ps1,fujikyun_commands.json,fujikyun_ja.json,fujikyun_manual.html,fujikyun_templates.json,LICENSE' (($names | Sort-Object) -join ',') 'paste-only package holds the app files only'
+}
+
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'src') -Filter '*.ps1') + @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'gui') -Filter '*.ps1') +
     @(Get-ChildItem -LiteralPath (Join-Path $psRoot 'build') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $psRoot 'fujikyun.ps1')) + @(Get-Item -LiteralPath $PSCommandPath)
 foreach ($f in $sources) {
