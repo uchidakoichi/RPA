@@ -88,6 +88,18 @@ foreach ($c in $data['categories']) {
             $out.Add('| ' + $i + ' | `' + $s[0] + '` ' + $title + ' | ' + $cell + ' | ' + [string]::Join($t['colSep'], $notes.ToArray()) + ' |')
         }
         $out.Add('')
+        $watch = Get-FujiTemplateWatch -Template $tpl
+        if ($watch.Count -gt 0) {
+            $out.Add($t['watch']); $out.Add('')
+            $out.Add($t['watchHeader'])
+            $out.Add('| --- | --- | --- |')
+            foreach ($r in $watch) {
+                $key = ''
+                if ($r.key) { $key = '`' + (& $md $r.key) + '`' }
+                $out.Add('| `' + (& $md $r.title) + '` | ' + $key + ' | ' + (Get-FujiText ('watch.action.' + $r.action)) + ' |')
+            }
+            $out.Add('')
+        }
         $out.Add($t['customize']); $out.Add('')
         foreach ($p in $tpl['customize']) { $out.Add('- ' + $p) }
         $out.Add('')
