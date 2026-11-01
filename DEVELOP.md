@@ -12,6 +12,15 @@ Windows PowerShell 5.1 ＋ Windows Forms で動く本体です。使う人向け
 | マクロのデータ | `fujikyun_macros.json`（データ版28） |
 | メール | Outlook と mailto（SMTP は使わない） |
 
+### 機能を足したら
+
+使う人に見える機能（コマンド・ボタン・設定）を足したり変えたりしたときは、同じ PR で次もそろえます。
+
+- **チュートリアル**（`docs/src/tutorial.md`）: その機能を試すレッスンか手順を足す・直す。できるだけメモ帳やふじキュンのフォルダの中だけで試せるようにする。
+- **テンプレート**（`fujikyun_templates.json`）: その機能を使うお手本を足す。体験用（職場のシステムに触らずに試せるもの）と、仕事で使う形のものを用意する。前からあるテンプレートで、新しい機能を使ったほうが分かりやすく安全になるものは書き直す。テンプレートには見張り（`watch`）も入れられる。
+- 足したら `build/Build-FujiTemplateDoc.ps1`（見本CSV・テンプレート解説）、`tests/golden.json` のステップ表示、テストのテンプレート数、README のテンプレート数を直す。
+- 操作マニュアル・更新履歴・`fujikyun_ja.json` の版（新しい文言を足したとき）も忘れずに。
+
 ### 文字コードの決まり
 
 Windows PowerShell 5.1 は、BOM のない .ps1 を ANSI（Shift_JIS）として読みます（[about_Character_Encoding](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding?view=powershell-5.1)）。メモ帳に貼り付けて保存すると BOM なしの UTF-8 になるので、.ps1 の中に日本語があると文字化けして動きません。

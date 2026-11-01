@@ -1861,6 +1861,16 @@ function Get-FujiTemplateStep {
     return , $out
 }
 
+# The template's watch rules ({ title; key; action }), cleaned like the ones made in the watch dialog
+function Get-FujiTemplateWatch {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Template)
+    $out = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    if ($Template.Contains('watch') -and $null -ne $Template['watch']) {
+        foreach ($r in $Template['watch']) { $rule = ConvertTo-FujiWatchRule -Source $r; if ($null -ne $rule) { $out.Add($rule) } }
+    }
+    return , $out
+}
+
 # Search words: lower case, full-width letters and digits as half-width, split at spaces (both widths)
 function ConvertTo-FujiSearchText {
     param([AllowEmptyString()][string]$Text)
@@ -1932,7 +1942,10 @@ function New-FujiMacroFromTemplate {
         $n++
     }
     $steps = Get-FujiTemplateStep -Template $Template -MacroNameOf (Get-FujiMacroNameLookup $Editor)
-    $Editor.Data.macros.Add([ordered]@{ id = (New-FujiMacroId $Editor); name = $name; targetWindow = [string]$Template['targetWindow']; steps = $steps })
+    $macro = [ordered]@{ id = (New-FujiMacroId $Editor); name = $name; targetWindow = [string]$Template['targetWindow']; steps = $steps }
+    $watch = Get-FujiTemplateWatch -Template $Template
+    if ($watch.Count -gt 0) { $macro['watch'] = $watch }
+    $Editor.Data.macros.Add($macro)
     $Editor.MacroIndex = $Editor.Data.macros.Count - 1
     $Editor.Selected = -1
     Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'editor.history.template' $name)
@@ -5857,7 +5870,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.10.27.7'
+$script:FujiAppVersion = '2026.11.01'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------

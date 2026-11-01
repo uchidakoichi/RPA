@@ -423,7 +423,7 @@ foreach ($t in $golden.templateLabels) {
     $ps = Get-Golden $t 'ps'
     if ($null -ne $ps) { $labelsById[$t.id] = @($ps) } else { $labelsById[$t.id] = @($t.labels) }
 }
-Assert-Equal 381 $templates['templates'].Count 'template count'
+Assert-Equal 385 $templates['templates'].Count 'template count'
 $cats = $templates['categories']
 foreach ($t in $templates['templates']) { Assert-True ($cats.Contains($t['category'])) ('{0}: category is listed' -f $t['id']) }
 $tplHits = { param($q) $ids = New-Object -TypeName 'System.Collections.Generic.List[string]'; foreach ($t in $templates['templates']) { if (Test-FujiTemplateMatch -Template $t -Query $q) { $ids.Add($t['id']) } }; , $ids.ToArray() }
@@ -570,6 +570,14 @@ try {
     $n2 = New-FujiMacroFromTemplate -Editor $ed -Template $tpl
     Assert-True ($n1 -eq $tpl['name'] -and $n2 -eq ($tpl['name'] + ' (2)')) 'template names unique'
     Assert-Equal $tpl['steps'].Count (Get-FujiCurrentStepList $ed).Count 'template steps'
+    Assert-True (-not (Get-FujiCurrentMacro $ed).Contains('watch')) 'template without watch rules: none on the macro'
+    $wtpl = @($templates['templates'] | Where-Object { $_['id'] -eq 'watch-kikan-guard' })[0]
+    [void](New-FujiMacroFromTemplate -Editor $ed -Template $wtpl)
+    $wm = Get-FujiCurrentMacro $ed
+    Assert-Equal 'CONTINUE,SKIP,STOP' (@($wm['watch'] | ForEach-Object { $_.action }) -join ',') 'template watch rules go onto the macro'
+    Assert-Equal '{ENTER}' ([string]$wm['watch'][0].key) 'template watch rule keeps its key'
+    $ed.Data.macros.RemoveAt($ed.Data.macros.Count - 1)
+    $ed.MacroIndex = $ed.Data.macros.Count - 1
     $csvPath = Write-FujiTemplateCsv -Editor $ed -Template $tpl
     $bytes = [System.IO.File]::ReadAllBytes($csvPath)
     Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB) 'sample CSV has a BOM (Excel)'
@@ -1550,6 +1558,8 @@ Assert-Equal ('main#-1:' + (Get-FujiText 'check.watchCall' 'A' 'gone')) (@(Get-F
 $bad = New-Object -TypeName 'System.Collections.Generic.List[string]'
 foreach ($t in $templates['templates']) {
     $tm = [ordered]@{ id = 't'; name = [string]$t['id']; targetWindow = ''; steps = (Get-FujiTemplateStep -Template $t) }
+    $tw = Get-FujiTemplateWatch -Template $t
+    if ($tw.Count -gt 0) { $tm['watch'] = $tw }
     $hdr = $null
     $cols = -1
     if ($t.Contains('csv') -and $t['csv'] -is [System.Collections.IList] -and $t['csv'].Count -gt 0) { $hdr = [string[]]$t['csv'][0]; $cols = $hdr.Length }
