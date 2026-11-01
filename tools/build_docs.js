@@ -376,8 +376,21 @@ function crc32(buf) {
     for (const b of buf) { c = CRC_TABLE[(c ^ b) & 0xFF] ^ (c >>> 8); }
     return (c ^ 0xFFFFFFFF) >>> 0;
 }
+// Every entry gets the date of the app's version (00:00 Japan time), so rebuilding the same version
+// does not churn the files and their SHA-256. The DOS time is local time with no zone; the extended
+// timestamp (0x5455, UTC) also carries the access time, which tar otherwise sets to 1970-01-01.
+const versionText = /\$script:FujiAppVersion\s*=\s*'([^']+)'/.exec(fs.readFileSync(path.join(root, "src", "Version.ps1"), "utf8"))[1];
+const [VY, VM, VD] = versionText.split(".").map(Number);
 function makeZip(entries) {
-    const DOS_TIME = 0, DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1; // 2026-01-01 00:00, so rebuilding does not churn
+    const DOS_TIME = 0, DOS_DATE = ((VY - 1980) << 9) | (VM << 5) | VD;
+    const UNIX = Date.UTC(VY, VM - 1, VD) / 1000 - 9 * 3600;
+    const extra = n => { // n = 2: mtime + atime (local header), n = 1: mtime only (central directory)
+        const b = Buffer.alloc(5 + 4 * n);
+        b.writeUInt16LE(0x5455, 0); b.writeUInt16LE(1 + 4 * n, 2); b.writeUInt8(3, 4);
+        for (let i = 0; i < n; i++) { b.writeUInt32LE(UNIX, 5 + 4 * i); }
+        return b;
+    };
+    const localExtra = extra(2), centralExtra = extra(1);
     const locals = [];
     const centrals = [];
     let offset = 0;
@@ -389,15 +402,15 @@ function makeZip(entries) {
         const local = Buffer.alloc(30);
         local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x0800, 6); local.writeUInt16LE(8, 8);
         local.writeUInt16LE(DOS_TIME, 10); local.writeUInt16LE(DOS_DATE, 12); local.writeUInt32LE(crc, 14);
-        local.writeUInt32LE(comp.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26); local.writeUInt16LE(0, 28);
-        locals.push(local, name, comp);
+        local.writeUInt32LE(comp.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26); local.writeUInt16LE(localExtra.length, 28);
+        locals.push(local, name, localExtra, comp);
         const central = Buffer.alloc(46);
         central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0x0800, 8);
         central.writeUInt16LE(8, 10); central.writeUInt16LE(DOS_TIME, 12); central.writeUInt16LE(DOS_DATE, 14); central.writeUInt32LE(crc, 16);
-        central.writeUInt32LE(comp.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28);
+        central.writeUInt32LE(comp.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt16LE(centralExtra.length, 30);
         central.writeUInt32LE(0, 38); central.writeUInt32LE(offset, 42);
-        centrals.push(central, name);
-        offset += 30 + name.length + comp.length;
+        centrals.push(central, name, centralExtra);
+        offset += 30 + name.length + localExtra.length + comp.length;
     }
     const centralBuf = Buffer.concat(centrals);
     const end = Buffer.alloc(22);
@@ -424,7 +437,7 @@ console.log("built", MANUAL, "(" + PAGES.length + " pages) and dist/fujikyun_sam
 // Run this after the VM build, so fujikyun.ps1 is the current one.
 const APP_FILES = ["fujikyun.bat", "fujikyun.ps1", "fujikyun_ja.json", "fujikyun_commands.json",
     "fujikyun_templates.json", MANUAL, "LICENSE"];
-const version = /\$script:FujiAppVersion\s*=\s*'([^']+)'/.exec(fs.readFileSync(path.join(root, "src", "Version.ps1"), "utf8"))[1];
+const version = versionText;
 const appZip = makeZip(APP_FILES.map(f => ({ name: f, data: fs.readFileSync(path.join(root, f)) })));
 const b64 = appZip.toString("base64").match(/.{1,76}/g).join("\r\n") + "\r\n";
 // cmd misreads a .bat that has LF-only line endings (a paste can lose the CR) and non-ASCII text, so
