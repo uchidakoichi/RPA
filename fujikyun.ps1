@@ -3388,25 +3388,38 @@ function Expand-FujiPlaceholder {
 #  Lines (tab separated): S title = window came to the front, W ms = pause, C x y kind = click at,
 #  N name x y = click on a named button, F name x y = click into a named text box, K keys = key
 #  with Ctrl / Alt / named key, T text = typed text, J = typing through the Japanese input method
-#  (not recordable as keys). A click into a named text box followed by typing becomes FIELD_SET.
+#  (not recordable as keys), G name = Tab moved the focus into a named text box.
+#  A click into a named text box followed by typing becomes FIELD_SET. So does Tab into a named
+#  text box followed by typing, and the Tabs that led there are dropped (no counting of Tabs).
+#  A pause before a window comes to the front becomes "wait until the window appears" (WAIT_FOR),
+#  so the macro goes on as soon as the window is there and still waits when the PC is slow.
+#  Stats (optional) gets Tab = Tab runs replaced, Wait = pauses replaced.
 # ---------------------------------------------------------------------------------------------
 
 function ConvertFrom-FujiRecording {
-    param([AllowEmptyString()][string]$Payload)
+    param([AllowEmptyString()][string]$Payload, [hashtable]$Stats)
+    if ($null -eq $Stats) { $Stats = @{} }
+    $Stats.Tab = 0
+    $Stats.Wait = 0
     $steps = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $lastSwitch = ''
+    $waitMs = 0
     # a click into a named text box waits for what is typed next (pauses in between are kept)
     $field = $null
     foreach ($line in ([string]$Payload).Split("`n")) {
         $f = $line.TrimEnd("`r").Split("`t")
         $step = $null
         if ($null -ne $field -and $f[0] -ne 'T' -and $f[0] -ne 'W') {
-            $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' }))))
+            # a click into the field without typing stays a click; Tabs without typing stay as they are
+            if (-not $field.Tab) { $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' })))) }
             $field = $null
         }
         switch ($f[0]) {
             'F' {
-                if ($f.Count -ge 4) { $field = @{ Name = $f[1]; X = $f[2]; Y = $f[3] } }
+                if ($f.Count -ge 4) { $field = @{ Name = $f[1]; X = $f[2]; Y = $f[3]; Tab = $false } }
+            }
+            'G' {
+                if ($f.Count -ge 2 -and $f[1] -ne '' -and $steps.Count -gt 0 -and (Test-FujiTabKeyStep $steps[$steps.Count - 1])) { $field = @{ Name = $f[1]; Tab = $true } }
             }
             'S' {
                 if ($f.Count -lt 2) { break }
@@ -3418,6 +3431,14 @@ function ConvertFrom-FujiRecording {
                 if ($target -ne '' -and $target -ne $lastSwitch) {
                     $step = @{ cmd = 'SWITCH'; val = $target }
                     $lastSwitch = $target
+                    $last = $steps.Count - 1
+                    if ($last -ge 0 -and $steps[$last].cmd -eq 'WAIT' -and $waitMs -gt 0) {
+                        # timeout: 3 times the recorded pause, at least 10 seconds (our own choice)
+                        $timeout = [Math]::Max(10, [int][Math]::Ceiling($waitMs / 1000.0) * 3)
+                        $v = ConvertTo-FujiStepValue -Cmd 'WAIT_FOR' -Settings ([ordered]@{ title = $target; key = ''; timeout = [string]$timeout })
+                        $steps[$last] = New-FujiStep -Cmd 'WAIT_FOR' -Value $v
+                        $Stats.Wait++
+                    }
                 }
             }
             'W' { if ($f.Count -ge 2) { $step = @{ cmd = 'WAIT'; val = [string](Get-FujiInt -Text $f[1] -Default 1000) } } }
@@ -3450,6 +3471,7 @@ function ConvertFrom-FujiRecording {
                 if ($f.Count -ge 2) { $v = $f[1] }
                 if ($null -ne $field) {
                     $step = @{ cmd = 'FIELD_SET'; val = (ConvertTo-FujiStepValue -Cmd 'FIELD_SET' -Settings ([ordered]@{ name = $field.Name; text = $v; nth = '1'; how = 'AUTO' })) }
+                    if ($field.Tab) { Remove-FujiTabRun -Steps $steps; $Stats.Tab++ }
                     $field = $null
                 } else {
                     $step = @{ cmd = 'TEXT'; val = $v }
@@ -3460,17 +3482,35 @@ function ConvertFrom-FujiRecording {
         if ($null -ne $step) {
             $steps.Add([ordered]@{ cmd = $step.cmd; val = $step.val; label = (Get-FujiStepLabel -Cmd $step.cmd -Value $step.val) })
         }
+        $waitMs = 0
+        if ($f[0] -eq 'W' -and $null -ne $step) { $waitMs = Get-FujiInt -Text $step.val -Default 0 }
     }
     if ($null -ne $field) { $steps.Add((New-FujiStep -Cmd 'CLICK_POS' -Value (ConvertTo-FujiStepValue -Cmd 'CLICK_POS' -Settings ([ordered]@{ x = $field.X; y = $field.Y; kind = 'LEFT' })))) }
     while ($steps.Count -gt 0 -and $steps[$steps.Count - 1].cmd -eq 'WAIT') { $steps.RemoveAt($steps.Count - 1) }
     return , $steps
 }
 
+function Test-FujiTabKeyStep {
+    param([System.Collections.IDictionary]$Step)
+    return ($Step.cmd -eq 'KEY' -and [string]$Step.val -cmatch '^\+?\{TAB( [0-9]+)?\}$')
+}
+
+# Drops the Tab keys at the end of Steps (and the pauses between them; a pause before the first
+# Tab stays, it may be waiting for the screen)
+function Remove-FujiTabRun {
+    param([System.Collections.Generic.List[object]]$Steps)
+    $from = $Steps.Count
+    while ($from -gt 0 -and ((Test-FujiTabKeyStep $Steps[$from - 1]) -or $Steps[$from - 1].cmd -eq 'WAIT')) { $from-- }
+    while ($from -lt $Steps.Count -and $Steps[$from].cmd -eq 'WAIT') { $from++ }
+    if ($from -lt $Steps.Count) { $Steps.RemoveRange($from, $Steps.Count - $from) }
+}
+
 # Puts the recorded steps into the macro they were recorded for, as one group at At.
 # Returns the number of steps (0 when nothing was recorded or the macro is gone).
 function Add-FujiRecordedStep {
     param([Parameter(Mandatory)][hashtable]$Editor, [string]$MacroId, [int]$At, [AllowEmptyString()][string]$Payload)
-    $steps = ConvertFrom-FujiRecording -Payload $Payload
+    $stats = @{}
+    $steps = ConvertFrom-FujiRecording -Payload $Payload -Stats $stats
     if ($steps.Count -eq 0) {
         Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.nothing') -Level 'warn'
         return 0
@@ -3493,6 +3533,7 @@ function Add-FujiRecordedStep {
     $Editor.Selected = $at
     Submit-FujiEditorChange -Editor $Editor -Description (Get-FujiText 'rec.history' $steps.Count)
     Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.done' $steps.Count) -Level 'ok'
+    if ($stats.Tab -gt 0 -or $stats.Wait -gt 0) { Write-FujiEditorLog -Editor $Editor -Message (Get-FujiText 'rec.smart' $stats.Tab $stats.Wait) -Level 'ok' }
     return $steps.Count
 }
 
@@ -5501,7 +5542,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 11
+$script:FujiTextVersion = 12
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -5870,7 +5911,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.01'
+$script:FujiAppVersion = '2026.11.03'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -8928,6 +8969,13 @@ public class FujiRecorder {
     int lastClickTick = 0, lastClickX = -9999, lastClickY = -9999, lastClickIndex = -1;
     bool imeNoted = false;
     int textStart = 0;
+    // after Tab / Shift+Tab: when the focus has settled, the name of the text box it landed in.
+    // UI Automation can take a while, so it is asked on another thread (keys are not missed
+    // meanwhile) and the answer goes in right after the Tab line (focusAt).
+    int focusDue = 0, focusAt = -1;
+    volatile int focusGen = 0;
+    volatile int focusDoneGen = -1;
+    volatile string focusName = null;
     static string Clean(string s) { return (s ?? "").Replace("\t", " ").Replace("\r", " ").Replace("\n", " "); }
     static string Title(IntPtr h) { StringBuilder sb = new StringBuilder(512); GetWindowText(h, sb, 512); return sb.ToString(); }
     void Add(string line) { AddAt(line, Environment.TickCount); }
@@ -8960,19 +9008,58 @@ public class FujiRecorder {
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // An automation id made of digits only is a window handle (Windows Forms): it changes every run
+    static string StableId(string id) {
+        if (string.IsNullOrEmpty(id)) { return ""; }
+        foreach (char c in id) { if (c < '0' || c > '9') { return id; } }
+        return "";
+    }
     // The name of a text box under the point, so typing into it can be "put text into a field by name"
     static string FieldName(int x, int y) {
         try {
             AutomationElement el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
             if (el == null || el.Current.ControlType != ControlType.Edit) { return ""; }
             string n = el.Current.Name;
-            if (string.IsNullOrEmpty(n)) { n = el.Current.AutomationId; }
+            if (string.IsNullOrEmpty(n)) { n = StableId(el.Current.AutomationId); }
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // The name of the text box that has the focus (after Tab), so typing into it can be FIELD_SET
+    static string FocusedFieldName(int ownPid) {
+        try {
+            AutomationElement el = AutomationElement.FocusedElement;
+            if (el == null || el.Current.ControlType != ControlType.Edit || el.Current.ProcessId == ownPid) { return ""; }
+            string n = el.Current.Name;
+            if (string.IsNullOrEmpty(n)) { n = StableId(el.Current.AutomationId); }
+            return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
+        } catch { return ""; }
+    }
+    void NoteFocus(int ownPid) {
+        if (focusDoneGen == focusGen && focusAt >= 0) {
+            string n = focusName;
+            if (!string.IsNullOrEmpty(n) && focusAt <= ev.Count) {
+                ev.Insert(focusAt, "G\t" + n);
+                if (lastClickIndex >= focusAt) { lastClickIndex++; }
+                Count = ev.Count;
+            }
+            focusAt = -1;
+        }
+        if (focusDue == 0 || Environment.TickCount - focusDue < 0) { return; }
+        focusDue = 0;
+        int gen = focusGen;
+        ThreadPool.QueueUserWorkItem(delegate(object o) {
+            string n = FocusedFieldName(ownPid);
+            if (gen == focusGen) { focusName = n; focusDoneGen = gen; }
+        });
+    }
+    void NoteTab(bool tab) {
+        focusGen++;
+        focusAt = tab ? ev.Count : -1;
+        focusDue = tab ? Environment.TickCount + 200 : 0;
+    }
     void Click(bool right) {
         FujiRecPoint p; GetCursorPos(out p);
-        FlushText(); imeNoted = false;
+        FlushText(); imeNoted = false; NoteTab(false);
         int now = Environment.TickCount;
         if (!right && now - lastClickTick < 500 && Math.Abs(p.X - lastClickX) < 5 && Math.Abs(p.Y - lastClickY) < 5 && lastClickIndex == ev.Count - 1) {
             ev[lastClickIndex] = "C\t" + lastClickX + "\t" + lastClickY + "\tDOUBLE"; lastClickTick = 0; return;
@@ -8994,11 +9081,15 @@ public class FujiRecorder {
             if (k == null && vk >= 48 && vk <= 57) { k = ((char)vk).ToString(); }
             if (k == null && vk == 32) { k = " "; }
             if (k == null) { return; }
-            FlushText(); imeNoted = false;
+            FlushText(); imeNoted = false; NoteTab(false);
             Add("K\t" + (ctrl ? "^" : "") + (alt ? "%" : "") + (shift ? "+" : "") + k);
             return;
         }
-        if (named != null) { FlushText(); imeNoted = false; Add("K\t" + (shift ? "+" : "") + named); return; }
+        if (named != null) {
+            FlushText(); imeNoted = false; Add("K\t" + (shift ? "+" : "") + named);
+            NoteTab(vk == 9);
+            return;
+        }
         byte[] state = new byte[256];
         if (shift) { state[0x10] = 0x80; state[0xA0] = 0x80; }
         StringBuilder buf = new StringBuilder(8);
@@ -9032,9 +9123,12 @@ public class FujiRecorder {
                 }
                 down[vk] = now;
             }
+            if (!ignore) { r.NoteFocus(ownPid); }
             Thread.Sleep(15);
         }
         r.FlushText();
+        for (int i = 0; i < 50 && r.focusAt >= 0 && r.focusDoneGen != r.focusGen; i++) { Thread.Sleep(20); }
+        r.NoteFocus(ownPid);
         return string.Join("\n", r.ev.ToArray());
     }
 }
