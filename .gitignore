@@ -17,3 +17,6 @@ fujikyun_settings_broken_*.json
 fujikyun_runs.csv
 fujikyun_edits.csv
 fujikyun_effect_*.csv
+# llama.cpp as base64 parts: only on the branch llm-pc-test
+tools/llm-bench/pc-check/llama_x64_*.txt
+tools/llm-bench/pc-check/llm-check-result.txt
