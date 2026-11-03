@@ -3205,6 +3205,7 @@ function Get-FujiNativeType {
         @($u, 'FindWindowEx', [IntPtr], [type[]]@([IntPtr], [IntPtr], [string], [string]), $wide),
         @($u, 'GetWindowTextLength', [int], [type[]]@([IntPtr]), $wide),
         @($u, 'GetWindowText', [int], [type[]]@([IntPtr], [System.Text.StringBuilder], [int]), $wide),
+        @($u, 'GetClassName', [int], [type[]]@([IntPtr], [System.Text.StringBuilder], [int]), $wide),
         @($u, 'IsWindowVisible', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'IsIconic', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'ShowWindow', [bool], [type[]]@([IntPtr], [int]), $auto),
@@ -3241,6 +3242,11 @@ function Get-FujiNativeType {
     $script:FujiNative = $tb.CreateType()
     return $script:FujiNative
 }
+
+# Windows of these classes are never the window a macro means. Windows 11 shows browser tabs in
+# Alt+Tab through one proxy window per tab (explorer.exe), titled like the tab: brought to the front,
+# it takes no keys, so SWITCH "a page title" sent keys and pastes nowhere (VM probe with Edge).
+$script:FujiSkipWindowClasses = @('Windows.Internal.Shell.TabProxyWindow')
 
 # The window a title means, the WScript AppActivate way: a title equal to it, else one starting
 # with it, else one ending with it (case ignored). Windows: @(@{ Handle; Title }, ...). $null if none.
@@ -5911,7 +5917,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.03'
+$script:FujiAppVersion = '2026.11.03.2'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -9657,8 +9663,10 @@ function New-FujiWinIo {
 
 # ----------------------------------------------------------------- windows
 # Visible top-level windows with a title, this app's own windows left out
+# (windows of the classes in $script:FujiSkipWindowClasses, src/Native.ps1, are left out)
 function Get-FujiTopWindow {
     $native = Get-FujiNativeType
+    $class = New-Object -TypeName System.Text.StringBuilder -ArgumentList 256
     $own = @{}
     foreach ($f in [System.Windows.Forms.Application]::OpenForms) { $own[$f.Handle.ToInt64()] = $true }
     $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -9669,6 +9677,9 @@ function Get-FujiTopWindow {
         if ($own.ContainsKey($h.ToInt64()) -or -not $native::IsWindowVisible($h)) { continue }
         $len = $native::GetWindowTextLength($h)
         if ($len -le 0) { continue }
+        $class.Length = 0
+        [void]$native::GetClassName($h, $class, $class.Capacity)
+        if ($script:FujiSkipWindowClasses -contains $class.ToString()) { continue }
         $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($len + 1)
         [void]$native::GetWindowText($h, $sb, $sb.Capacity)
         $list.Add(@{ Handle = $h; Title = $sb.ToString() })

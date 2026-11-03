@@ -6076,6 +6076,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
 <hr>
+<h2 id="202611032">2026.11.03.2</h2>
+<p><strong>直したこと</strong></p>
+<ul><li>対象ウィンドウや SWITCH にページの題名（例: <code>基幹システム</code>）を書くと、Edge のページに文字やキーが入らないことがあったのを直しました。Windows 11 は Alt+Tab に Edge のタブを並べるため、タブと同じ題名の見えない窓を作ります。ふじキュンがこの窓を前に出していたので、入力がどこにも届いていませんでした。今はこの窓を相手にしません。</li></ul>
+<hr>
 <h2 id="20261103">2026.11.03</h2>
 <p><strong>新しくなったこと</strong></p>
 <ul><li>［⏺ 記録］で、Tab の回数と待つ秒数を合わせなくてよくなりました。<ul><li>Tab で名前のある入力欄へ移って文字を入れると、そこまでの Tab は入れずに <strong>🧩 欄に入力（名前で）</strong> にします。欄の並びが変わっても動きます。</li><li>間があいたあとに別のウィンドウ（確認の画面など）が前に出たときは、WAIT ではなく <strong>ウィンドウ出現待ち</strong> にします。出たらすぐ次へ進み、PC が遅いときは記録した間の3倍（最低10秒）まで待ちます。</li><li>置き換えた数は、記録のあとにログで知らせます。</li></ul></li></ul>

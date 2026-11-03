@@ -440,8 +440,10 @@ function New-FujiWinIo {
 
 # ----------------------------------------------------------------- windows
 # Visible top-level windows with a title, this app's own windows left out
+# (windows of the classes in $script:FujiSkipWindowClasses, src/Native.ps1, are left out)
 function Get-FujiTopWindow {
     $native = Get-FujiNativeType
+    $class = New-Object -TypeName System.Text.StringBuilder -ArgumentList 256
     $own = @{}
     foreach ($f in [System.Windows.Forms.Application]::OpenForms) { $own[$f.Handle.ToInt64()] = $true }
     $list = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -452,6 +454,9 @@ function Get-FujiTopWindow {
         if ($own.ContainsKey($h.ToInt64()) -or -not $native::IsWindowVisible($h)) { continue }
         $len = $native::GetWindowTextLength($h)
         if ($len -le 0) { continue }
+        $class.Length = 0
+        [void]$native::GetClassName($h, $class, $class.Capacity)
+        if ($script:FujiSkipWindowClasses -contains $class.ToString()) { continue }
         $sb = New-Object -TypeName System.Text.StringBuilder -ArgumentList ($len + 1)
         [void]$native::GetWindowText($h, $sb, $sb.Capacity)
         $list.Add(@{ Handle = $h; Title = $sb.ToString() })

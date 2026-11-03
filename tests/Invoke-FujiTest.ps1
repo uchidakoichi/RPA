@@ -1593,6 +1593,9 @@ try {
     Remove-Item -LiteralPath $bookDir -Recurse -Force
 }
 
+# Windows 11's Alt+Tab proxy windows for browser tabs are never a macro's window
+Assert-True ($script:FujiSkipWindowClasses -contains 'Windows.Internal.Shell.TabProxyWindow') 'windows: the tab proxy windows are left out'
+
 # recording: a click into a named text box, then typing
 $rec = ConvertFrom-FujiRecording -Payload ("F`tNo`t10`t20`nW`t1500`nT`t123`nF`tName`t5`t6`nK`t{TAB}")
 Assert-Equal 'WAIT FIELD_SET CLICK_POS KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: the pause, the field, a field click without typing stays a click'
