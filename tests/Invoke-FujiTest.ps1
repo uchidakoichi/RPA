@@ -1597,6 +1597,23 @@ try {
 $rec = ConvertFrom-FujiRecording -Payload ("F`tNo`t10`t20`nW`t1500`nT`t123`nF`tName`t5`t6`nK`t{TAB}")
 Assert-Equal 'WAIT FIELD_SET CLICK_POS KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: the pause, the field, a field click without typing stays a click'
 Assert-Equal '{"name":"No","text":"123","nth":"1","how":"AUTO"}' $rec[1].val 'recording: typed text goes into the field by name'
+# Tab into a named text box, then typing: FIELD_SET, the Tabs that led there are dropped
+$st = @{}
+$rec = ConvertFrom-FujiRecording -Stats $st -Payload ("S`ta - App`nW`t2000`nK`t{TAB}`nW`t1300`nK`t{TAB}`nG`tName`nT`tabc`nK`t{TAB}`nG`tKana`nK`t{TAB}`nT`txyz`nK`t+{TAB}`nG`tAddr`nK`t^c")
+Assert-Equal 'SWITCH WAIT FIELD_SET KEY TEXT KEY KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: Tabs into a named field become FIELD_SET (pause before the first Tab kept)'
+Assert-True ($rec[2].val -eq '{"name":"Name","text":"abc","nth":"1","how":"AUTO"}' -and $rec[3].val -eq '{TAB 2}' -and $rec[5].val -eq '+{TAB}') 'recording: Tabs without typing, or into a field with no name, stay'
+Assert-Equal 1 $st.Tab 'recording: one Tab run replaced'
+# G without a Tab before it (a stray line) changes nothing
+$rec = ConvertFrom-FujiRecording -Payload ("G`tName`nT`tabc")
+Assert-Equal 'TEXT' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: a focus line needs a Tab before it'
+# a pause before another window comes to the front: wait until it appears
+$st = @{}
+$rec = ConvertFrom-FujiRecording -Stats $st -Payload ("S`ta - App`nK`t{ENTER}`nW`t4200`nS`tConfirm`nK`t{ENTER}`nW`t1500`nS`tb - App`nK`t{ENTER}`nW`t2000`nS`tc - App`nK`t{ENTER}")
+Assert-Equal 'SWITCH KEY WAIT_FOR SWITCH KEY WAIT_FOR SWITCH KEY WAIT KEY' (@($rec | ForEach-Object { $_.cmd }) -join ' ') 'recording: a pause before a new window becomes WAIT_FOR; the same app again stays WAIT'
+Assert-Equal '{"title":"Confirm","key":"","timeout":"15"}' $rec[2].val 'recording: WAIT_FOR: the window, no key, 3x the pause'
+Assert-Equal 2 $st.Wait 'recording: two pauses replaced'
+$rec = ConvertFrom-FujiRecording -Payload ("S`ta - App`nW`t1300`nS`tOther")
+Assert-Equal '{"title":"Other","key":"","timeout":"10"}' $rec[1].val 'recording: WAIT_FOR waits at least 10 seconds'
 
 # the window's look on this PC: text size, place, size, pane split
 $ui = [ordered]@{ ui = [ordered]@{} }

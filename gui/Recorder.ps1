@@ -32,6 +32,13 @@ public class FujiRecorder {
     int lastClickTick = 0, lastClickX = -9999, lastClickY = -9999, lastClickIndex = -1;
     bool imeNoted = false;
     int textStart = 0;
+    // after Tab / Shift+Tab: when the focus has settled, the name of the text box it landed in.
+    // UI Automation can take a while, so it is asked on another thread (keys are not missed
+    // meanwhile) and the answer goes in right after the Tab line (focusAt).
+    int focusDue = 0, focusAt = -1;
+    volatile int focusGen = 0;
+    volatile int focusDoneGen = -1;
+    volatile string focusName = null;
     static string Clean(string s) { return (s ?? "").Replace("\t", " ").Replace("\r", " ").Replace("\n", " "); }
     static string Title(IntPtr h) { StringBuilder sb = new StringBuilder(512); GetWindowText(h, sb, 512); return sb.ToString(); }
     void Add(string line) { AddAt(line, Environment.TickCount); }
@@ -64,19 +71,58 @@ public class FujiRecorder {
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // An automation id made of digits only is a window handle (Windows Forms): it changes every run
+    static string StableId(string id) {
+        if (string.IsNullOrEmpty(id)) { return ""; }
+        foreach (char c in id) { if (c < '0' || c > '9') { return id; } }
+        return "";
+    }
     // The name of a text box under the point, so typing into it can be "put text into a field by name"
     static string FieldName(int x, int y) {
         try {
             AutomationElement el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
             if (el == null || el.Current.ControlType != ControlType.Edit) { return ""; }
             string n = el.Current.Name;
-            if (string.IsNullOrEmpty(n)) { n = el.Current.AutomationId; }
+            if (string.IsNullOrEmpty(n)) { n = StableId(el.Current.AutomationId); }
             return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
         } catch { return ""; }
     }
+    // The name of the text box that has the focus (after Tab), so typing into it can be FIELD_SET
+    static string FocusedFieldName(int ownPid) {
+        try {
+            AutomationElement el = AutomationElement.FocusedElement;
+            if (el == null || el.Current.ControlType != ControlType.Edit || el.Current.ProcessId == ownPid) { return ""; }
+            string n = el.Current.Name;
+            if (string.IsNullOrEmpty(n)) { n = StableId(el.Current.AutomationId); }
+            return string.IsNullOrEmpty(n) || n.Length > 40 ? "" : Clean(n);
+        } catch { return ""; }
+    }
+    void NoteFocus(int ownPid) {
+        if (focusDoneGen == focusGen && focusAt >= 0) {
+            string n = focusName;
+            if (!string.IsNullOrEmpty(n) && focusAt <= ev.Count) {
+                ev.Insert(focusAt, "G\t" + n);
+                if (lastClickIndex >= focusAt) { lastClickIndex++; }
+                Count = ev.Count;
+            }
+            focusAt = -1;
+        }
+        if (focusDue == 0 || Environment.TickCount - focusDue < 0) { return; }
+        focusDue = 0;
+        int gen = focusGen;
+        ThreadPool.QueueUserWorkItem(delegate(object o) {
+            string n = FocusedFieldName(ownPid);
+            if (gen == focusGen) { focusName = n; focusDoneGen = gen; }
+        });
+    }
+    void NoteTab(bool tab) {
+        focusGen++;
+        focusAt = tab ? ev.Count : -1;
+        focusDue = tab ? Environment.TickCount + 200 : 0;
+    }
     void Click(bool right) {
         FujiRecPoint p; GetCursorPos(out p);
-        FlushText(); imeNoted = false;
+        FlushText(); imeNoted = false; NoteTab(false);
         int now = Environment.TickCount;
         if (!right && now - lastClickTick < 500 && Math.Abs(p.X - lastClickX) < 5 && Math.Abs(p.Y - lastClickY) < 5 && lastClickIndex == ev.Count - 1) {
             ev[lastClickIndex] = "C\t" + lastClickX + "\t" + lastClickY + "\tDOUBLE"; lastClickTick = 0; return;
@@ -98,11 +144,15 @@ public class FujiRecorder {
             if (k == null && vk >= 48 && vk <= 57) { k = ((char)vk).ToString(); }
             if (k == null && vk == 32) { k = " "; }
             if (k == null) { return; }
-            FlushText(); imeNoted = false;
+            FlushText(); imeNoted = false; NoteTab(false);
             Add("K\t" + (ctrl ? "^" : "") + (alt ? "%" : "") + (shift ? "+" : "") + k);
             return;
         }
-        if (named != null) { FlushText(); imeNoted = false; Add("K\t" + (shift ? "+" : "") + named); return; }
+        if (named != null) {
+            FlushText(); imeNoted = false; Add("K\t" + (shift ? "+" : "") + named);
+            NoteTab(vk == 9);
+            return;
+        }
         byte[] state = new byte[256];
         if (shift) { state[0x10] = 0x80; state[0xA0] = 0x80; }
         StringBuilder buf = new StringBuilder(8);
@@ -136,9 +186,12 @@ public class FujiRecorder {
                 }
                 down[vk] = now;
             }
+            if (!ignore) { r.NoteFocus(ownPid); }
             Thread.Sleep(15);
         }
         r.FlushText();
+        for (int i = 0; i < 50 && r.focusAt >= 0 && r.focusDoneGen != r.focusGen; i++) { Thread.Sleep(20); }
+        r.NoteFocus(ownPid);
         return string.Join("\n", r.ev.ToArray());
     }
 }

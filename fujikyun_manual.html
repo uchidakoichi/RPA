@@ -132,7 +132,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h3 id="整えて仕上げる">整えて仕上げる</h3>
 <ol><li><strong>日本語のコメントを差し込みに置き換えます。</strong><ol><li>コメントのブロックを選んで、「追加」の行から <strong>［📝 文字列貼付］</strong>（TEXT）を足します（選んだブロックのすぐ後ろに入ります）。</li><li>［＋ 差し込みを追加 ▼］から <code>{{氏名}}</code> を選んで［OK］。</li><li>コメントのブロックを選んで <strong>Delete</strong> で消します。</li></ol></li><li><strong>記録した文字を差し込みに置き換えます。</strong> TEXT <code>000-0000-0001</code> をダブルクリックし、中身を <code>{{電話番号}}</code> に変えます。</li><li><strong>座標クリックを消します。</strong> CLICK_POS は、メモ帳の位置や大きさが変わるとずれます。SWITCH でメモ帳が前に出れば入力できるので、ここでは Delete で消します。</li><li><strong>余分な待機を消します。</strong> 考えながら操作したときの WAIT は、要らなければ消します（ステップの間には、実行の操作の「間隔」の待ちが入ります）。</li><li><strong>グループに名前を付けます。</strong> グループの始まりをダブルクリックし、名前を「1人分を入力」にします。</li><li><strong>メモ帳の起動を足します。</strong> <strong>［📁 グループ］</strong> を追加して、名前を「準備」、実行タイミングを <strong>「最初の1行だけ」</strong> にし、ドラッグでいちばん上に動かします。その中に <strong>［🚀 アプリ起動］</strong>（RUN）<code>notepad.exe</code> と <strong>［⏳ 待機］</strong>（WAIT）<code>2000</code> を入れます（レッスン2の手順4と同じです）。</li><li>開いていたメモ帳は閉じ（保存しない）、<strong>開始行 1・終了行 1</strong> にして［▶ 実行］。1人分が入ることを確かめます。</li><li>終了行を空欄（最後まで）にして実行し、5人分が入ったら <strong>［💾 本番ファイルに保存］</strong>（Ctrl+S）で保存します。</li></ol>
 <p><strong>ポイント</strong></p>
-<ul><li>記録は <strong>たたき台</strong> です。「入力した文字 → 差し込み（<code>{{列名}}</code>）」「座標クリック → 消す、または CLICK_NAME・CLICK_TEXT・CLICK_IMG」に置き換えると、どの行でも同じように動く、安定したマクロになります。</li><li>日本語入力がオンのときの文字は記録されません。記録されたコメントの場所に TEXT か CSV を入れます。</li><li>名前のあるボタンを押すと CLICK_NAME、名前のある入力欄をクリックして文字を入れると <strong>🧩 欄に入力（名前で）</strong> として記録されます。職場のシステムでは、そのまま位置が変わっても動くブロックになることがあります。</li><li>記録されるものの一覧は <a href="#page-manual/画面操作の記録-記録">操作マニュアルの「画面操作の記録」</a> にあります。</li></ul>
+<ul><li>記録は <strong>たたき台</strong> です。「入力した文字 → 差し込み（<code>{{列名}}</code>）」「座標クリック → 消す、または CLICK_NAME・CLICK_TEXT・CLICK_IMG」に置き換えると、どの行でも同じように動く、安定したマクロになります。</li><li>日本語入力がオンのときの文字は記録されません。記録されたコメントの場所に TEXT か CSV を入れます。</li><li>名前のあるボタンを押すと CLICK_NAME、名前のある入力欄をクリックして文字を入れると <strong>🧩 欄に入力（名前で）</strong> として記録されます。職場のシステムでは、そのまま位置が変わっても動くブロックになることがあります。</li><li><strong>Tab で欄を移るときも同じです。</strong> Tab で名前のある入力欄へ移って文字を入れると、そこまでの Tab は入れずに <strong>🧩 欄に入力（名前で）</strong> になります。Tab を何回押すか数えなくても、欄の並びが変わっても動きます（メモ帳の本文には名前が無いので、このレッスンでは Tab のまま残ります）。</li><li><strong>画面が出るのを待っていた間は、👀 ウィンドウ出現待ち（WAIT_FOR）になります。</strong> 間があいたあとに別のウィンドウ（確認の画面など）が前に出ると、決まった秒数待つ WAIT ではなく、出たらすぐ次へ進むブロックが入ります。PC が遅い日も、記録した間の3倍（最低10秒）まで待ちます。記録のあと、置き換えた数をログで知らせます。</li><li>記録されるものの一覧は <a href="#page-manual/画面操作の記録-記録">操作マニュアルの「画面操作の記録」</a> にあります。</li></ul>
 <hr>
 <h2 id="レッスン4値を読み取る">レッスン4：値を読み取る</h2>
 <p><strong>ゴール:</strong> 画面の値をコピーして記録し、結果をCSVで受け取る。</p>
@@ -240,7 +240,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <ul><li>毎行（ふつう）</li><li><strong>最初の1行だけ</strong>: アプリの起動、ログイン、画面を開く、ASK で値を聞くなどの「準備」に</li><li><strong>最後の1行だけ</strong>: 保存、閉じる、報告メールなどの「後片付け」に（最後の行がスキップされても実行します）</li></ul>
 <h3 id="画面操作の記録-記録">画面操作の記録（⏺ 記録）</h3>
 <ol><li>記録した操作を入れたい場所のすぐ上のブロックを選びます（何も選ばなければ最後に入ります）。</li><li>編集の行の <strong>［⏺ 記録］</strong> を押します。ボタンが <strong>［⏹ 記録終了（○件）］</strong> に変わります。</li><li>ふだんどおりに操作します。ふじキュンの画面での操作は記録しません。</li><li>終わったら <strong>［⏹ 記録終了］</strong> を押すと、「⏺ 記録した操作」グループとしてマクロに入ります。</li></ol>
-<div class="table-wrap"><table><thead><tr><th>操作</th><th>記録されるコマンド</th></tr></thead><tbody><tr><td>ウィンドウの切り替え</td><td>SWITCH（タイトルの「 - 」より後ろ、例: <code>メモ帳</code> <code>Excel</code>）</td></tr><tr><td>名前のあるボタンのクリック</td><td>CLICK_NAME（位置が変わっても動く）</td></tr><tr><td>名前のある入力欄をクリックして文字を入力</td><td>FIELD_SET（欄に入力（名前で）。位置が変わっても動く）</td></tr><tr><td>それ以外のクリック</td><td>CLICK_POS（座標。ダブルクリック・右クリックも区別）</td></tr><tr><td>Tab・Enter・矢印・F1〜F12・Ctrl+C など</td><td>KEY（同じキーの連続は <code>{TAB 3}</code> のようにまとめる）</td></tr><tr><td>半角の文字入力</td><td>TEXT</td></tr><tr><td>日本語入力（IME がオン）</td><td>「ここで日本語を入力していた」というコメント（TEXT か CSV に置き換えます）</td></tr><tr><td>操作の間があいたとき（1.2秒以上）</td><td>WAIT</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>操作</th><th>記録されるコマンド</th></tr></thead><tbody><tr><td>ウィンドウの切り替え</td><td>SWITCH（タイトルの「 - 」より後ろ、例: <code>メモ帳</code> <code>Excel</code>）</td></tr><tr><td>名前のあるボタンのクリック</td><td>CLICK_NAME（位置が変わっても動く）</td></tr><tr><td>名前のある入力欄をクリックして文字を入力</td><td>FIELD_SET（欄に入力（名前で）。位置が変わっても動く）</td></tr><tr><td>Tab で名前のある入力欄へ移って文字を入力</td><td>FIELD_SET（そこまでの Tab は入れない。Tab の回数を合わせなくても動く）</td></tr><tr><td>それ以外のクリック</td><td>CLICK_POS（座標。ダブルクリック・右クリックも区別）</td></tr><tr><td>Tab・Enter・矢印・F1〜F12・Ctrl+C など</td><td>KEY（同じキーの連続は <code>{TAB 3}</code> のようにまとめる）</td></tr><tr><td>半角の文字入力</td><td>TEXT</td></tr><tr><td>日本語入力（IME がオン）</td><td>「ここで日本語を入力していた」というコメント（TEXT か CSV に置き換えます）</td></tr><tr><td>操作の間があいたとき（1.2秒以上）</td><td>WAIT</td></tr><tr><td>間があいたあとに、別のウィンドウが前に出たとき</td><td>WAIT_FOR（ウィンドウ出現待ち。出たらすぐ次へ進み、遅いときは記録した間の3倍・最低10秒まで待つ）</td></tr></tbody></table></div>
 <p>記録はあくまで <strong>たたき台</strong> です。記録したあと、入力した文字を TEXT や CSV（差し込み）に置き換え、座標クリックを CLICK_NAME・CLICK_TEXT・CLICK_IMG に置き換えると、ずっと安定します。最初の記録だけ、準備（小さな C# のコンパイル）に数秒かかります。</p>
 <h3 id="部品を指して名前を入れる-部品を指す">部品を指して名前を入れる（🎯 部品を指す）</h3>
 <p>「欄に入力（名前で）」「欄の値を読む（名前で）」「表を読み取ってCSVに保存」「名前でクリック」の編集画面には、次の2つのボタンがあります。名前を調べて打ち込む必要はありません。</p>
@@ -6075,6 +6075,12 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h1 id="更新履歴">更新履歴</h1>
 <p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
+<hr>
+<h2 id="20261103">2026.11.03</h2>
+<p><strong>新しくなったこと</strong></p>
+<ul><li>［⏺ 記録］で、Tab の回数と待つ秒数を合わせなくてよくなりました。<ul><li>Tab で名前のある入力欄へ移って文字を入れると、そこまでの Tab は入れずに <strong>🧩 欄に入力（名前で）</strong> にします。欄の並びが変わっても動きます。</li><li>間があいたあとに別のウィンドウ（確認の画面など）が前に出たときは、WAIT ではなく <strong>ウィンドウ出現待ち</strong> にします。出たらすぐ次へ進み、PC が遅いときは記録した間の3倍（最低10秒）まで待ちます。</li><li>置き換えた数は、記録のあとにログで知らせます。</li></ul></li></ul>
+<p><strong>直したこと</strong></p>
+<ul><li>記録で、Windows Forms で作られた画面の入力欄に、実行のたびに変わる番号（ウィンドウの番号）を欄の名前として入れることがあったのを直しました。</li></ul>
 <hr>
 <h2 id="20261101">2026.11.01</h2>
 <p><strong>新しくなったこと</strong></p>
