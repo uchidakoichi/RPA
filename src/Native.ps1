@@ -25,6 +25,7 @@ function Get-FujiNativeType {
         @($u, 'FindWindowEx', [IntPtr], [type[]]@([IntPtr], [IntPtr], [string], [string]), $wide),
         @($u, 'GetWindowTextLength', [int], [type[]]@([IntPtr]), $wide),
         @($u, 'GetWindowText', [int], [type[]]@([IntPtr], [System.Text.StringBuilder], [int]), $wide),
+        @($u, 'GetClassName', [int], [type[]]@([IntPtr], [System.Text.StringBuilder], [int]), $wide),
         @($u, 'IsWindowVisible', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'IsIconic', [bool], [type[]]@([IntPtr]), $auto),
         @($u, 'ShowWindow', [bool], [type[]]@([IntPtr], [int]), $auto),
@@ -61,6 +62,11 @@ function Get-FujiNativeType {
     $script:FujiNative = $tb.CreateType()
     return $script:FujiNative
 }
+
+# Windows of these classes are never the window a macro means. Windows 11 shows browser tabs in
+# Alt+Tab through one proxy window per tab (explorer.exe), titled like the tab: brought to the front,
+# it takes no keys, so SWITCH "a page title" sent keys and pastes nowhere (VM probe with Edge).
+$script:FujiSkipWindowClasses = @('Windows.Internal.Shell.TabProxyWindow')
 
 # The window a title means, the WScript AppActivate way: a title equal to it, else one starting
 # with it, else one ending with it (case ignored). Windows: @(@{ Handle; Title }, ...). $null if none.
