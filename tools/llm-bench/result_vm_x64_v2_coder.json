@@ -1,0 +1,419 @@
+{
+    "summary":  {
+                    "model":  "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+                    "loadMs":  2100,
+                    "peakMb":  1218,
+                    "extract":  "4/8",
+                    "extractFields":  "26/32",
+                    "classify":  "8/10",
+                    "judge":  "6/10",
+                    "invalidJson":  0,
+                    "medianMs":  11083,
+                    "maxMs":  42761,
+                    "promptTokPerSec":  9.6,
+                    "genTokPerSec":  7.5
+                },
+    "rows":  [
+                 {
+                     "task":  "extract",
+                     "input":  "お世話になります。児童手当の申請をしたく連絡しました。申請者は見本太郎、昭和60年4月3日生まれです。連絡先は090-1234-5678です。",
+                     "expect":  {
+                                    "name":  "見本太郎",
+                                    "birth":  "1985-04-03",
+                                    "phone":  "09012345678",
+                                    "kind":  "児童手当"
+                                },
+                     "got":  "{\n  \"name\": \"見本太郎\",\n  \"birth\": \"昭和60年4月3日\",\n  \"phone\": \"090-1234-5678\",\n  \"kind\": \"児童手当\"\n}",
+                     "ok":  4,
+                     "ms":  28698,
+                     "promptTokens":  224,
+                     "outTokens":  62,
+                     "promptPerSec":  10.948026784347528,
+                     "genPerSec":  7.432392339664717
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "【住民票の写しの交付申請】氏名：試験 花子／生年月日：平成2年12月25日／電話：0466-12-3456",
+                     "expect":  {
+                                    "name":  "試験花子",
+                                    "birth":  "1990-12-25",
+                                    "phone":  "0466123456",
+                                    "kind":  "住民票"
+                                },
+                     "got":  "{\n  \"name\": \"試験 花子\",\n  \"birth\": \"平成2年12月25日\",\n  \"phone\": \"0466-12-3456\",\n  \"kind\": \"住民票\"\n}",
+                     "ok":  4,
+                     "ms":  13976,
+                     "promptTokens":  219,
+                     "outTokens":  63,
+                     "promptPerSec":  9.676727690601401,
+                     "genPerSec":  7.695079257454639
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "電話番号 080 9876 5432、名前は架空次郎（かくうじろう）です。1979年7月1日生まれ。国民健康保険の加入手続きについて。",
+                     "expect":  {
+                                    "name":  "架空次郎",
+                                    "birth":  "1979-07-01",
+                                    "phone":  "08098765432",
+                                    "kind":  "国民健康保険"
+                                },
+                     "got":  "{\n  \"name\": \"架空次郎\",\n  \"birth\": \"1979-07-01\",\n  \"phone\": \"080 9876 5432\",\n  \"kind\": \"国民健康保険\"\n}",
+                     "ok":  4,
+                     "ms":  14332,
+                     "promptTokens":  222,
+                     "outTokens":  63,
+                     "promptPerSec":  9.659617614377115,
+                     "genPerSec":  7.662148676580086
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "令和3年5月10日生まれの子（見本 さくら）の児童手当です。保護者の電話は070-1111-2222。",
+                     "expect":  {
+                                    "name":  "見本さくら",
+                                    "birth":  "2021-05-10",
+                                    "phone":  "07011112222",
+                                    "kind":  "児童手当"
+                                },
+                     "got":  "{\n  \"name\": \"さくら\",\n  \"birth\": \"1990-05-10\",\n  \"phone\": \"070-1111-2222\",\n  \"kind\": \"児童手当\"\n}",
+                     "ok":  2,
+                     "ms":  13185,
+                     "promptTokens":  213,
+                     "outTokens":  62,
+                     "promptPerSec":  9.695035989494382,
+                     "genPerSec":  7.731682724695692
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "粗大ごみの回収をお願いしたいです。仮名一郎、電話0466-98-7654。生年月日は書かなくていいですよね？",
+                     "expect":  {
+                                    "name":  "仮名一郎",
+                                    "birth":  "",
+                                    "phone":  "0466987654",
+                                    "kind":  "ごみ"
+                                },
+                     "got":  "{\n  \"name\": \"一郎\",\n  \"birth\": \"\",\n  \"phone\": \"0466-98-7654\",\n  \"kind\": \"ごみ\"\n}",
+                     "ok":  3,
+                     "ms":  11083,
+                     "promptTokens":  212,
+                     "outTokens":  46,
+                     "promptPerSec":  9.699593878004329,
+                     "genPerSec":  7.620701754861331
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "申請者：見本 由美子（昭和45年1月31日生）TEL 045-123-4567 件名：住民税の証明書",
+                     "expect":  {
+                                    "name":  "見本由美子",
+                                    "birth":  "1970-01-31",
+                                    "phone":  "0451234567",
+                                    "kind":  "住民税"
+                                },
+                     "got":  "{\n  \"name\": \"由美子\",\n  \"birth\": \"1945-01-31\",\n  \"phone\": \"045-123-4567\",\n  \"kind\": \"住民税\"\n}",
+                     "ok":  2,
+                     "ms":  13009,
+                     "promptTokens":  215,
+                     "outTokens":  59,
+                     "promptPerSec":  9.71813199900325,
+                     "genPerSec":  7.704375155249802
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "平成31年4月30日生まれの試験ゆうと（電話090-2222-3333）について、児童手当の住所変更をしたいです。",
+                     "expect":  {
+                                    "name":  "試験ゆうと",
+                                    "birth":  "2019-04-30",
+                                    "phone":  "09022223333",
+                                    "kind":  "児童手当"
+                                },
+                     "got":  "{\n  \"name\": \"試験ゆうと\",\n  \"birth\": \"1998-04-30\",\n  \"phone\": \"090-2222-3333\",\n  \"kind\": \"児童手当\"\n}",
+                     "ok":  3,
+                     "ms":  13856,
+                     "promptTokens":  216,
+                     "outTokens":  65,
+                     "promptPerSec":  9.750809046295036,
+                     "genPerSec":  7.714471963680267
+                 },
+                 {
+                     "task":  "extract",
+                     "input":  "国保の保険証の再発行。氏名 架空 美紀、1992/3/8生、連絡先 080-5555-6666",
+                     "expect":  {
+                                    "name":  "架空美紀",
+                                    "birth":  "1992-03-08",
+                                    "phone":  "08055556666",
+                                    "kind":  "国民健康保険"
+                                },
+                     "got":  "{\n  \"name\": \"架空 美紀\",\n  \"birth\": \"1992/3/8\",\n  \"phone\": \"080-5555-6666\",\n  \"kind\": \"国民健康保険\"\n}",
+                     "ok":  4,
+                     "ms":  14019,
+                     "promptTokens":  218,
+                     "outTokens":  63,
+                     "promptPerSec":  9.664250143928296,
+                     "genPerSec":  7.562457667008644
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "引っ越したので住所の変更をしたいのですが、何を持っていけばいいですか。",
+                     "expect":  "住民票",
+                     "got":  "{\n  \"kind\": \"住民票\"\n}",
+                     "ok":  true,
+                     "ms":  10351,
+                     "promptTokens":  99,
+                     "outTokens":  12,
+                     "promptPerSec":  11.073467535557295,
+                     "genPerSec":  7.931300516976588
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "今年の住民税の通知書が届きません。",
+                     "expect":  "住民税",
+                     "got":  "{\n  \"kind\": \"住民税\"\n}",
+                     "ok":  true,
+                     "ms":  3097,
+                     "promptTokens":  93,
+                     "outTokens":  12,
+                     "promptPerSec":  10.265827910504793,
+                     "genPerSec":  8.379235036781033
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "子どもが生まれたので手当の手続きを教えてください。",
+                     "expect":  "児童手当",
+                     "got":  "{\n  \"kind\": \"児童手当\"\n}",
+                     "ok":  true,
+                     "ms":  3335,
+                     "promptTokens":  93,
+                     "outTokens":  14,
+                     "promptPerSec":  10.294226140128437,
+                     "genPerSec":  8.339416830995944
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "会社を辞めたので、保険証を切り替えたいです。",
+                     "expect":  "国民健康保険",
+                     "got":  "{\n  \"kind\": \"国民健康保険\"\n}",
+                     "ok":  true,
+                     "ms":  3892,
+                     "promptTokens":  98,
+                     "outTokens":  14,
+                     "promptPerSec":  10.185405376919784,
+                     "genPerSec":  8.087046479988604
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "冷蔵庫を捨てたいのですが、どうすればいいですか。",
+                     "expect":  "ごみ",
+                     "got":  "{\n  \"kind\": \"ごみ\"\n}",
+                     "ok":  true,
+                     "ms":  3087,
+                     "promptTokens":  94,
+                     "outTokens":  11,
+                     "promptPerSec":  10.302480837385643,
+                     "genPerSec":  8.218588145179716
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "市役所の駐車場は何時まで使えますか。",
+                     "expect":  "その他",
+                     "got":  "{\n  \"kind\": \"ごみ\"\n}",
+                     "ok":  false,
+                     "ms":  3136,
+                     "promptTokens":  94,
+                     "outTokens":  11,
+                     "promptPerSec":  10.282748524560885,
+                     "genPerSec":  7.889172899113257
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "マイナンバーカードで住民票の写しをコンビニで取れますか。",
+                     "expect":  "住民票",
+                     "got":  "{\n  \"kind\": \"住民票\"\n}",
+                     "ok":  true,
+                     "ms":  3951,
+                     "promptTokens":  102,
+                     "outTokens":  12,
+                     "promptPerSec":  10.346088144072727,
+                     "genPerSec":  8.35514532635957
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "固定資産税ではなく、市県民税の納付書を再発行してほしい。",
+                     "expect":  "住民税",
+                     "got":  "{\n  \"kind\": \"住民税\"\n}",
+                     "ok":  true,
+                     "ms":  3995,
+                     "promptTokens":  102,
+                     "outTokens":  12,
+                     "promptPerSec":  10.28107703039848,
+                     "genPerSec":  8.212178810488297
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "資源ごみの収集日が祝日の場合はどうなりますか。",
+                     "expect":  "ごみ",
+                     "got":  "{\n  \"kind\": \"ごみ\"\n}",
+                     "ok":  true,
+                     "ms":  3371,
+                     "promptTokens":  97,
+                     "outTokens":  11,
+                     "promptPerSec":  10.235566920136524,
+                     "genPerSec":  8.357982416476592
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "高額療養費の申請は国保の窓口でいいですか。",
+                     "expect":  "国民健康保険",
+                     "got":  "{\n  \"kind\": \"住民票\"\n}",
+                     "ok":  false,
+                     "ms":  3667,
+                     "promptTokens":  98,
+                     "outTokens":  12,
+                     "promptPerSec":  10.24188208387567,
+                     "genPerSec":  7.86831023745845
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 照会ボタンを押した\n画面のタイトル: 基幹システム\n画面の文字: 該当するデータがありません。\nボタン: OK",
+                     "expect":  [
+                                    "SKIP_ROW"
+                                ],
+                     "got":  "{\n  \"reason\": \"画面の文字が「該当するデータがありません」で表示され、照会ボタンが押されたため、該当するデータが存在しません。\",\n  \"action\": \"SKIP_ROW\"\n}",
+                     "ok":  true,
+                     "ms":  42761,
+                     "promptTokens":  389,
+                     "outTokens":  51,
+                     "promptPerSec":  10.990599703344218,
+                     "genPerSec":  6.816394683430271
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 保存ボタンを押した\n画面のタイトル: 確認\n画面の文字: 保存しました。\nボタン: OK",
+                     "expect":  [
+                                    "CLOSE_ENTER"
+                                ],
+                     "got":  "{\n  \"reason\": \"保存ボタンが押されたが、画面のタイトルが「確認」で「保存しました」が表示されない\",\n  \"action\": \"CLOSE_ESC\"\n}",
+                     "ok":  false,
+                     "ms":  9767,
+                     "promptTokens":  382,
+                     "outTokens":  42,
+                     "promptPerSec":  8.614342474839786,
+                     "genPerSec":  7.081354224364591
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 次の人を照会した\n画面のタイトル: 基幹システム\n画面の文字: セッションの有効期限が切れました。もう一度ログインしてください。\nボタン: OK",
+                     "expect":  [
+                                    "STOP",
+                                    "ASK_HUMAN"
+                                ],
+                     "got":  "{\n  \"reason\": \"パスワードの有効期限が切れています\",\n  \"action\": \"STOP\"\n}",
+                     "ok":  true,
+                     "ms":  9493,
+                     "promptTokens":  398,
+                     "outTokens":  27,
+                     "promptPerSec":  8.622610415975421,
+                     "genPerSec":  7.082614062094368
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 登録ボタンを押した\n画面のタイトル: 確認\n画面の文字: 同じ番号のデータがあります。上書きしますか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "ASK_HUMAN",
+                                    "STOP"
+                                ],
+                     "got":  "{\n  \"reason\": \"画面の文字が「同じ番号のデータがあります。上書きしますか？」であるため、上書きを確認するためのボタンが表示されている。\",\n  \"action\": \"ASK_HUMAN\"\n}",
+                     "ok":  true,
+                     "ms":  13223,
+                     "promptTokens":  399,
+                     "outTokens":  50,
+                     "promptPerSec":  8.57963185304403,
+                     "genPerSec":  6.757369877189629
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 検索ボタンを押した\n画面のタイトル: お知らせ\n画面の文字: サーバーが混み合っています。しばらくしてからもう一度お試しください。\nボタン: OK",
+                     "expect":  [
+                                    "RETRY"
+                                ],
+                     "got":  "{\n  \"reason\": \"サーバーが混み合っています。しばらくしてからもう一度お試しください。\",\n  \"action\": \"CLOSE_ESC\"\n}",
+                     "ok":  false,
+                     "ms":  11278,
+                     "promptTokens":  401,
+                     "outTokens":  36,
+                     "promptPerSec":  8.550150910163566,
+                     "genPerSec":  6.930104353511355
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 生年月日を入力した\n画面のタイトル: 入力エラー\n画面の文字: 生年月日の形式が正しくありません。\nボタン: OK",
+                     "expect":  [
+                                    "SKIP_ROW"
+                                ],
+                     "got":  "{\n  \"reason\": \"生年月日の形式が正しくありません。\",\n  \"action\": \"SKIP_ROW\"\n}",
+                     "ok":  true,
+                     "ms":  8749,
+                     "promptTokens":  390,
+                     "outTokens":  26,
+                     "promptPerSec":  8.431669350078895,
+                     "genPerSec":  6.683233958099866
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 画面を開いた\n画面のタイトル: お知らせ\n画面の文字: 本日17時から18時までシステムの保守を行います。\nボタン: 閉じる",
+                     "expect":  [
+                                    "CLOSE_ENTER",
+                                    "CLOSE_ESC"
+                                ],
+                     "got":  "{\n  \"reason\": \"画面のタイトルが「お知らせ」で、画面の文字が「本日17時から18時までシステムの保守を行います。」で、ボタンが「閉じる」\",\n  \"action\": \"CLOSE_ESC\"\n}",
+                     "ok":  true,
+                     "ms":  14380,
+                     "promptTokens":  395,
+                     "outTokens":  61,
+                     "promptPerSec":  8.448572460889402,
+                     "genPerSec":  6.824940059963923
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 削除ボタンを押した\n画面のタイトル: 確認\n画面の文字: 選んだ3件を削除します。元に戻せません。よろしいですか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "ASK_HUMAN",
+                                    "STOP"
+                                ],
+                     "got":  "{\n  \"reason\": \"削除ボタンを押したが、確認画面で確認が求められました。\",\n  \"action\": \"SKIP_ROW\"\n}",
+                     "ok":  false,
+                     "ms":  12480,
+                     "promptTokens":  407,
+                     "outTokens":  34,
+                     "promptPerSec":  7.9933062157032975,
+                     "genPerSec":  6.519949365678078
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 印刷ボタンを押した\n画面のタイトル: Windows セキュリティ\n画面の文字: このアプリがデバイスに変更を加えることを許可しますか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "STOP",
+                                    "ASK_HUMAN"
+                                ],
+                     "got":  "{\n  \"reason\": \"ユーザーが「はい」を選択した\",\n  \"action\": \"CLOSE_ENTER\"\n}",
+                     "ok":  false,
+                     "ms":  10870,
+                     "promptTokens":  405,
+                     "outTokens":  27,
+                     "promptPerSec":  8.15606989285837,
+                     "genPerSec":  6.542771734521501
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 次へを押した\n画面のタイトル: 処理中\n画面の文字: 処理しています。しばらくお待ちください。\nボタン: なし",
+                     "expect":  [
+                                    "RETRY"
+                                ],
+                     "got":  "{\n  \"reason\": \"画面の文字が「処理しています。しばらくお待ちください。」で表示されており、操作が完了していないため、RETRYを選択した\",\n  \"action\": \"RETRY\"\n}",
+                     "ok":  true,
+                     "ms":  13148,
+                     "promptTokens":  389,
+                     "outTokens":  50,
+                     "promptPerSec":  7.872283150280349,
+                     "genPerSec":  6.193600317112336
+                 }
+             ]
+}
