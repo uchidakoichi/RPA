@@ -1,0 +1,102 @@
+[
+    {
+        "summary":  {
+                        "model":  "gemma-4-E2B_q4_0-it.gguf",
+                        "loadMs":  4716,
+                        "peakMb":  1689,
+                        "cats":  {
+                                     "macro":  "0/0 (0/0)",
+                                     "explain":  "0/0 (0/0)",
+                                     "debug":  "0/0 (0/0)",
+                                     "agent":  "0/0 (0/0)",
+                                     "summary":  "0/0 (0/0)",
+                                     "write":  "0/0 (0/0)",
+                                     "table":  "0/0 (0/0)",
+                                     "match":  "5/5 (5/5)",
+                                     "calc":  "0/0 (0/0)"
+                                 },
+                        "invalidJson":  0,
+                        "medianMs":  130120,
+                        "maxMs":  252383,
+                        "promptTokPerSec":  7,
+                        "genTokPerSec":  3.9
+                    },
+        "rows":  [
+                     {
+                         "id":  "match1",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"生年月日、住所が一致し、漢字の旧字（髙）と新字（高）は同じとみなされるため、同じ人物であると判断します。\",\n  \"same\": true\n}",
+                         "thinking":  "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as a help for municipal record matching (名寄せ). I need to determine if two records refer to the same person based on specific criteria.\n2.  **Identify Matching Criteria:**\n    *   Name (Kanji/Old vs. New characters, full-width vs. half-width, spacing).\n    *   Date of Birth (Must be the same).\n    *   Address (Must be the same).\n3.  **Analyze Record 1:**\n    *   Name: 髙橋 一郎 (Takahashi Ichirō)\n    *   DOB: 昭和50年5月5日 (May 5, 1975)\n    *   Address: 藤沢市朝日町1-1\n4.  **Analyze Record 2:**\n    *   Name: 高橋一郎 (Takahashi Ichirō)\n    *   DOB: 昭和50年5月5日 (May 5, 1975)\n    *   Address: 藤沢市朝日町1-1\n5.  **Compare Records based on Rules:**\n    *   **DOB:** 昭和50年5月5日 (Match)\n    *   **Address:** 藤沢市朝日町1-1 (Match)\n    *   **Name Comparison:**\n        *   Record 1 uses 髙 (Taka/High) - Katakana/Kanji variant.\n        *   Record 2 uses 高 (Taka/High) - Standard Kanji.\n        *   The rule states: \"漢字の旧字と新字（髙と高、齋と斉など）、全角と半角、空白の有無は同じとみなします。\" (Old/New kanji, full-width/half-width, presence/absence of space are considered the same.)\n        *   Since 髙 and 高 are considered the same type of character (variant/old vs. new), they match.\n        *   一郎 (Ichirō) matches.\n6.  **Conclusion:** All criteria match.\n7.  **Formulate the Answer:** State clearly that they are the same person. (Self-Correction: Ensure the tone is appropriate for a record matching assistant.)",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  164530,
+                         "promptTokens":  139,
+                         "outTokens":  559,
+                         "promptPerSec":  6.728798487830823,
+                         "genPerSec":  3.8795943017853807
+                     },
+                     {
+                         "id":  "match2",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"姓（齋藤と斉藤）の旧字・新字の区別は同じとみなされ、名と生年月日が完全に一致しています。\",\n  \"same\": true\n}",
+                         "thinking":  "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as a municipal office staff helping with name matching (名寄せ). I need to determine if two records refer to the same person based on specific criteria.\n\n2.  **Identify the Matching Criteria:**\n    *   **Name:** Check for old/new kanji differences (e.g., 髙 vs 高, 齋 vs 斉).\n    *   **Format:** Check for full-width vs. half-width characters, and presence/absence of spaces.\n    *   **Date of Birth (DOB):** Must be the same.\n\n3.  **Analyze Record 1:**\n    *   Name: 齋藤 花子 (Saitō Hanako)\n    *   DOB: 平成元年1月10日生まれ (Born January 10, Heisei 1)\n\n4.  **Analyze Record 2:**\n    *   Name: 斉藤花子 (Saitō Hanako)\n    *   DOB: 平成元年1月10日生まれ (Born January 10, Heisei 1)\n\n5.  **Compare Records based on Criteria:**\n    *   **Name Comparison:**\n        *   Record 1: 齋藤 (Saitō)\n        *   Record 2: 斉藤 (Saitō)\n        *   *Rule Check:* The prompt states that old/new kanji (齋 vs 斉) are considered the same. (Match)\n        *   Record 1: 花子 (Hanako)\n        *   Record 2: 花子 (Hanako) (Match)\n    *   **DOB Comparison:**\n        *   Record 1: 平成元年1月10日生まれ\n        *   Record 2: 平成元年1月10日生まれ\n        *   *Rule Check:* Dates must be the same. (Match)\n\n6.  **Conclusion:** All criteria match.\n\n7.  **Formulate the Answer:** State clearly that they are the same person. (Self-Correction: Ensure the tone is appropriate for a municipal assistant.)",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  130120,
+                         "promptTokens":  121,
+                         "outTokens":  521,
+                         "promptPerSec":  7.339382207502682,
+                         "genPerSec":  4.190372186359486
+                     },
+                     {
+                         "id":  "match3",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"生年月日が昭和60年と昭和61年で異なっているため、別の人と判断されます。\",\n  \"same\": false\n}",
+                         "thinking":  "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as an assistant for municipal record matching (名寄せ). I need to determine if two records refer to the same person based on specific criteria.\n2.  **Identify Matching Criteria:**\n    *   Name (Kanji/Old vs. New characters, full-width vs. half-width, spacing).\n    *   Date of Birth (Must be the same).\n3.  **Analyze Record 1:**\n    *   Name: 見本 太郎 (Mimoto Tarō)\n    *   Date of Birth: 昭和60年4月3日 (Shōwa 60, April 3rd)\n4.  **Analyze Record 2:**\n    *   Name: 見本 太郎 (Mimoto Tarō)\n    *   Date of Birth: 昭和61年4月3日 (Shōwa 61, April 3rd)\n5.  **Compare Records:**\n    *   Name: Identical (見本 太郎).\n    *   Date of Birth: Different (昭和60年 vs. 昭和61年).\n6.  **Apply Rule:** The instruction states: \"生年月日が違えば別の人です (If the date of birth is different, they are different people).\"\n7.  **Conclusion:** The records refer to different people.\n8.  **Formulate Response:** State the conclusion clearly based on the rule.",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  91992,
+                         "promptTokens":  121,
+                         "outTokens":  372,
+                         "promptPerSec":  7.315667216283878,
+                         "genPerSec":  4.316538442399094
+                     },
+                     {
+                         "id":  "match4",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"生年月日が完全に一致しており、名前の表記（文字の種類やスペースの有無）の差異は、名寄せのルールに基づき同一人物と判断して\",\"same\"\n  : true\n}",
+                         "thinking":  "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as an assistant for municipal record matching (名寄せ). I need to determine if two records refer to the same person based on specific criteria.\n2.  **Identify Matching Criteria:**\n    *   Name (Kanji/Kana): Old vs. New characters (e.g., 髙/高, 齋/斉), full-width vs. half-width, presence/absence of spaces.\n    *   Date of Birth (DOB): Must be the same.\n3.  **Analyze Record 1:** ﾐﾎﾝ ﾀﾛｳ、1985年4月3日生まれ\n4.  **Analyze Record 2:** ミホン タロウ、1985年4月3日生まれ\n5.  **Compare Record 1 and Record 2:**\n\n    *   **Name Comparison:**\n        *   Record 1: ﾐﾎﾝ ﾀﾛｳ (Hiragana/Katakana mix, space between ﾐﾎﾝ and ﾀﾛｳ)\n        *   Record 2: ミホン タロウ (Katakana/Kanji mix, space between ミホン and タロウ)\n        *   *Rule Check:* The prompt states that \"漢字の旧字と新字（髙と高、齋と斉など）、全角と半角、空白の有無は同じとみなします\" (Old/New kanji, full/half-width, presence/absence of space are considered the same).\n        *   *Interpretation:* The core components are the same (Miho/Mihon, Tarou/Taro). The difference is the character set (Hiragana/Katakana vs. Kanji/Katakana) and the spacing. Since the prompt focuses on *character* differences (like 髙 vs 高), and the prompt doesn\u0027t explicitly state that Hiragana/Katakana differences are ignored, I must look closely at the provided examples.\n        *   *Re-evaluating the prompt\u0027s focus:* The prompt emphasizes *Kanji* differences (旧字と新字). The provided examples are:\n            *   髙と高 (Kanji variation)\n            *   齋と斉 (Kanji variation)\n            *   全角と半角 (Width variation)\n            *   空白の有無 (Spacing variation)\n        *   *Applying the rule to the input:*\n            *   Record 1: ﾐﾎﾝ ﾀﾛｳ (Hiragana/Katakana, space)\n            *   Record 2: ミホン タロウ (Katakana/Kanji, space)\n            *   The prompt implies that if the *sound* and *structure* are the same, it matches. The difference here is primarily the character type (Hiragana/Katakana vs. Kanji/Katakana). In many Japanese systems, these are treated as variations of the same name.\n    *   **Date of Birth Comparison:**\n        *   Record 1: 1985年4月3日\n        *   Record 2: 1985年4月3日\n        *   *Result:* Identical.\n\n6.  **Conclusion:** The dates of birth match perfectly. The names are phonetically and structurally identical, differing only in the specific character set used (Hiragana/Katakana vs. Kanji/Katakana). Given the constraints of the matching task, they are considered the same person.\n\n7.  **Final Output Generation.** (State the conclusion clearly.)",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  252383,
+                         "promptTokens":  127,
+                         "outTokens":  828,
+                         "promptPerSec":  7.331312725795268,
+                         "genPerSec":  3.3683175126134324
+                     },
+                     {
+                         "id":  "match5",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"名前（漢字）が異なります（花子と華子）。\",\n  \"same\": false\n}",
+                         "thinking":  "Thinking Process:\n\n1.  **Analyze the Request:** The user wants me to act as an assistant for municipal record matching (名寄せ). I need to determine if two records refer to the same person based on specific criteria.\n2.  **Identify Matching Criteria:**\n    *   Name (Kanji/Characters): Old vs. New characters (e.g., 髙/高, 齋/斉), full-width vs. half-width, presence/absence of spaces.\n    *   Date of Birth (DOB): Must be the same.\n3.  **Analyze the Input Records:**\n    *   Record 1: 試験 花子、平成2年12月25日生まれ\n    *   Record 2: 試験 華子、平成2年12月25日生まれ\n4.  **Compare Records based on Criteria:**\n    *   **Name Comparison:**\n        *   Record 1: 花子 (Kanji: か/は/こ)\n        *   Record 2: 華子 (Kanji: か/は/こ)\n        *   The characters are different (花 vs. 華).\n    *   **DOB Comparison:**\n        *   Record 1: 平成2年12月25日生まれ\n        *   Record 2: 平成2年12月25日生まれ\n        *   The DOB is the same.\n5.  **Determine the Result:** Since the names (花子 and 華子) are different, they are considered different people, even though the dates of birth match.\n6.  **Formulate the Output:** State the conclusion clearly based on the rules provided. (The names are different, so they are not the same person.)",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  125547,
+                         "promptTokens":  122,
+                         "outTokens":  417,
+                         "promptPerSec":  6.496509136907001,
+                         "genPerSec":  3.5078726528221167
+                     }
+                 ]
+    }
+]
