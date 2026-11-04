@@ -1,0 +1,631 @@
+[
+    {
+        "summary":  {
+                        "model":  "Qwen3-1.7B-Q4_K_M-rq.gguf",
+                        "loadMs":  2618,
+                        "peakMb":  2295,
+                        "cats":  {
+                                     "macro":  "2/5 (10/18)",
+                                     "explain":  "2/3 (5/6)",
+                                     "debug":  "2/4 (7/9)",
+                                     "agent":  "3/6 (7/10)",
+                                     "summary":  "1/3 (4/11)",
+                                     "write":  "2/3 (11/12)",
+                                     "table":  "3/4 (10/11)",
+                                     "match":  "3/5 (3/5)",
+                                     "calc":  "1/4 (1/4)"
+                                 },
+                        "invalidJson":  0,
+                        "medianMs":  16792,
+                        "maxMs":  92913,
+                        "promptTokPerSec":  9.3,
+                        "genTokPerSec":  6
+                    },
+        "rows":  [
+                     {
+                         "id":  "macro1",
+                         "cat":  "macro",
+                         "got":  "{\"steps\": [{\"cmd\": \"SWITCH\", \"val\": \"基幹システム\"}, {\"cmd\": \"RUN\", \"val\": \"notepad.exe\"}, {\"cmd\": \"TEXT\", \"val\": \"CSVの氏名,CSVのカナ\"}, {\"cmd\": \"RECORD\", \"val\": \"{\\\"name\\\":\\\"列名\\\",\\\"value\\\":\\\"氏名\\\",\\\"value2\\\":\\\"カナ\\\"}\"}, {\"cmd\": \"IF_START\", \"val\": \"{\\\"left\\\":\\\"氏名\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"{{列名}}\\\"}\"}, {\"cmd\": \"IF_END\", \"val\": \"{\\\"left\\\":\\\"カナ\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"{{列名}}\\\"}\"}, {\"cmd\": \"CLICK_NAME\", \"val\": \"登録\"}, {\"cmd\": \"CONFIRM\", \"val\": \"OK\"}]}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        false,
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  92913,
+                         "promptTokens":  576,
+                         "outTokens":  169,
+                         "promptPerSec":  9.956385500183917,
+                         "genPerSec":  4.798203141469278
+                     },
+                     {
+                         "id":  "macro2",
+                         "cat":  "macro",
+                         "got":  "{\"steps\": [{\"cmd\": \"SWITCH\", \"val\": \"メモ帳\"}, {\"cmd\": \"RUN\", \"val\": \"notepad.exe\"}, {\"cmd\": \"TEXT\", \"val\": \"処理を始めます\"}]}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  13957,
+                         "promptTokens":  556,
+                         "outTokens":  51,
+                         "promptPerSec":  6.486063071974097,
+                         "genPerSec":  5.043031176422175
+                     },
+                     {
+                         "id":  "macro3",
+                         "cat":  "macro",
+                         "got":  "{\n  \"steps\": [\n    {\n      \"cmd\": \"RUN\",\n      \"val\": \"notepad.exe\"\n    },\n    {\n      \"cmd\": \"FIELD_SET\",\n      \"val\": \"{\\\"name\\\":\\\"宛名番号\\\",\\\"text\\\":\\\"{{CSV}}\\\"}\"\n    },\n    {\n      \"cmd\": \"RUN\",\n      \"val\": \"検索\"\n    },\n    {\n      \"cmd\": \"IF_START\",\n      \"val\": \"{\\\"left\\\":\\\"状態\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"該当なし\\\"}\"\n    },\n    {\n      \"cmd\": \"IF_END\",\n      \"val\": \"{\\\"left\\\":\\\"状態\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"該当なし\\\"}\"\n    },\n    {\n      \"cmd\": \"IF_START\",\n      \"val\": \"{\\\"left\\\":\\\"状態\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"該当なし\\\"}\"\n    },\n    {\n      \"cmd\": \"IF_END\",\n      \"val\": \"{\\\"left\\\":\\\"状態\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"該当なし\\\"}\"\n    },\n    {\n      \"cmd\": \"SCREENSHOT\",\n      \"val\": \"{\\\"name\\\":\\\"状態\\\",\\\"scope\\\":\\\"WINDOW\\\"}\"\n    }\n  ]\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        false,
+                                        false,
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  60682,
+                         "promptTokens":  605,
+                         "outTokens":  246,
+                         "promptPerSec":  9.835228450719407,
+                         "genPerSec":  4.620039032729771
+                     },
+                     {
+                         "id":  "macro4",
+                         "cat":  "macro",
+                         "got":  "{\n  \"steps\": [\n    {\n      \"cmd\": \"FILE_OP\",\n      \"val\": \"{\\\"op\\\":\\\"COPY\\\"\\\",\\\"src\\\":\\\"受付一覧.xlsx\\\",\\\"dest\\\":\\\"C:\\\\\\\\共有\\\\\\\\控え\\\\\\\\\\\"}\"\n    },\n    {\n      \"cmd\": \"MAIL\",\n      \"val\": \"{\\\"to\\\":\\\"tantou@example.lg.jp\\\",\\\"subject\\\":\\\"本日分の受付一覧を保存しました\\\",\\\"body\\\":\\\"\\\"}\"\n    }\n  ]\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  29369,
+                         "promptTokens":  593,
+                         "outTokens":  97,
+                         "promptPerSec":  6.456269483458473,
+                         "genPerSec":  4.9023522916147915
+                     },
+                     {
+                         "id":  "macro5",
+                         "cat":  "macro",
+                         "got":  "{\n  \"steps\": [\n    {\n      \"cmd\": \"SWITCH\",\n      \"val\": \"申請一覧\"\n    },\n    {\n      \"cmd\": \"CLICK_NAME\",\n      \"val\": \"削除\"\n    }\n  ]\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  14740,
+                         "promptTokens":  561,
+                         "outTokens":  52,
+                         "promptPerSec":  6.51322804048883,
+                         "genPerSec":  5.047797195740808
+                     },
+                     {
+                         "id":  "explain1",
+                         "cat":  "explain",
+                         "got":  "{\"summary\": \"住民記録システムに移動し、宛名番号を入力して照会します。\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  21518,
+                         "promptTokens":  181,
+                         "outTokens":  35,
+                         "promptPerSec":  10.165598860448917,
+                         "genPerSec":  6.142569397032741
+                     },
+                     {
+                         "id":  "explain2",
+                         "cat":  "explain",
+                         "got":  "{\n  \"summary\": \"マクロは「氏名」「住所」のフィールドを設定し、内容を確認後、「登録」ボタンをクリックします。\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  14653,
+                         "promptTokens":  171,
+                         "outTokens":  46,
+                         "promptPerSec":  9.973162758107811,
+                         "genPerSec":  6.248161999011957
+                     },
+                     {
+                         "id":  "explain3",
+                         "cat":  "explain",
+                         "got":  "{\"summary\": \"このマクロは、残高が0である場合に「完納」という結果を表示します。\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  13578,
+                         "promptTokens":  176,
+                         "outTokens":  35,
+                         "promptPerSec":  9.80191215199599,
+                         "genPerSec":  6.079146916889122
+                     },
+                     {
+                         "id":  "debug1",
+                         "cat":  "debug",
+                         "got":  "{\n  \"step\": 1,\n  \"cause\": \"WINDOW_NOT_FOUND\",\n  \"fix\": \"「住民記録システム」ウィンドウを正しく開く\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  32539,
+                         "promptTokens":  257,
+                         "outTokens":  47,
+                         "promptPerSec":  10.24417489110482,
+                         "genPerSec":  6.198876952157741
+                     },
+                     {
+                         "id":  "debug2",
+                         "cat":  "debug",
+                         "got":  "{\n  \"step\": 4,\n  \"cause\": \"TIMEOUT\",\n  \"fix\": \"増加する待機時間やエラーハンドリングを追加する\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  26887,
+                         "promptTokens":  336,
+                         "outTokens":  49,
+                         "promptPerSec":  10.202777489091034,
+                         "genPerSec":  5.69400218720859
+                     },
+                     {
+                         "id":  "debug3",
+                         "cat":  "debug",
+                         "got":  "{\n  \"step\": 2,\n  \"cause\": \"FIELD_NOT_FOUND\",\n  \"fix\": \"フィールド名が正しく指定されていないため、入力欄を正しく設定する\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  22216,
+                         "promptTokens":  289,
+                         "outTokens":  51,
+                         "promptPerSec":  10.122072190618862,
+                         "genPerSec":  6.059085780901035
+                     },
+                     {
+                         "id":  "debug4",
+                         "cat":  "debug",
+                         "got":  "{\n  \"step\": 3,\n  \"cause\": \"FIELD_NOT_FOUND\",\n  \"fix\": \"入力欄が見つからないため、エラーを発生させた\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  25079,
+                         "promptTokens":  331,
+                         "outTokens":  48,
+                         "promptPerSec":  10.115700679004645,
+                         "genPerSec":  5.8500495387173705
+                     },
+                     {
+                         "id":  "agent1",
+                         "cat":  "agent",
+                         "got":  "{\"thought\": \"目標は「C:\\\\\", \"tool\": \"ask_human\", \"arg\": \"C:\\\\受付\\\\PDFの数を教えて\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        true
+                                    ],
+                         "ok":  false,
+                         "ms":  36353,
+                         "promptTokens":  316,
+                         "outTokens":  34,
+                         "promptPerSec":  10.287667938040112,
+                         "genPerSec":  5.888428203643973
+                     },
+                     {
+                         "id":  "agent2",
+                         "cat":  "agent",
+                         "got":  "{\"thought\": \"このタスクでは、CSVファイルの内容を条件に絞って別のファイルに書き出すため、filter_csvツールを使用する必要があります。\", \"tool\": \"filter_csv\", \"arg\": \"申請.csv|種別|児童手当|児童手当.csv\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  18783,
+                         "promptTokens":  343,
+                         "outTokens":  66,
+                         "promptPerSec":  7.944568272624243,
+                         "genPerSec":  5.86631427867213
+                     },
+                     {
+                         "id":  "agent3",
+                         "cat":  "agent",
+                         "got":  "{\"thought\": \"このタスクでは、CSVファイルの行を条件に応じて別のファイルに書き出す必要があります。そのため、filter_csvツールを使用します。\", \"tool\": \"filter_csv\", \"arg\": \"申請.csv|種別|児童手当|児童手当.csv\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  18277,
+                         "promptTokens":  400,
+                         "outTokens":  68,
+                         "promptPerSec":  9.98554365611603,
+                         "genPerSec":  5.755360087110382
+                     },
+                     {
+                         "id":  "agent4",
+                         "cat":  "agent",
+                         "got":  "{\"thought\": \"目標はC:\\\\\",\n\"tool\": \"delete_file\",\n\"arg\": \"C:\\\\受付\\\\2024_申請.pdf\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  14587,
+                         "promptTokens":  344,
+                         "outTokens":  35,
+                         "promptPerSec":  7.7418439673803645,
+                         "genPerSec":  5.195781636579524
+                     },
+                     {
+                         "id":  "agent5",
+                         "cat":  "agent",
+                         "got":  "{\"thought\": \"現在、CSVファイルのフィルタリングが完了しています。次に、フィルタリングしたデータを「児童手当.csv」に書き出し、その件数を報告する必要があります。\", \"tool\": \"write_file\", \"arg\": \"児童手当.csv|[受付番号,氏名,種別]\\n1,見本太郎\\n2,試験花子\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        true
+                                    ],
+                         "ok":  false,
+                         "ms":  30660,
+                         "promptTokens":  416,
+                         "outTokens":  95,
+                         "promptPerSec":  10.02132897779453,
+                         "genPerSec":  5.4503888214612655
+                     },
+                     {
+                         "id":  "agent6",
+                         "cat":  "agent",
+                         "got":  "{\n  \"thought\": \"目標は『あのファイルを課長に送っておいて』であり、ファイルの移動を行う必要があります。しかし、『あのファイル』とは具体的に何であるかが明確ではありません。この状\",\n  \"tool\": \"ask_human\",\n  \"arg\": \"何かを送るべきファイルは何ですか？\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  16817,
+                         "promptTokens":  309,
+                         "outTokens":  79,
+                         "promptPerSec":  8.000626334747349,
+                         "genPerSec":  5.871396543283032
+                     },
+                     {
+                         "id":  "summary1",
+                         "cat":  "summary",
+                         "got":  "{\n  \"points\": [\n    \"日付: 令和8年12月1日（月）\",\n    \"時間: 午前8時30分から午後5時まで\",\n    \"場所: 市民課窓口（本庁舎）と本庁舎1階の休日窓口（毎月第2・第4土曜日）で開くための代わりの窓口が開催されるための情報です。ただし、この変更は11月27日（木\"] }",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  43658,
+                         "promptTokens":  223,
+                         "outTokens":  130,
+                         "promptPerSec":  10.286285309634716,
+                         "genPerSec":  5.879535161215487
+                     },
+                     {
+                         "id":  "summary2",
+                         "cat":  "summary",
+                         "got":  "{\"points\": [\"日付・時間・場所\", \"締め切り\", \"金額\"]}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        false,
+                                        false,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  12930,
+                         "promptTokens":  178,
+                         "outTokens":  24,
+                         "promptPerSec":  10.22783966278705,
+                         "genPerSec":  6.381204854709676
+                     },
+                     {
+                         "id":  "summary3",
+                         "cat":  "summary",
+                         "got":  "{\"points\": [\"日付・時間・場所\", \"締め切り\", \"金額\"]}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        false,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  13664,
+                         "promptTokens":  178,
+                         "outTokens":  24,
+                         "promptPerSec":  9.989599370239006,
+                         "genPerSec":  5.722728338104762
+                     },
+                     {
+                         "id":  "write1",
+                         "cat":  "write",
+                         "got":  "{\"subject\": \"住民票の写し取得について\", \"body\": \"住民票の写しは第2・第4土曜日の午前9時から正午まで、本庁舎1階の休日窓口で取得可能です。本人確認の書類が必要です。\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  24312,
+                         "promptTokens":  155,
+                         "outTokens":  68,
+                         "promptPerSec":  10.120869392874528,
+                         "genPerSec":  6.36854947920949
+                     },
+                     {
+                         "id":  "write2",
+                         "cat":  "write",
+                         "got":  "{\"subject\": \"おわびします\", \"body\": \"ご迷惑をおかけしましたことお詩ります。申し込みは受け付けているため、ご心配に感じましたことをまずお詣りいたします。収集日は11月20日（木）で、当日の朝8時30分までに出すことができます。今後もよりよいサービスを提供するために、皆様のご意見をぜひ聞かせてください。\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false,
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  false,
+                         "ms":  21750,
+                         "promptTokens":  156,
+                         "outTokens":  97,
+                         "promptPerSec":  10.13997189422037,
+                         "genPerSec":  6.6215308179149375
+                     },
+                     {
+                         "id":  "write3",
+                         "cat":  "write",
+                         "got":  "{\"subject\": \"児童手当の振込日を確認してください\", \"body\": \"12月10日に児童手当が振込まれます。口座を変えたい場合は、11月28日までに子育て支援課で手続きが必要です。\"}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  16292,
+                         "promptTokens":  148,
+                         "outTokens":  63,
+                         "promptPerSec":  9.810849833924953,
+                         "genPerSec":  6.444028931611184
+                     },
+                     {
+                         "id":  "table1",
+                         "cat":  "table",
+                         "got":  "{\n  \"column\": \"種別\",\n  \"op\": \"CONTAINS\",\n  \"value\": \"児童手当\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  22477,
+                         "promptTokens":  183,
+                         "outTokens":  30,
+                         "promptPerSec":  10.169256437306034,
+                         "genPerSec":  6.600475279740661
+                     },
+                     {
+                         "id":  "table2",
+                         "cat":  "table",
+                         "got":  "{\n  \"column\": \"金額\",\n  \"op\": \"GT\",\n  \"value\": \"5000\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  7116,
+                         "promptTokens":  183,
+                         "outTokens":  29,
+                         "promptPerSec":  8.740467209438027,
+                         "genPerSec":  6.632413409697679
+                     },
+                     {
+                         "id":  "table3",
+                         "cat":  "table",
+                         "got":  "{\n  \"column\": \"備考\",\n  \"op\": \"CONTAINS\",\n  \"value\": \"\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  5904,
+                         "promptTokens":  180,
+                         "outTokens":  24,
+                         "promptPerSec":  8.776430019539525,
+                         "genPerSec":  6.846927411554815
+                     },
+                     {
+                         "id":  "table4",
+                         "cat":  "table",
+                         "got":  "{\n  \"column\": \"氏名\",\n  \"op\": \"CONTAINS\",\n  \"value\": \"見本\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true,
+                                        true,
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  6686,
+                         "promptTokens":  183,
+                         "outTokens":  27,
+                         "promptPerSec":  8.796099035630887,
+                         "genPerSec":  6.805739332330797
+                     },
+                     {
+                         "id":  "match1",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"名寄せでは、漢字の形を統一するため、『高橋』と『高橋』は同じ人です。\",\n  \"same\": true\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  23909,
+                         "promptTokens":  166,
+                         "outTokens":  48,
+                         "promptPerSec":  10.051904766316527,
+                         "genPerSec":  6.390868509512128
+                     },
+                     {
+                         "id":  "match2",
+                         "cat":  "match",
+                         "got":  "{\"reason\": \"記録1と記録2では、氏名の順序が異なるため、同じ人とは言えない。記録1は『斉藤花子』、記録2は『齋藤花子』である。\", \"same\": false}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  16792,
+                         "promptTokens":  145,
+                         "outTokens":  72,
+                         "promptPerSec":  9.060113110889683,
+                         "genPerSec":  6.253941194102868
+                     },
+                     {
+                         "id":  "match3",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"生年月日が違います。記録1は昭和60年、記録2は昭和61年生まれです。\",\n  \"same\": false\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  13818,
+                         "promptTokens":  146,
+                         "outTokens":  53,
+                         "promptPerSec":  8.709911777132826,
+                         "genPerSec":  6.558407537930929
+                     },
+                     {
+                         "id":  "match4",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"記録1と記録2の名前（ﾎﾝ・ﾛｳ vs タロウ）が異なるため、同じ人とは言えない。\",\n  \"same\": false\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  14593,
+                         "promptTokens":  150,
+                         "outTokens":  56,
+                         "promptPerSec":  9.05246231089612,
+                         "genPerSec":  6.479543727024127
+                     },
+                     {
+                         "id":  "match5",
+                         "cat":  "match",
+                         "got":  "{\n  \"reason\": \"記録1と記録2の名前（花子 vs. 華子）は異なるため、同じ人とは言えない。\",\n  \"same\": false\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  14014,
+                         "promptTokens":  152,
+                         "outTokens":  52,
+                         "promptPerSec":  9.045338791549199,
+                         "genPerSec":  6.550976423035853
+                     },
+                     {
+                         "id":  "calc1",
+                         "cat":  "calc",
+                         "got":  "{\n  \"answer\": \"2026-11-14\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  10821,
+                         "promptTokens":  65,
+                         "outTokens":  26,
+                         "promptPerSec":  9.945597581230668,
+                         "genPerSec":  5.883705501241108
+                     },
+                     {
+                         "id":  "calc2",
+                         "cat":  "calc",
+                         "got":  "{ \"answer\": \"3800\" }",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  7759,
+                         "promptTokens":  82,
+                         "outTokens":  17,
+                         "promptPerSec":  8.988418830900876,
+                         "genPerSec":  5.6553369060924235
+                     },
+                     {
+                         "id":  "calc3",
+                         "cat":  "calc",
+                         "got":  "{\n  \"answer\": \"2016\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        false
+                                    ],
+                         "ok":  false,
+                         "ms":  5100,
+                         "promptTokens":  59,
+                         "outTokens":  19,
+                         "promptPerSec":  9.161264428991474,
+                         "genPerSec":  6.4844535226793765
+                     },
+                     {
+                         "id":  "calc4",
+                         "cat":  "calc",
+                         "got":  "{\n  \"answer\": \"50\"\n}",
+                         "thinking":  "",
+                         "checks":  [
+                                        true
+                                    ],
+                         "ok":  true,
+                         "ms":  6307,
+                         "promptTokens":  76,
+                         "outTokens":  16,
+                         "promptPerSec":  9.357992464353437,
+                         "genPerSec":  6.768354423525717
+                     }
+                 ]
+    }
+]
