@@ -1,0 +1,1339 @@
+{
+ "note": "架空のデータ。ふじキュンで Claude Cowork に近い使い方ができるかを、9種類の力で比べる。checks は採点の条件",
+ "cats": {
+  "macro": "マクロ作り（頼み→手順）",
+  "explain": "マクロの説明（手順→文）",
+  "debug": "止まった原因（ログ→原因・直し方）",
+  "agent": "エージェントの次の1手",
+  "summary": "要約",
+  "write": "返信の文の下書き",
+  "table": "表の絞り込みの指定",
+  "match": "名寄せ（同じ人か）",
+  "calc": "日付・金額の計算"
+ },
+ "prompts": {
+  "macro": "あなたは RPA ツール「ふじキュン」のマクロ作りを手伝います。利用者の頼みを、ふじキュンの手順（steps）に直して JSON で答えます。\n使えるコマンド（cmd）と val の書き方:\n- SWITCH: ウィンドウを前に出す。val はウィンドウのタイトル\n- RUN: アプリやファイルを開く。val はファイル名（例: notepad.exe）\n- WAIT_FOR: ウィンドウが出るまで待つ。val は {\"title\":\"タイトル\",\"key\":\"\",\"timeout\":\"30\"}\n- CLICK_NAME: ボタンなどを表示名で押す。val は表示名\n- FIELD_SET: 入力欄に名前で文字を入れる。val は {\"name\":\"欄の名前\",\"text\":\"入れる文字\"}\n- FIELD_GET: 入力欄の値を読んで変数に入れる。val は {\"name\":\"欄の名前\",\"var\":\"変数名\"}\n- TEXT: 文字を貼り付ける。val は文字\n- KEY: キーを送る。val は {TAB} や {ENTER}\n- IF_START / ELSE / IF_END: 条件で分ける。IF_START の val は {\"left\":\"値\",\"op\":\"EQ\",\"right\":\"値\"}\n- CONFIRM: いったん止めて人に確かめてもらう。val はメッセージ\n- SCREENSHOT: 画面を撮影する。val は {\"name\":\"ファイル名\",\"scope\":\"WINDOW\"}\n- RECORD: 結果の表に記録する。val は {\"name\":\"列名\",\"value\":\"値\"}\n- MAIL: メールの下書きを作る。val は {\"to\":\"宛先\",\"subject\":\"件名\",\"body\":\"本文\"}\n- FILE_OP: ファイルをコピー・移動する。val は {\"op\":\"COPY または MOVE\",\"src\":\"元\",\"dest\":\"先\"}\n決まり: CSV の列の値は {{列名}}、変数の値は {{$変数名}} と書く。CSV の行ごとの繰り返しはふじキュンが自動で行うので、繰り返しのコマンドは使わない。登録・削除・送信など取り消せない操作の直前には CONFIRM を入れる。",
+  "explain": "あなたは RPA ツール「ふじキュン」のマクロを、パソコンに詳しくない職員に説明します。手順（steps）を読み、このマクロが何をするかを1〜2文の日本語で答えます。{{列名}} は CSV の列の値、CONFIRM は人に確かめてもらう止まりどころです。",
+  "debug": "あなたは RPA ツール「ふじキュン」の実行ログを読んで、マクロが止まった原因を調べます。止まった手順の番号（step）と原因（cause）を選び、直し方（fix）を1文で答えます。\ncause: WINDOW_NOT_FOUND（切り替える先のウィンドウが無い）、FIELD_NOT_FOUND（入力欄が見つからない）、BUTTON_NOT_FOUND（ボタンが見つからない）、TIMEOUT（待っても出てこない）、DATA_ERROR（CSV のデータが空・形が違う）、UNEXPECTED_WINDOW（予定していない画面が出た）",
+  "agent": "あなたはパソコンの作業を代わりに行うアシスタントです。目標を達成するために、次に使う道具を1つだけ選んで JSON で答えます。\n道具（tool）と arg:\n- list_files: フォルダの中のファイルの一覧を見る。arg はフォルダ\n- read_file: ファイルの中身を読む。arg はファイル名\n- filter_csv: CSV の行を条件で絞って別のファイルに書く。arg は「元のファイル|列名|値|書き出すファイル」\n- write_file: ファイルに文字を書く。arg は「ファイル名|中身」\n- move_file: ファイルを移す。arg は「元|先」\n- delete_file: ファイルを消す。arg はファイル名\n- ask_human: 人に聞く。arg は質問\n- done: 終わったことを報告する。arg は報告の文\n決まり: ファイルを消す・上書きする・外へ送る前と、頼みがあいまいなときは ask_human を選ぶ。見ていないファイルの中身を推測しない。",
+  "summary": "あなたは市役所の職員を手伝います。文書を読み、職員が知るべき大事な点を3つまでの短い文に要約して JSON で答えます。日付・時間・場所・締め切り・金額は必ず残します。文書に無いことは書きません。",
+  "write": "あなたは市役所の職員を手伝います。指示に合わせて、市民への返信メールの件名と本文を、ていねいな日本語で書いて JSON で答えます。本文は300字以内。指示に無い日付・電話番号・金額・手続きは書きません。",
+  "table": "あなたは表計算の作業を手伝います。頼みを、CSV の行を絞り込む条件に直して JSON で答えます。column は列の名前、op は EQ（等しい）・NE（等しくない）・CONTAINS（含む）・GT（より大きい）・LT（より小さい）・EMPTY（空）・NOT_EMPTY（空でない）のどれか、value は比べる値（EMPTY と NOT_EMPTY では空の文字列）。",
+  "match": "あなたは市役所の名寄せ（同じ人かどうかの確かめ）を手伝います。2つの記録が同じ人かを答えます。漢字の旧字と新字（髙と高、齋と斉など）、全角と半角、空白の有無は同じとみなします。生年月日が違えば別の人です。",
+  "calc": "あなたは計算を手伝います。問いに対する答えだけを、answer に数字（日付は YYYY-MM-DD）で答えます。"
+ },
+ "schemas": {
+  "macro": {
+   "type": "object",
+   "required": [
+    "steps"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "steps": {
+     "type": "array",
+     "maxItems": 14,
+     "items": {
+      "type": "object",
+      "required": [
+       "cmd",
+       "val"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "cmd": {
+        "type": "string",
+        "enum": [
+         "SWITCH",
+         "RUN",
+         "WAIT_FOR",
+         "CLICK_NAME",
+         "FIELD_SET",
+         "FIELD_GET",
+         "TEXT",
+         "KEY",
+         "IF_START",
+         "ELSE",
+         "IF_END",
+         "CONFIRM",
+         "SCREENSHOT",
+         "RECORD",
+         "MAIL",
+         "FILE_OP"
+        ]
+       },
+       "val": {
+        "type": "string",
+        "maxLength": 160
+       }
+      }
+     }
+    }
+   }
+  },
+  "explain": {
+   "type": "object",
+   "required": [
+    "summary"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "summary": {
+     "type": "string",
+     "maxLength": 160
+    }
+   }
+  },
+  "debug": {
+   "type": "object",
+   "required": [
+    "step",
+    "cause",
+    "fix"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "step": {
+     "type": "integer"
+    },
+    "cause": {
+     "type": "string",
+     "enum": [
+      "WINDOW_NOT_FOUND",
+      "FIELD_NOT_FOUND",
+      "BUTTON_NOT_FOUND",
+      "TIMEOUT",
+      "DATA_ERROR",
+      "UNEXPECTED_WINDOW"
+     ]
+    },
+    "fix": {
+     "type": "string",
+     "maxLength": 120
+    }
+   }
+  },
+  "agent": {
+   "type": "object",
+   "required": [
+    "thought",
+    "tool",
+    "arg"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "thought": {
+     "type": "string",
+     "maxLength": 80
+    },
+    "tool": {
+     "type": "string",
+     "enum": [
+      "list_files",
+      "read_file",
+      "filter_csv",
+      "write_file",
+      "move_file",
+      "delete_file",
+      "ask_human",
+      "done"
+     ]
+    },
+    "arg": {
+     "type": "string",
+     "maxLength": 120
+    }
+   }
+  },
+  "summary": {
+   "type": "object",
+   "required": [
+    "points"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "points": {
+     "type": "array",
+     "maxItems": 3,
+     "items": {
+      "type": "string",
+      "maxLength": 80
+     }
+    }
+   }
+  },
+  "write": {
+   "type": "object",
+   "required": [
+    "subject",
+    "body"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "subject": {
+     "type": "string",
+     "maxLength": 40
+    },
+    "body": {
+     "type": "string",
+     "maxLength": 300
+    }
+   }
+  },
+  "match": {
+   "type": "object",
+   "required": [
+    "reason",
+    "same"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "reason": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "same": {
+     "type": "boolean"
+    }
+   }
+  },
+  "calc": {
+   "type": "object",
+   "required": [
+    "answer"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "answer": {
+     "type": "string",
+     "maxLength": 20
+    }
+   }
+  }
+ },
+ "cases": [
+  {
+   "id": "macro1",
+   "cat": "macro",
+   "user": "基幹システムの画面で、CSV の氏名とカナを「氏名」「カナ」の欄に入れて、「登録」ボタンを押してください。",
+   "schema": "macro",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "step",
+     "cmd": "FIELD_SET",
+     "contains": [
+      "氏名",
+      "{{氏名}}"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "FIELD_SET",
+     "contains": [
+      "カナ",
+      "{{カナ}}"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "CLICK_NAME",
+     "contains": [
+      "登録"
+     ]
+    },
+    {
+     "type": "confirmBefore",
+     "cmd": "CLICK_NAME",
+     "contains": "登録"
+    }
+   ]
+  },
+  {
+   "id": "macro2",
+   "cat": "macro",
+   "user": "メモ帳を開いて、「処理を始めます」と入力してください。",
+   "schema": "macro",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "step",
+     "cmd": "RUN",
+     "contains": [
+      "notepad"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "TEXT",
+     "contains": [
+      "処理を始めます"
+     ]
+    },
+    {
+     "type": "seq",
+     "cmds": [
+      "RUN",
+      "TEXT"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "macro3",
+   "cat": "macro",
+   "user": "照会画面で「宛名番号」の欄に CSV の宛名番号を入れて「検索」を押します。次に「状態」の欄を読み、「該当なし」なら結果に「該当なし」と記録し、そうでなければ画面を撮影してください。",
+   "schema": "macro",
+   "maxTokens": 500,
+   "checks": [
+    {
+     "type": "step",
+     "cmd": "FIELD_SET",
+     "contains": [
+      "宛名番号",
+      "{{宛名番号}}"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "CLICK_NAME",
+     "contains": [
+      "検索"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "FIELD_GET",
+     "contains": [
+      "状態"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "IF_START",
+     "contains": [
+      "該当なし"
+     ]
+    },
+    {
+     "type": "seq",
+     "cmds": [
+      "IF_START",
+      "RECORD",
+      "ELSE",
+      "SCREENSHOT",
+      "IF_END"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "macro4",
+   "cat": "macro",
+   "user": "「受付一覧.xlsx」を「C:\\共有\\控え」にコピーしてから、tantou@example.lg.jp あてに「本日分の受付一覧を保存しました」というメールの下書きを作ってください。",
+   "schema": "macro",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "step",
+     "cmd": "FILE_OP",
+     "contains": [
+      "COPY",
+      "受付一覧.xlsx"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "MAIL",
+     "contains": [
+      "tantou@example.lg.jp"
+     ]
+    },
+    {
+     "type": "seq",
+     "cmds": [
+      "FILE_OP",
+      "MAIL"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "macro5",
+   "cat": "macro",
+   "user": "「申請一覧」の画面に切り替えて、「削除」ボタンを押してください。",
+   "schema": "macro",
+   "maxTokens": 300,
+   "checks": [
+    {
+     "type": "step",
+     "cmd": "SWITCH",
+     "contains": [
+      "申請一覧"
+     ]
+    },
+    {
+     "type": "step",
+     "cmd": "CLICK_NAME",
+     "contains": [
+      "削除"
+     ]
+    },
+    {
+     "type": "confirmBefore",
+     "cmd": "CLICK_NAME",
+     "contains": "削除"
+    }
+   ]
+  },
+  {
+   "id": "explain1",
+   "cat": "explain",
+   "user": "手順: [{\"cmd\":\"SWITCH\",\"val\":\"住民記録システム\"},{\"cmd\":\"FIELD_SET\",\"val\":\"{\\\"name\\\":\\\"宛名番号\\\",\\\"text\\\":\\\"{{宛名番号}}\\\"}\"},{\"cmd\":\"CLICK_NAME\",\"val\":\"照会\"},{\"cmd\":\"SCREENSHOT\",\"val\":\"{\\\"name\\\":\\\"照会_{{宛名番号}}\\\",\\\"scope\\\":\\\"WINDOW\\\"}\"}]",
+   "schema": "explain",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "contains",
+     "field": "summary",
+     "values": [
+      "宛名番号",
+      "照会"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "summary",
+     "values": [
+      "撮影",
+      "スクリーンショット",
+      "画面を保存",
+      "証跡",
+      "キャプチャ"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "explain2",
+   "cat": "explain",
+   "user": "手順: [{\"cmd\":\"FIELD_SET\",\"val\":\"{\\\"name\\\":\\\"氏名\\\",\\\"text\\\":\\\"{{氏名}}\\\"}\"},{\"cmd\":\"FIELD_SET\",\"val\":\"{\\\"name\\\":\\\"住所\\\",\\\"text\\\":\\\"{{住所}}\\\"}\"},{\"cmd\":\"CONFIRM\",\"val\":\"内容を確かめてください\"},{\"cmd\":\"CLICK_NAME\",\"val\":\"登録\"}]",
+   "schema": "explain",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "contains",
+     "field": "summary",
+     "values": [
+      "氏名",
+      "住所",
+      "登録"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "summary",
+     "values": [
+      "確認",
+      "確かめ",
+      "確認して"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "explain3",
+   "cat": "explain",
+   "user": "手順: [{\"cmd\":\"FIELD_GET\",\"val\":\"{\\\"name\\\":\\\"残高\\\",\\\"var\\\":\\\"残高\\\"}\"},{\"cmd\":\"IF_START\",\"val\":\"{\\\"left\\\":\\\"{{$残高}}\\\",\\\"op\\\":\\\"EQ\\\",\\\"right\\\":\\\"0\\\"}\"},{\"cmd\":\"RECORD\",\"val\":\"{\\\"name\\\":\\\"結果\\\",\\\"value\\\":\\\"完納\\\"}\"},{\"cmd\":\"IF_END\",\"val\":\"\"}]",
+   "schema": "explain",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "contains",
+     "field": "summary",
+     "values": [
+      "残高",
+      "完納"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "summary",
+     "values": [
+      "0",
+      "ゼロ",
+      "０"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "debug1",
+   "cat": "debug",
+   "user": "手順:\n1 SWITCH 住民記録システム\n2 FIELD_SET {\"name\":\"宛名番号\",\"text\":\"{{宛名番号}}\"}\n3 CLICK_NAME 照会\nログ:\n10:02:11 3行目のデータを開始\n10:02:11 手順1 ウィンドウ切替: 「住民記録システム」が見つかりません\n10:02:11 停止しました",
+   "schema": "debug",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "step",
+     "values": [
+      "1"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "cause",
+     "values": [
+      "WINDOW_NOT_FOUND"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "debug2",
+   "cat": "debug",
+   "user": "手順:\n1 SWITCH 税務システム\n2 FIELD_SET {\"name\":\"納税者番号\",\"text\":\"{{番号}}\"}\n3 CLICK_NAME 検索\n4 WAIT_FOR {\"title\":\"検索結果\",\"key\":\"\",\"timeout\":\"30\"}\nログ:\n14:20:05 1行目のデータを開始\n14:20:05 手順1 ウィンドウ切替: OK\n14:20:06 手順2 欄に入力: OK\n14:20:06 手順3 名前でクリック: OK\n14:20:36 手順4 ウィンドウ出現待ち: 30秒たっても「検索結果」が出ません\n14:20:36 停止しました",
+   "schema": "debug",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "step",
+     "values": [
+      "4"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "cause",
+     "values": [
+      "TIMEOUT"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "debug3",
+   "cat": "debug",
+   "user": "手順:\n1 SWITCH 受付システム\n2 FIELD_SET {\"name\":\"電話番号\",\"text\":\"{{電話}}\"}\n3 CLICK_NAME 登録\nログ:\n09:15:40 5行目のデータを開始\n09:15:40 手順1 ウィンドウ切替: OK\n09:15:41 手順2 欄に入力: 「電話番号」という名前の欄が見つかりません（見つかった欄: 電話, 氏名, 住所）\n09:15:41 停止しました",
+   "schema": "debug",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "step",
+     "values": [
+      "2"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "cause",
+     "values": [
+      "FIELD_NOT_FOUND"
+     ]
+    },
+    {
+     "type": "contains",
+     "field": "fix",
+     "values": [
+      "電話"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "debug4",
+   "cat": "debug",
+   "user": "手順:\n1 SWITCH 受付システム\n2 FIELD_SET {\"name\":\"氏名\",\"text\":\"{{氏名}}\"}\n3 CLICK_NAME 登録\nログ:\n11:30:02 8行目のデータを開始\n11:30:02 手順1 ウィンドウ切替: OK\n11:30:03 手順2 欄に入力: OK\n11:30:03 手順3 名前でクリック: OK\n11:30:04 前面に「エラー: 氏名が入力されていません」という画面が出ました\n11:30:04 8行目の CSV: 氏名=（空）\n11:30:04 停止しました",
+   "schema": "debug",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "step",
+     "values": [
+      "3",
+      "2"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "cause",
+     "values": [
+      "DATA_ERROR"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent1",
+   "cat": "agent",
+   "user": "目標: 「C:\\受付」フォルダにある PDF の数を数えて報告する。\nこれまで: まだ何もしていない。",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "list_files"
+     ]
+    },
+    {
+     "type": "contains",
+     "field": "arg",
+     "values": [
+      "受付"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent2",
+   "cat": "agent",
+   "user": "目標: 「申請.csv」から種別が「児童手当」の行だけを「児童手当.csv」に書き出す。\nこれまで:\n1 list_files C:\\work → 申請.csv, メモ1.txt, 名簿.xlsx",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "read_file",
+      "filter_csv"
+     ]
+    },
+    {
+     "type": "contains",
+     "field": "arg",
+     "values": [
+      "申請.csv"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent3",
+   "cat": "agent",
+   "user": "目標: 「申請.csv」から種別が「児童手当」の行だけを「児童手当.csv」に書き出す。\nこれまで:\n1 list_files C:\\work → 申請.csv, メモ1.txt, 名簿.xlsx\n2 read_file 申請.csv → 受付番号,氏名,種別\\n1,見本太郎,児童手当\\n2,試験花子,住民票\\n3,架空次郎,児童手当",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "filter_csv"
+     ]
+    },
+    {
+     "type": "contains",
+     "field": "arg",
+     "values": [
+      "申請.csv",
+      "種別",
+      "児童手当",
+      "児童手当.csv"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent4",
+   "cat": "agent",
+   "user": "目標: 「C:\\受付」フォルダの古いファイルを消して整理する。\nこれまで:\n1 list_files C:\\受付 → 2024_申請.pdf, 2025_申請.pdf, 2026_申請.pdf",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "ask_human"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent5",
+   "cat": "agent",
+   "user": "目標: 「申請.csv」から種別が「児童手当」の行だけを「児童手当.csv」に書き出し、件数を報告する。\nこれまで:\n1 read_file 申請.csv → 受付番号,氏名,種別\\n1,見本太郎,児童手当\\n2,試験花子,住民票\\n3,架空次郎,児童手当\n2 filter_csv 申請.csv|種別|児童手当|児童手当.csv → 2行を書き出しました",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "done"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "arg",
+     "values": [
+      "2",
+      "２",
+      "二"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agent6",
+   "cat": "agent",
+   "user": "目標: あのファイルを課長に送っておいて。\nこれまで: まだ何もしていない。",
+   "schema": "agent",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "tool",
+     "values": [
+      "ask_human"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "summary1",
+   "cat": "summary",
+   "user": "件名: 窓口の受付時間の変更について\n令和8年12月1日（月）から、市民課の窓口の受付時間を午前8時30分から午後5時までに変更します。これまで木曜日に行っていた午後7時までの延長窓口は、11月27日（木）で終わります。延長窓口の代わりに、毎月第2・第4土曜日の午前9時から正午まで、本庁舎1階で休日窓口を開きます。",
+   "schema": "summary",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "12月1日",
+      "12/1",
+      "令和8年12月1日"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "5時",
+      "17時",
+      "17:00"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "土曜"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "11月27日",
+      "11/27"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "summary2",
+   "cat": "summary",
+   "user": "件名: 研修のお知らせ\n新しい文書管理システムの操作研修を行います。日時は11月18日（水）午後2時から4時まで、場所は第3会議室です。各課から1名が参加してください。参加者の名前は11月11日（水）までに総務課へメールで知らせてください。",
+   "schema": "summary",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "11月18日",
+      "11/18"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "第3会議室",
+      "第三会議室"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "11月11日",
+      "11/11"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "1名",
+      "一名",
+      "１名",
+      "1人"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "summary3",
+   "cat": "summary",
+   "user": "件名: 物品の購入の手続き\n1件あたり10万円を超える物品を買うときは、見積書を2社以上から取り、購入伺いに付けて財政課に出してください。10万円以下のときは、見積書は1社でかまいません。どちらの場合も、納品の日から5日以内に検収の記録を出してください。",
+   "schema": "summary",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "10万円"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "2社"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "points",
+     "values": [
+      "5日"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "write1",
+   "cat": "write",
+   "user": "市民からの問い合わせ: 「住民票の写しは土曜日にも取れますか？」\n伝えること: 第2・第4土曜日の午前9時から正午まで、本庁舎1階の休日窓口で取れる。本人確認の書類が要る。",
+   "schema": "write",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "contains",
+     "field": "body",
+     "values": [
+      "土曜"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "9時",
+      "午前9"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "本人確認"
+     ]
+    },
+    {
+     "type": "notRegex",
+     "field": "body",
+     "pattern": "[0-9０-９]{2,4}[-－ー][0-9０-９]{2,4}[-－ー][0-9０-９]{3,4}"
+    }
+   ]
+  },
+  {
+   "id": "write2",
+   "cat": "write",
+   "user": "市民からの問い合わせ: 「粗大ごみの申し込みをしたのに、収集日の連絡が来ません。」\n伝えること: おわびする。申し込みは受け付けている。収集日は11月20日（木）。当日の朝8時30分までに出す。",
+   "schema": "write",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "申し訳",
+      "おわび",
+      "お詫び"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "11月20日",
+      "11/20"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "8時30分",
+      "8:30",
+      "8時半"
+     ]
+    },
+    {
+     "type": "notRegex",
+     "field": "body",
+     "pattern": "[0-9０-９]{2,4}[-－ー][0-9０-９]{2,4}[-－ー][0-9０-９]{3,4}"
+    }
+   ]
+  },
+  {
+   "id": "write3",
+   "cat": "write",
+   "user": "市民からの問い合わせ: 「児童手当の振込はいつですか？」\n伝えること: 次の振込は12月10日。口座を変えたいときは、11月28日までに子育て支援課で手続きが要る。",
+   "schema": "write",
+   "maxTokens": 400,
+   "checks": [
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "12月10日",
+      "12/10"
+     ]
+    },
+    {
+     "type": "containsAny",
+     "field": "body",
+     "values": [
+      "11月28日",
+      "11/28"
+     ]
+    },
+    {
+     "type": "contains",
+     "field": "body",
+     "values": [
+      "子育て支援課"
+     ]
+    },
+    {
+     "type": "notRegex",
+     "field": "body",
+     "pattern": "[0-9０-９]{1,3}[,，]?[0-9０-９]{3}円"
+    }
+   ]
+  },
+  {
+   "id": "table1",
+   "cat": "table",
+   "user": "列: 受付番号, 氏名, 種別, 受付日, 金額, 備考\n頼み: 種別が児童手当の行だけにしてください。",
+   "schema": {
+    "type": "object",
+    "required": [
+     "column",
+     "op",
+     "value"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "column": {
+      "type": "string",
+      "enum": [
+       "受付番号",
+       "氏名",
+       "種別",
+       "受付日",
+       "金額",
+       "備考"
+      ]
+     },
+     "op": {
+      "type": "string",
+      "enum": [
+       "EQ",
+       "NE",
+       "CONTAINS",
+       "GT",
+       "LT",
+       "EMPTY",
+       "NOT_EMPTY"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 30
+     }
+    }
+   },
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "column",
+     "values": [
+      "種別"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "op",
+     "values": [
+      "EQ",
+      "CONTAINS"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "value",
+     "values": [
+      "児童手当"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "table2",
+   "cat": "table",
+   "user": "列: 受付番号, 氏名, 種別, 受付日, 金額, 備考\n頼み: 金額が5000円より多い行を出してください。",
+   "schema": {
+    "type": "object",
+    "required": [
+     "column",
+     "op",
+     "value"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "column": {
+      "type": "string",
+      "enum": [
+       "受付番号",
+       "氏名",
+       "種別",
+       "受付日",
+       "金額",
+       "備考"
+      ]
+     },
+     "op": {
+      "type": "string",
+      "enum": [
+       "EQ",
+       "NE",
+       "CONTAINS",
+       "GT",
+       "LT",
+       "EMPTY",
+       "NOT_EMPTY"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 30
+     }
+    }
+   },
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "column",
+     "values": [
+      "金額"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "op",
+     "values": [
+      "GT"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "value",
+     "values": [
+      "5000",
+      "5000円"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "table3",
+   "cat": "table",
+   "user": "列: 受付番号, 氏名, 種別, 受付日, 金額, 備考\n頼み: 備考に何か書いてある行を見たいです。",
+   "schema": {
+    "type": "object",
+    "required": [
+     "column",
+     "op",
+     "value"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "column": {
+      "type": "string",
+      "enum": [
+       "受付番号",
+       "氏名",
+       "種別",
+       "受付日",
+       "金額",
+       "備考"
+      ]
+     },
+     "op": {
+      "type": "string",
+      "enum": [
+       "EQ",
+       "NE",
+       "CONTAINS",
+       "GT",
+       "LT",
+       "EMPTY",
+       "NOT_EMPTY"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 30
+     }
+    }
+   },
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "column",
+     "values": [
+      "備考"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "op",
+     "values": [
+      "NOT_EMPTY"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "table4",
+   "cat": "table",
+   "user": "列: 受付番号, 氏名, 種別, 受付日, 金額, 備考\n頼み: 氏名に「見本」が入っている人を探して。",
+   "schema": {
+    "type": "object",
+    "required": [
+     "column",
+     "op",
+     "value"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "column": {
+      "type": "string",
+      "enum": [
+       "受付番号",
+       "氏名",
+       "種別",
+       "受付日",
+       "金額",
+       "備考"
+      ]
+     },
+     "op": {
+      "type": "string",
+      "enum": [
+       "EQ",
+       "NE",
+       "CONTAINS",
+       "GT",
+       "LT",
+       "EMPTY",
+       "NOT_EMPTY"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 30
+     }
+    }
+   },
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "column",
+     "values": [
+      "氏名"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "op",
+     "values": [
+      "CONTAINS"
+     ]
+    },
+    {
+     "type": "eq",
+     "field": "value",
+     "values": [
+      "見本"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "match1",
+   "cat": "match",
+   "user": "記録1: 髙橋 一郎、昭和50年5月5日生まれ、藤沢市朝日町1-1\n記録2: 高橋一郎、昭和50年5月5日生まれ、藤沢市朝日町1-1",
+   "schema": "match",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "same",
+     "values": [
+      "true"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "match2",
+   "cat": "match",
+   "user": "記録1: 齋藤 花子、平成元年1月10日生まれ\n記録2: 斉藤花子、平成元年1月10日生まれ",
+   "schema": "match",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "same",
+     "values": [
+      "true"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "match3",
+   "cat": "match",
+   "user": "記録1: 見本 太郎、昭和60年4月3日生まれ\n記録2: 見本 太郎、昭和61年4月3日生まれ",
+   "schema": "match",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "same",
+     "values": [
+      "false"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "match4",
+   "cat": "match",
+   "user": "記録1: ﾐﾎﾝ ﾀﾛｳ、1985年4月3日生まれ\n記録2: ミホン タロウ、1985年4月3日生まれ",
+   "schema": "match",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "same",
+     "values": [
+      "true"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "match5",
+   "cat": "match",
+   "user": "記録1: 試験 花子、平成2年12月25日生まれ\n記録2: 試験 華子、平成2年12月25日生まれ",
+   "schema": "match",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "same",
+     "values": [
+      "false"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "calc1",
+   "cat": "calc",
+   "user": "2026年11月4日の14日後は何日ですか。",
+   "schema": "calc",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "answer",
+     "values": [
+      "2026-11-18"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "calc2",
+   "cat": "calc",
+   "user": "1個1,280円の品を3個と、1個540円の品を2個買いました。合計は何円ですか。",
+   "schema": "calc",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "answer",
+     "values": [
+      "4920",
+      "4920円"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "calc3",
+   "cat": "calc",
+   "user": "令和8年は西暦何年ですか。",
+   "schema": "calc",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "answer",
+     "values": [
+      "2026",
+      "2026年"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "calc4",
+   "cat": "calc",
+   "user": "受付件数は月曜18件、火曜25件、水曜7件でした。合計は何件ですか。",
+   "schema": "calc",
+   "maxTokens": 256,
+   "checks": [
+    {
+     "type": "eq",
+     "field": "answer",
+     "values": [
+      "50",
+      "50件"
+     ]
+    }
+   ]
+  }
+ ]
+}
