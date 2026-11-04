@@ -9,6 +9,7 @@
 | `Invoke-LlmBench.ps1` | モデルごとに llama-server を起動し、答えの形を JSON に縛って（json_schema）全問を聞き、採点と時間の計測をする。ふじキュンと同じ PowerShell 5.1 の Invoke-WebRequest で聞く。`-V2` は2回目の聞き方 |
 | `result_vm_x64.json` / `result_vm_x64_v2.json` | VM での結果（1回目・2回目） |
 | `pc-check/` | 職場の PC で llama.cpp が動くかを確かめる道具（llama.cpp の本体の base64 はブランチ `llm-pc-test` だけに置く） |
+| `pc-check/llm-speed.bat` | 職場の PC でモデルの速さを測る道具（llm-check.bat のあとに使う）。モデル Qwen3-1.7B Q4_K_M の base64 16個はブランチ `llm-model-q4` の `tools/llm-bench/pc-check/model/` だけに置く。公式の Q8_0 を llama-quantize で Q4_K_M に縮めたもの（VM で抜き出し 31/32、Q8_0 と同じ） |
 
 ## 結果（2026-11-03、VM）
 
@@ -21,7 +22,7 @@ VM は Apple Silicon 上の Windows 11（ARM64、4コア、6GB）です。ARM64 
 | Qwen3-1.7B Q8_0 | Apache-2.0 | 1.83GB | 2.4GB | 1回目 27/32 → **2回目 31/32** | 5/10 | 2/10 → 6/10 | 約9秒 |
 | TinySwallow-1.5B Q5_K_M | Apache-2.0（Gemma の利用規約も守る） | 1.13GB | 1.3GB | 27/32 → 25/32 | **8/10** | 5/10 → **7/10** | 約12秒 |
 | Qwen3-0.6B Q8_0 | Apache-2.0 | 0.64GB | 1.2GB | 22/32 → 27/32 | 4/10 | 4/10 → 6/10 | 約6秒 |
-| LFM2.5-1.2B-JP Q4_K_M | lfm1.0（年間収入1,000万ドル以上の組織の商用利用は対象外） | 0.73GB | 0.8GB | 21/32 | 6/10 | 4/10 | 約19秒 |
+| LFM2.5-1.2B-JP Q4_K_M | lfm1.0（年間収入1,000万ドル以上の組織の商用利用は対象外。官公庁の利用は商用に当たらないとして扱う） | 0.73GB | 0.8GB | 21/32 | 6/10 | 4/10 | 約19秒 |
 
 分かったこと:
 - **和暦を西暦に直すのは、どのモデルも苦手**。書かれたままを抜き出させ、変換はプログラムで行えば、Qwen3-1.7B は8件中7件が全項目正解。
