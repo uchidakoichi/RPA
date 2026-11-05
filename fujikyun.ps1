@@ -51,7 +51,185 @@ $script:StartWatch = [System.Diagnostics.Stopwatch]::StartNew()
 $script:StartMarks = New-Object -TypeName 'System.Collections.Generic.List[double]'
 $textReady = $false
 try {
-    # ===== src/Alert.ps1 =====
+    # ===== src/Ai.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  AI commands (AI_CHOOSE, AI_EXTRACT): the parts that need no window and no llama-server
+#  The question for AI_CHOOSE is built so the answer is one option letter, and the probability of
+#  every letter is read from that one token (logprobs): nothing is written, only the prompt is
+#  computed, and the probability says how sure the model is. AI_EXTRACT asks for a JSON answer held
+#  to a schema. Answers that are unsure or not in the source text go to a review list
+#  (fujikyun_logs\ai_review_<date>.csv) so a run does not have to stop for them.
+#  The shared AI folder holds ai.json (version, files and sizes, SHA-256, llama-server options);
+#  it is copied to %LOCALAPPDATA%\fujikyun\ai once and again when the version changes.
+# ---------------------------------------------------------------------------------------------
+$script:FujiAiLetters = 'ABCDEFGHIJ'
+$script:FujiAiSourceMax = 3000
+$script:FujiAiReviewSourceMax = 100
+
+# "value" or "value: note" per line (half or full width colon); blank lines are skipped
+function Read-FujiAiLine {
+    param([AllowEmptyString()][string]$Text)
+    $list = New-Object -TypeName 'System.Collections.Generic.List[hashtable]'
+    foreach ($line in ([string]$Text -split "`r?`n")) {
+        $t = $line.Trim()
+        if ($t -eq '') { continue }
+        $i = $t.IndexOfAny([char[]]@(':', [char]0xFF1A))
+        if ($i -ge 0) { $list.Add(@{ Head = $t.Substring(0, $i).Trim(); Note = $t.Substring($i + 1).Trim() }) }
+        else { $list.Add(@{ Head = $t; Note = '' }) }
+    }
+    return , $list
+}
+
+function Read-FujiAiOption {
+    param([AllowEmptyString()][string]$Text)
+    $list = New-Object -TypeName 'System.Collections.Generic.List[hashtable]'
+    foreach ($x in (Read-FujiAiLine -Text $Text)) { $list.Add(@{ Value = $x.Head; Note = $x.Note }) }
+    return , $list
+}
+
+function Read-FujiAiItem {
+    param([AllowEmptyString()][string]$Text)
+    $list = New-Object -TypeName 'System.Collections.Generic.List[hashtable]'
+    foreach ($x in (Read-FujiAiLine -Text $Text)) { $list.Add(@{ Name = $x.Head; Note = $x.Note }) }
+    return , $list
+}
+
+function Limit-FujiAiSource {
+    param([AllowEmptyString()][string]$Source)
+    $s = [string]$Source
+    if ($s.Length -gt $script:FujiAiSourceMax) { return @{ Text = $s.Substring(0, $script:FujiAiSourceMax); Cut = $true } }
+    return @{ Text = $s; Cut = $false }
+}
+
+# The request for AI_CHOOSE (Truncated is for the caller and is taken out before sending)
+function New-FujiAiChooseBody {
+    param([AllowEmptyString()][string]$Question, [Parameter(Mandatory)][System.Collections.IList]$Options, [AllowEmptyString()][string]$Source)
+    $lines = for ($i = 0; $i -lt $Options.Count; $i++) {
+        $line = [string]$script:FujiAiLetters[$i] + ': ' + $Options[$i].Value
+        if ($Options[$i].Note) { $line += ([string][char]0xFF08 + $Options[$i].Note + [char]0xFF09) }
+        $line
+    }
+    $q = ([string]$Question).Trim() -replace '[\u3002\uFF0E.\uFF1F?]+$', ''
+    $src = Limit-FujiAiSource -Source $Source
+    return [ordered]@{
+        messages = @(@{ role = 'system'; content = (Get-FujiText 'run.aiChoosePrompt' $q (@($lines) -join "`n")) }, @{ role = 'user'; content = $src.Text })
+        temperature = 0; max_tokens = 1; logprobs = $true; top_logprobs = 20
+        chat_template_kwargs = @{ enable_thinking = $false }
+        Truncated = $src.Cut
+    }
+}
+
+# The probability of each option letter among the top tokens of the one answer token, shared out
+# among the options. Returns @{ Value; P; Covered; Probs } (Value '' when no letter was answered).
+function Read-FujiAiChoice {
+    param([Parameter(Mandatory)]$Response, [Parameter(Mandatory)][System.Collections.IList]$Options)
+    $mass = New-Object -TypeName 'double[]' -ArgumentList $Options.Count
+    $top = @()
+    try { $top = @($Response.choices[0].logprobs.content[0].top_logprobs) } catch { $top = @() }
+    foreach ($lp in $top) {
+        $tok = ([string]$lp.token).Trim().ToUpperInvariant()
+        if ($tok.Length -ne 1) { continue }
+        $i = $script:FujiAiLetters.IndexOf($tok)
+        if ($i -ge 0 -and $i -lt $Options.Count) { $mass[$i] += [Math]::Exp([double]$lp.logprob) }
+    }
+    $sum = 0.0
+    foreach ($v in $mass) { $sum += $v }
+    $probs = [ordered]@{}
+    $best = -1; $bestP = 0.0
+    for ($i = 0; $i -lt $Options.Count; $i++) {
+        $p = 0.0
+        if ($sum -gt 0) { $p = $mass[$i] / $sum }
+        $probs[[string]$Options[$i].Value] = $p
+        if ($p -gt $bestP) { $bestP = $p; $best = $i }
+    }
+    $value = ''
+    if ($best -ge 0) { $value = [string]$Options[$best].Value }
+    return @{ Value = $value; P = $bestP; Covered = $sum; Probs = $probs }
+}
+
+# The request for AI_EXTRACT: one string per item, all required, nothing else
+function New-FujiAiExtractBody {
+    param([Parameter(Mandatory)][System.Collections.IList]$Items, [AllowEmptyString()][string]$Note, [AllowEmptyString()][string]$Source)
+    $props = [ordered]@{}
+    $names = @()
+    $lines = foreach ($it in $Items) {
+        $props[[string]$it.Name] = [ordered]@{ type = 'string'; maxLength = 100 }
+        $names += [string]$it.Name
+        if ($it.Note) { '- ' + $it.Name + ': ' + $it.Note } else { '- ' + $it.Name }
+    }
+    $extra = ''
+    if (([string]$Note).Trim()) { $extra = "`n" + ([string]$Note).Trim() }
+    $src = Limit-FujiAiSource -Source $Source
+    return [ordered]@{
+        messages = @(@{ role = 'system'; content = (Get-FujiText 'run.aiExtractPrompt' (@($lines) -join "`n") $extra) }, @{ role = 'user'; content = $src.Text })
+        temperature = 0; max_tokens = [Math]::Min(600, 60 * $Items.Count)
+        response_format = @{ type = 'json_schema'; json_schema = @{ name = 'answer'; schema = [ordered]@{ type = 'object'; required = $names; additionalProperties = $false; properties = $props } } }
+        chat_template_kwargs = @{ enable_thinking = $false }
+        Truncated = $src.Cut
+    }
+}
+
+function ConvertTo-FujiAiPlain {
+    param([AllowEmptyString()][string]$Text)
+    return (([string]$Text).Normalize([System.Text.NormalizationForm]::FormKC) -replace '\s', '')
+}
+
+# The value (width and spaces aside) is found in the source text; an empty value always is
+function Test-FujiAiInSource {
+    param([AllowEmptyString()][string]$Value, [AllowEmptyString()][string]$Source)
+    $v = ConvertTo-FujiAiPlain -Text $Value
+    if ($v -eq '') { return $true }
+    return (ConvertTo-FujiAiPlain -Text $Source).Contains($v)
+}
+
+# One line in fujikyun_logs\ai_review_<date>.csv (UTF-8 with BOM, header on the first line); returns the path
+function Add-FujiAiReviewRow {
+    param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][datetime]$Now, [Parameter(Mandatory)][System.Collections.IDictionary]$Row)
+    $dir = Join-Path $Directory $script:FujiLogFolder
+    if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir) }
+    $path = Join-Path $dir ('ai_review_' + $Now.ToString('yyyy-MM-dd') + '.csv')
+    $src = [string]$Row['source']
+    if ($src.Length -gt $script:FujiAiReviewSourceMax) { $src = $src.Substring(0, $script:FujiAiReviewSourceMax) }
+    $cells = foreach ($k in @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason')) {
+        $v = [string]$Row[$k]
+        if ($k -eq 'source') { $v = $src }
+        ConvertTo-FujiSafeCsvValue -Value $v
+    }
+    $line = ConvertTo-FujiCsvText -Rows @(, @($cells))
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        [System.IO.File]::AppendAllText($path, $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
+    } else {
+        $head = ConvertTo-FujiCsvText -Rows @(, @((Get-FujiText 'run.aiReviewHeader') -split ','))
+        Write-FujiTextFile -Path $path -Text ($head + $line) -Bom
+    }
+    return $path
+}
+
+# ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used
+function Read-FujiAiManifest {
+    param([Parameter(Mandatory)][string]$Path)
+    $j = ConvertFrom-FujiJson -Json (Read-FujiUtf8File -Path $Path)
+    if ($j -isnot [System.Collections.IDictionary] -or -not $j.Contains('aiVersion') -or -not $j.Contains('model') -or -not $j['model'] -or
+        -not $j.Contains('files') -or $j['files'] -isnot [System.Collections.IDictionary] -or -not $j['files'].Contains($j['model'])) {
+        throw (Get-FujiText 'run.aiManifestBad' $Path)
+    }
+    $serverArgs = ''
+    if ($j.Contains('serverArgs')) { $serverArgs = [string]$j['serverArgs'] }
+    return @{ AiVersion = [int]$j['aiVersion']; Model = [string]$j['model']; Files = $j['files']; ServerArgs = $serverArgs }
+}
+
+# 'copy' when there is no copy yet, the version differs, or the model file is not the full size
+function Test-FujiAiCopyNeeded {
+    param([Parameter(Mandatory)][hashtable]$Shared, [AllowNull()][hashtable]$Local, [Parameter(Mandatory)][string]$LocalDir)
+    if ($null -eq $Local -or [int]$Local.AiVersion -ne [int]$Shared.AiVersion -or [string]$Local.Model -ne [string]$Shared.Model) { return 'copy' }
+    $model = Join-Path $LocalDir $Shared.Model
+    if (-not (Test-Path -LiteralPath $model -PathType Leaf)) { return 'copy' }
+    $want = [long]$Shared.Files[$Shared.Model]['size']
+    if ((Get-Item -LiteralPath $model).Length -ne $want) { return 'copy' }
+    return 'none'
+}
+
+# ===== src/Alert.ps1 =====
 # ---------------------------------------------------------------------------------------------
 #  How the app calls a person (saved per PC in fujikyun_settings.json, "alerts"):
 #    error    a run stopped with an error

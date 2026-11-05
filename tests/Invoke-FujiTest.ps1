@@ -416,6 +416,78 @@ $text = ConvertTo-FujiCsvText -Rows $rows
 Assert-Equal "a,`"b,c`",`"d`"`"e`",`"f`r`ng`",`r`n" $text 'csv write'
 Assert-Equal @(, @('a', 'b,c', "d`"e", "f`r`ng", '')) @(foreach ($rec in (ConvertFrom-FujiCsv -Text $text).Records) { , @($rec) }) 'csv write/read round trip'
 
+# ----------------------------------------------------------------- AI: prompts, probabilities, review list, manifest
+$fwColon = [string][char]0xFF1A
+$fwSpace = [string][char]0x3000
+$o = Read-FujiAiOption -Text ("resident`ngarbage" + $fwColon + "collection days`n`n other ")
+Assert-Equal @('resident', 'garbage', 'other') @($o | ForEach-Object { $_.Value }) 'ai: options, full-width colon, blank line, spaces'
+Assert-Equal 'collection days' $o[1].Note 'ai: option note'
+Assert-Equal '' $o[0].Note 'ai: option without a note'
+$it = Read-FujiAiItem -Text "name: the applicant`nphone"
+Assert-Equal @('name', 'phone') @($it | ForEach-Object { $_.Name }) 'ai: items'
+Assert-Equal 'the applicant' $it[0].Note 'ai: item note'
+$b = New-FujiAiChooseBody -Question 'which desk' -Options $o -Source ('x' * 3100)
+Assert-True ($b.messages[0].content.Contains('which desk')) 'ai: choose prompt has the question'
+Assert-True ($b.messages[0].content.Contains("A: resident") -and $b.messages[0].content.Contains('B: garbage') -and $b.messages[0].content.Contains('collection days') -and $b.messages[0].content.Contains('C: other')) 'ai: choose prompt letters and notes'
+Assert-Equal 3000 $b.messages[1].content.Length 'ai: source cut at 3000'
+Assert-True $b.Truncated 'ai: cut is reported'
+Assert-Equal 1 $b.max_tokens 'ai: one token'
+Assert-True ($b.logprobs -and $b.top_logprobs -eq 20 -and $b.temperature -eq 0 -and -not $b.chat_template_kwargs.enable_thinking) 'ai: choose request settings'
+Assert-True (-not (New-FujiAiChooseBody -Question 'q' -Options $o -Source 'short').Truncated) 'ai: short source not cut'
+$resp = '{"choices":[{"logprobs":{"content":[{"top_logprobs":[{"token":" A","logprob":-0.5},{"token":"b","logprob":-1.2},{"token":"x","logprob":-3}]}]}}]}' | ConvertFrom-Json
+$c = Read-FujiAiChoice -Response $resp -Options $o
+Assert-Equal 'resident' $c.Value 'ai: choice with a space before the letter'
+Assert-True ([Math]::Abs($c.P - ([Math]::Exp(-0.5) / ([Math]::Exp(-0.5) + [Math]::Exp(-1.2)))) -lt 0.001) 'ai: probability shared among options (lower case b counted)'
+Assert-True ([Math]::Abs($c.Covered - ([Math]::Exp(-0.5) + [Math]::Exp(-1.2))) -lt 0.001) 'ai: covered mass'
+Assert-True ($c.Probs.Contains('other') -and $c.Probs['other'] -eq 0) 'ai: options not in the top list get 0'
+$none = Read-FujiAiChoice -Response ('{"choices":[{"logprobs":{"content":[{"top_logprobs":[{"token":"x","logprob":-0.1}]}]}}]}' | ConvertFrom-Json) -Options $o
+Assert-True ($none.Covered -eq 0 -and $none.P -eq 0) 'ai: no letter answered'
+$e = New-FujiAiExtractBody -Items $it -Note 'more' -Source 'text'
+Assert-Equal 120 $e.max_tokens 'ai: extract tokens 60 per item'
+Assert-Equal 'json_schema' $e.response_format.type 'ai: extract json schema'
+$sch = $e.response_format.json_schema.schema
+Assert-Equal @('name', 'phone') @($sch.required) 'ai: extract schema requires every item'
+Assert-Equal 100 $sch.properties['name'].maxLength 'ai: extract item max length'
+Assert-True ($e.messages[0].content.Contains('the applicant') -and $e.messages[0].content.Contains('more')) 'ai: extract prompt has items and note'
+$many = Read-FujiAiItem -Text ((1..12 | ForEach-Object { 'v' + $_ }) -join "`n")
+Assert-Equal 600 (New-FujiAiExtractBody -Items $many -Note '' -Source 't').max_tokens 'ai: extract tokens at most 600'
+Assert-True (Test-FujiAiInSource -Value 'Nakamura Sakura' -Source ('name: Nakamura' + $fwSpace + 'Sakura')) 'ai: in source, spaces'
+Assert-True (Test-FujiAiInSource -Value '0466-12-3456' -Source ('tel ' + [string][char]0xFF10 + '466-12-3456')) 'ai: in source, full-width digits'
+Assert-True (-not (Test-FujiAiInSource -Value 'Nakamura Hanako' -Source 'name: Nakamura Sakura')) 'ai: not in source'
+Assert-True (Test-FujiAiInSource -Value '' -Source 'abc') 'ai: empty value counts as in source'
+$aiWork = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_ai_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $aiWork)
+try {
+    $p1 = Add-FujiAiReviewRow -Directory $aiWork -Now ([datetime]'2026-11-10 09:00') -Row ([ordered]@{ time = '09:00'; macro = 'm'; step = 3; row = 1; command = 'AI_EXTRACT'; name = 'name'; source = ("a,b`n""c""" + ('y' * 200)); answer = ''; p = ''; probs = ''; reason = 'r1' })
+    [void](Add-FujiAiReviewRow -Directory $aiWork -Now ([datetime]'2026-11-10 09:05') -Row ([ordered]@{ time = '09:05'; macro = 'm'; step = 3; row = 2; command = 'AI_CHOOSE'; name = 'desk'; source = 'x'; answer = '=bad'; p = '0.33'; probs = 'a=0.33;b=0.30'; reason = 'r2' }))
+    Assert-Equal (Join-Path (Join-Path $aiWork 'fujikyun_logs') 'ai_review_2026-11-10.csv') $p1 'ai: review csv path'
+    $bytes = [System.IO.File]::ReadAllBytes($p1)
+    Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) 'ai: review csv has a BOM'
+    $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p1).Text).Records
+    Assert-Equal 3 $recs.Count 'ai: review csv header + 2 rows'
+    Assert-Equal 11 $recs[0].Count 'ai: review csv 11 columns'
+    Assert-Equal ("a,b`n""c""" + ('y' * 93)) $recs[1][6] 'ai: review csv keeps comma, quote, newline; source cut to 100'
+    Assert-Equal "'=bad" $recs[2][7] 'ai: review csv answer cannot run as a formula'
+    $m = Join-Path $aiWork 'ai.json'
+    Write-FujiTextFile -Path $m -Text '{"aiVersion":2,"model":"m.gguf","files":{"m.gguf":{"size":5,"sha256":"ab"}},"serverArgs":"-c 4096"}'
+    $man = Read-FujiAiManifest -Path $m
+    Assert-True ($man.AiVersion -eq 2 -and $man.Model -eq 'm.gguf' -and $man.ServerArgs -eq '-c 4096' -and $man.Files['m.gguf']['size'] -eq 5) 'ai: manifest read'
+    Write-FujiTextFile -Path $m -Text '{"aiVersion":2}'
+    $threw = $false; try { [void](Read-FujiAiManifest -Path $m) } catch { $threw = $true }
+    Assert-True $threw 'ai: manifest without a model is refused'
+    $local = Join-Path $aiWork 'local'
+    [void](New-Item -ItemType Directory -Path $local)
+    $shared = @{ AiVersion = 1; Model = 'm.gguf'; Files = @{ 'm.gguf' = @{ size = 5 } } }
+    Assert-Equal 'copy' (Test-FujiAiCopyNeeded -Shared $shared -Local $null -LocalDir $local) 'ai: no copy yet'
+    Write-FujiTextFile -Path (Join-Path $local 'm.gguf') -Text '12345'
+    Assert-Equal 'none' (Test-FujiAiCopyNeeded -Shared $shared -Local @{ AiVersion = 1; Model = 'm.gguf' } -LocalDir $local) 'ai: same version, same size'
+    Assert-Equal 'copy' (Test-FujiAiCopyNeeded -Shared @{ AiVersion = 2; Model = 'm.gguf'; Files = @{ 'm.gguf' = @{ size = 5 } } } -Local @{ AiVersion = 1; Model = 'm.gguf' } -LocalDir $local) 'ai: new version'
+    Write-FujiTextFile -Path (Join-Path $local 'm.gguf') -Text '123'
+    Assert-Equal 'copy' (Test-FujiAiCopyNeeded -Shared $shared -Local @{ AiVersion = 1; Model = 'm.gguf' } -LocalDir $local) 'ai: cut-off copy'
+} finally {
+    Remove-Item -LiteralPath $aiWork -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 # ----------------------------------------------------------------- commands and templates
 $script:FujiCsvHeaderNameOf = { param($Column) $h = @($golden.fixture.header); if ($Column -ge 1 -and $Column -le $h.Count) { ([string]$h[$Column - 1]).Trim() } else { '' } }
 $labelsById = @{}
