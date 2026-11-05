@@ -33,6 +33,7 @@ try {
     $io.Ocr = { param($Settings, $Find, $Nth) $script:screenText }
     $io.Confirm = { param($Caption, $Message) $logs.Add('CONFIRM ' + $Message); 'continue' }
     $io.AiChat = { param($Body) Invoke-FujiAiChat -Server $srv -Body $Body }
+    $io.AiTookFocus = { $false }
     $io.AiPick = { param($Caption, $Message, $Options, $Initial) $logs.Add('PICK ' + $Initial); @{ Choice = 'continue'; Value = $Initial } }
     $io.AiReview = { param($Row) $reviews.Add($Row); [void](Add-FujiAiReviewRow -Directory $work -Now (Get-Date) -Row $Row) }
     foreach ($id in @('ai-sort-inquiry', 'ai-unexpected-window')) {
