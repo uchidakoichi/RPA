@@ -6277,7 +6277,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.03.2'
+$script:FujiAppVersion = '2026.11.05'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -6799,18 +6799,18 @@ function Copy-FujiAiLocal {
 # cannot be reached but there is a copy, the copy is used (Log {Message} says so).
 function Resolve-FujiAiReady {
     param([AllowEmptyString()][string]$SharedDir, [string]$LocalDir = (Get-FujiAiLocalDir), [Parameter(Mandatory)][scriptblock]$Copy, [scriptblock]$Log = { param($Message) })
-    $localManifest = Get-FujiAiLocalManifest -LocalDir $LocalDir
-    $shared = $null
-    if ($SharedDir) { try { $shared = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json') } catch { $shared = $null } }
-    if ($null -eq $shared) {
-        if ($null -ne $localManifest -and (Test-Path -LiteralPath (Join-Path $LocalDir $localManifest.Model) -PathType Leaf)) {
+    $aiReadyLocal = Get-FujiAiLocalManifest -LocalDir $LocalDir
+    $aiReadyShared = $null
+    if ($SharedDir) { try { $aiReadyShared = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json') } catch { $aiReadyShared = $null } }
+    if ($null -eq $aiReadyShared) {
+        if ($null -ne $aiReadyLocal -and (Test-Path -LiteralPath (Join-Path $LocalDir $aiReadyLocal.Model) -PathType Leaf)) {
             & $Log (Get-FujiText 'run.aiSharedOffline' $SharedDir)
             return $LocalDir
         }
         if (-not $SharedDir) { throw (Get-FujiText 'run.aiNoFolder') }
         throw (Get-FujiText 'run.aiSharedMissing' $SharedDir)
     }
-    if ((Test-FujiAiCopyNeeded -Shared $shared -Local $localManifest -LocalDir $LocalDir) -eq 'copy') {
+    if ((Test-FujiAiCopyNeeded -Shared $aiReadyShared -Local $aiReadyLocal -LocalDir $LocalDir) -eq 'copy') {
         if ((& $Copy) -ne 'copied') { throw (Get-FujiText 'run.aiCopyCanceled') }
     }
     return $LocalDir
@@ -7982,7 +7982,8 @@ function Get-FujiDiagnostic {
     $tasks = $null -ne (Get-Module -ListAvailable -Name ScheduledTasks)
     & $add $tasks 'tasks' ''
 
-    # AI commands: the shared folder, the copy on this PC, memory, AVX2 (llama.cpp's x64 build needs it), local disk
+    # AI commands: the shared folder, the copy on this PC, memory, AVX2 (speed only: llama.cpp's x64
+    # build also has backends for CPUs without it; it ran on the ARM VM, which reports none), local disk
     $aiFolder = Get-FujiAiFolderSetting -Settings $script:Settings
     if ($aiFolder) { & $add (Test-Path -LiteralPath (Join-Path $aiFolder 'ai.json') -PathType Leaf) 'aiFolder' $aiFolder } else { & $add $true 'aiFolder' (Get-FujiText 'diag.aiNotSet') }
     $aiLocal = Get-FujiAiLocalManifest -LocalDir (Get-FujiAiLocalDir)
@@ -7992,7 +7993,7 @@ function Get-FujiDiagnostic {
     try {
         if (-not ('FujiDiagCpu' -as [type])) { Add-Type -TypeDefinition 'public static class FujiDiagCpu { [System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint f); }' -Language CSharp }
         $avx2 = [FujiDiagCpu]::IsProcessorFeaturePresent(40)
-        & $add $avx2 'aiAvx2' ''
+        & $add $true 'aiAvx2' $(if ($avx2) { Get-FujiText 'diag.aiAvx2Yes' } else { Get-FujiText 'diag.aiAvx2No' })
     } catch {
         & $add $false 'aiAvx2' $_.Exception.Message
     }

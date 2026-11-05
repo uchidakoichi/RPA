@@ -99,18 +99,18 @@ function Copy-FujiAiLocal {
 # cannot be reached but there is a copy, the copy is used (Log {Message} says so).
 function Resolve-FujiAiReady {
     param([AllowEmptyString()][string]$SharedDir, [string]$LocalDir = (Get-FujiAiLocalDir), [Parameter(Mandatory)][scriptblock]$Copy, [scriptblock]$Log = { param($Message) })
-    $localManifest = Get-FujiAiLocalManifest -LocalDir $LocalDir
-    $shared = $null
-    if ($SharedDir) { try { $shared = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json') } catch { $shared = $null } }
-    if ($null -eq $shared) {
-        if ($null -ne $localManifest -and (Test-Path -LiteralPath (Join-Path $LocalDir $localManifest.Model) -PathType Leaf)) {
+    $aiReadyLocal = Get-FujiAiLocalManifest -LocalDir $LocalDir
+    $aiReadyShared = $null
+    if ($SharedDir) { try { $aiReadyShared = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json') } catch { $aiReadyShared = $null } }
+    if ($null -eq $aiReadyShared) {
+        if ($null -ne $aiReadyLocal -and (Test-Path -LiteralPath (Join-Path $LocalDir $aiReadyLocal.Model) -PathType Leaf)) {
             & $Log (Get-FujiText 'run.aiSharedOffline' $SharedDir)
             return $LocalDir
         }
         if (-not $SharedDir) { throw (Get-FujiText 'run.aiNoFolder') }
         throw (Get-FujiText 'run.aiSharedMissing' $SharedDir)
     }
-    if ((Test-FujiAiCopyNeeded -Shared $shared -Local $localManifest -LocalDir $LocalDir) -eq 'copy') {
+    if ((Test-FujiAiCopyNeeded -Shared $aiReadyShared -Local $aiReadyLocal -LocalDir $LocalDir) -eq 'copy') {
         if ((& $Copy) -ne 'copied') { throw (Get-FujiText 'run.aiCopyCanceled') }
     }
     return $LocalDir

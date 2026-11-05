@@ -96,8 +96,8 @@
     "fileRenameWild": "名前を変えるときは、元のファイル名に * や ? は使えないよ（1つずつ変えてね）"
   },
   "label": {
-    "aiChoose": "AIが選ぶ → ${name}",
-    "aiExtract": "AIが抜き出す → {items}",
+    "aiChoose": "🤖 AIが選ぶ → ${name}",
+    "aiExtract": "🔎 AIが抜き出す → {items}",
     "key": "キー送信 {key}",
     "text": "文字列「{text}」を貼付",
     "csv": "CSV {col}列目{name}を貼付",
@@ -1039,7 +1039,9 @@
     "aiCopy": "AI のこの PC の写し",
     "aiNoCopy": "まだない",
     "aiMemory": "空きメモリ（AI は 1024 MB 以上）",
-    "aiAvx2": "CPU の AVX2（AI に必要）",
+    "aiAvx2": "CPU の AVX2（AI の速さに関わる）",
+    "aiAvx2Yes": "あり",
+    "aiAvx2No": "なし（AI は動くが、遅いことがある）",
     "aiDisk": "この PC の空き（AI の写しに 2 GB 以上）",
     "title": "🩺 環境チェック",
     "running": "🩺 この端末で使える機能を調べてるキュン…",

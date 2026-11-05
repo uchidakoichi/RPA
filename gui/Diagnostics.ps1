@@ -74,7 +74,8 @@ function Get-FujiDiagnostic {
     $tasks = $null -ne (Get-Module -ListAvailable -Name ScheduledTasks)
     & $add $tasks 'tasks' ''
 
-    # AI commands: the shared folder, the copy on this PC, memory, AVX2 (llama.cpp's x64 build needs it), local disk
+    # AI commands: the shared folder, the copy on this PC, memory, AVX2 (speed only: llama.cpp's x64
+    # build also has backends for CPUs without it; it ran on the ARM VM, which reports none), local disk
     $aiFolder = Get-FujiAiFolderSetting -Settings $script:Settings
     if ($aiFolder) { & $add (Test-Path -LiteralPath (Join-Path $aiFolder 'ai.json') -PathType Leaf) 'aiFolder' $aiFolder } else { & $add $true 'aiFolder' (Get-FujiText 'diag.aiNotSet') }
     $aiLocal = Get-FujiAiLocalManifest -LocalDir (Get-FujiAiLocalDir)
@@ -84,7 +85,7 @@ function Get-FujiDiagnostic {
     try {
         if (-not ('FujiDiagCpu' -as [type])) { Add-Type -TypeDefinition 'public static class FujiDiagCpu { [System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint f); }' -Language CSharp }
         $avx2 = [FujiDiagCpu]::IsProcessorFeaturePresent(40)
-        & $add $avx2 'aiAvx2' ''
+        & $add $true 'aiAvx2' $(if ($avx2) { Get-FujiText 'diag.aiAvx2Yes' } else { Get-FujiText 'diag.aiAvx2No' })
     } catch {
         & $add $false 'aiAvx2' $_.Exception.Message
     }

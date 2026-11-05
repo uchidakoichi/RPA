@@ -45,5 +45,6 @@ if (-not $Only -or $Only -eq 'pick') {
     $r = Show-FujiRunAiPick -Caption 'AI' -Message ("which action`n`n" + ('The record you searched for was not found. ' * 6)) -Options $opts -Initial 'SKIP_ROW'
     Write-Output ('pick: ' + $r.Choice + ' ' + $r.Value)
 }
+if ($Only -eq 'diag') { ConvertTo-FujiDiagnosticText -Result (Get-FujiDiagnostic) }
 $timer.Stop()
 $owner.Close()
