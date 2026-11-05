@@ -243,10 +243,16 @@ function Get-FujiDefinedVarName {
     if ($ErrorVarName) { $names.Add($ErrorVarName) }
     foreach ($s in $Steps) {
         $def = Get-FujiCommandDef -Cmd $s.cmd
+        if ($s.cmd -eq 'AI_EXTRACT') {
+            foreach ($it in (Read-FujiAiItem -Text (ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val)['items'])) { if ($it.Name -and -not $names.Contains($it.Name)) { $names.Add($it.Name) } }
+            continue
+        }
         if ($null -eq $def -or -not $def.Contains('definesVar')) { continue }
         $name = ([string](ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val)[$def['definesVar']]).Trim()
         if (-not $name -and $s.cmd -eq 'LOOP_START') { $name = [string]$def['parseDefaults']['counter'] }
         if ($name -and -not $names.Contains($name)) { $names.Add($name) }
+        $prob = $name + (Get-FujiText 'run.aiProbSuffix')
+        if ($s.cmd -eq 'AI_CHOOSE' -and $name -and -not $names.Contains($prob)) { $names.Add($prob) }
     }
     return , $names.ToArray()
 }

@@ -488,6 +488,37 @@ try {
     Remove-Item -LiteralPath $aiWork -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# AI commands: definitions, checks, labels, defined variables
+Assert-True ($null -ne (Get-FujiCommandDef 'AI_CHOOSE')) 'ai: AI_CHOOSE defined'
+Assert-True ($null -ne (Get-FujiCommandDef 'AI_EXTRACT')) 'ai: AI_EXTRACT defined'
+Assert-True ((@($script:FujiCommands['palette'] | Where-Object { $_['category'] -eq 'ai' })[0]['cmds'] -join ',') -eq 'AI_CHOOSE,AI_EXTRACT') 'ai: palette group'
+$chooseDefault = ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value ''
+Assert-True ($chooseDefault['threshold'] -eq '0.5' -and $chooseDefault['low'] -eq 'REVIEW' -and $chooseDefault['unknown'] -ne '') 'ai: choose defaults'
+Assert-Equal 'ON' (ConvertFrom-FujiStepValue -Cmd 'AI_EXTRACT' -Value '')['strict'] 'ai: extract default strict'
+$aiOk = [ordered]@{ name = 'desk'; src = '{{$text}}'; question = 'which desk'; options = "resident`ngarbage"; threshold = '0.5'; low = 'REVIEW'; unknown = 'unknown' }
+Assert-Equal '' (Test-FujiStepSetting -Cmd 'AI_CHOOSE' -Settings $aiOk) 'ai: valid choose'
+$aiBad = @(
+    @{ options = 'resident' }, @{ options = ((1..11 | ForEach-Object { 'o' + $_ }) -join "`n") }, @{ options = ("resident`nresident" + [char]0xFF1A + 'same') },
+    @{ threshold = '1.5' }, @{ threshold = 'x' }, @{ threshold = '-0.1' }, @{ name = '' }, @{ name = 'a b' }, @{ src = ' ' }, @{ question = '' }, @{ low = 'ODD' }
+)
+foreach ($bad in $aiBad) {
+    $s = [ordered]@{}; foreach ($k in $aiOk.Keys) { $s[$k] = $aiOk[$k] }; foreach ($k in $bad.Keys) { $s[$k] = $bad[$k] }
+    Assert-True ((Test-FujiStepSetting -Cmd 'AI_CHOOSE' -Settings $s) -ne '') ('ai: choose rejects ' + (($bad.Keys | ForEach-Object { $_ + '=' + $bad[$_] }) -join ','))
+}
+$exOk = [ordered]@{ src = '{{$text}}'; items = "name: the applicant`nphone"; note = ''; strict = 'ON' }
+Assert-Equal '' (Test-FujiStepSetting -Cmd 'AI_EXTRACT' -Settings $exOk) 'ai: valid extract'
+foreach ($bad in @(@{ items = '' }, @{ items = ((1..11 | ForEach-Object { 'v' + $_ }) -join "`n") }, @{ items = "a`na" }, @{ items = 'a b' }, @{ src = '' })) {
+    $s = [ordered]@{}; foreach ($k in $exOk.Keys) { $s[$k] = $exOk[$k] }; foreach ($k in $bad.Keys) { $s[$k] = $bad[$k] }
+    Assert-True ((Test-FujiStepSetting -Cmd 'AI_EXTRACT' -Settings $s) -ne '') ('ai: extract rejects ' + (($bad.Keys | ForEach-Object { $_ + '=' + $bad[$_] }) -join ','))
+}
+$aiVal = ConvertTo-FujiStepValue -Cmd 'AI_CHOOSE' -Settings $aiOk
+Assert-Equal $aiVal (ConvertTo-FujiStepValue -Cmd 'AI_CHOOSE' -Settings (ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value $aiVal)) 'ai: choose value round trip'
+Assert-True ((Get-FujiStepLabel -Cmd 'AI_CHOOSE' -Value $aiVal).Contains('desk')) 'ai: choose label names the variable'
+$exVal = ConvertTo-FujiStepValue -Cmd 'AI_EXTRACT' -Settings $exOk
+Assert-True ((Get-FujiStepLabel -Cmd 'AI_EXTRACT' -Value $exVal).Contains('name') -and (Get-FujiStepLabel -Cmd 'AI_EXTRACT' -Value $exVal).Contains('phone')) 'ai: extract label names the items'
+$aiSteps = @((New-FujiStep -Cmd 'AI_CHOOSE' -Value $aiVal), (New-FujiStep -Cmd 'AI_EXTRACT' -Value $exVal))
+Assert-Equal @('desk', ('desk' + (Get-FujiText 'run.aiProbSuffix')), 'name', 'phone') (Get-FujiDefinedVarName -Steps $aiSteps) 'ai: defined variables (answer, probability, each item)'
+
 # ----------------------------------------------------------------- commands and templates
 $script:FujiCsvHeaderNameOf = { param($Column) $h = @($golden.fixture.header); if ($Column -ge 1 -and $Column -le $h.Count) { ([string]$h[$Column - 1]).Trim() } else { '' } }
 $labelsById = @{}

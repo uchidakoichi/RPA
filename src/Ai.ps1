@@ -26,6 +26,18 @@ function Read-FujiAiLine {
     return , $list
 }
 
+# The first value that appears twice (width, case and spaces aside), or ''
+function Get-FujiAiDuplicate {
+    param([AllowEmptyCollection()][string[]]$Values)
+    $seen = @{}
+    foreach ($v in $Values) {
+        $k = (ConvertTo-FujiAiPlain -Text $v).ToLowerInvariant()
+        if ($seen.ContainsKey($k)) { return $v }
+        $seen[$k] = $true
+    }
+    return ''
+}
+
 function Read-FujiAiOption {
     param([AllowEmptyString()][string]$Text)
     $list = New-Object -TypeName 'System.Collections.Generic.List[hashtable]'

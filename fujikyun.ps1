@@ -80,6 +80,18 @@ function Read-FujiAiLine {
     return , $list
 }
 
+# The first value that appears twice (width, case and spaces aside), or ''
+function Get-FujiAiDuplicate {
+    param([AllowEmptyCollection()][string[]]$Values)
+    $seen = @{}
+    foreach ($v in $Values) {
+        $k = (ConvertTo-FujiAiPlain -Text $v).ToLowerInvariant()
+        if ($seen.ContainsKey($k)) { return $v }
+        $seen[$k] = $true
+    }
+    return ''
+}
+
 function Read-FujiAiOption {
     param([AllowEmptyString()][string]$Text)
     $list = New-Object -TypeName 'System.Collections.Generic.List[hashtable]'
@@ -471,7 +483,7 @@ $script:FujiCommands = $null
 $script:FujiBlockEnds = @{}
 # Raised whenever fujikyun_commands.json gets commands or fields the scripts need (2: FILE_OP):
 # an older file is reported at start (its palette would lack the new buttons)
-$script:FujiCommandsVersion = 2
+$script:FujiCommandsVersion = 3
 
 function Import-FujiCommand {
     param([Parameter(Mandatory)][string]$Path)
@@ -819,6 +831,28 @@ function Test-FujiStepSetting {
         }
         'GROUP_START' { if ($s['name'] -eq '') { return (Get-FujiText 'validate.groupName') } }
         'COMMENT' { if ($s['memo'] -eq '') { return (Get-FujiText 'validate.memo') } }
+        'AI_CHOOSE' {
+            $e = Get-FujiVarNameError $s['name']
+            if ($e) { return $e }
+            if (([string]$s['src']).Trim() -eq '') { return (Get-FujiText 'validate.aiSrc') }
+            if (([string]$s['question']).Trim() -eq '') { return (Get-FujiText 'validate.aiQuestion') }
+            $opts = Read-FujiAiOption -Text $s['options']
+            if ($opts.Count -lt 2 -or $opts.Count -gt 10) { return (Get-FujiText 'validate.aiOptions' $opts.Count) }
+            $same = Get-FujiAiDuplicate -Values @($opts | ForEach-Object { $_.Value })
+            if ($same) { return (Get-FujiText 'validate.aiOptionSame' $same) }
+            $n = 0.0
+            $t = ([string]$s['threshold']).Trim()
+            if ($t -notmatch '^[0-9]*\.?[0-9]+$' -or -not [double]::TryParse($t, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$n) -or $n -gt 1) { return (Get-FujiText 'validate.aiThreshold') }
+            if ($s['low'] -notin @('REVIEW', 'ASK', 'STOP', 'USE')) { return (Get-FujiText 'validate.aiLow') }
+        }
+        'AI_EXTRACT' {
+            if (([string]$s['src']).Trim() -eq '') { return (Get-FujiText 'validate.aiSrc') }
+            $items = Read-FujiAiItem -Text $s['items']
+            if ($items.Count -lt 1 -or $items.Count -gt 10) { return (Get-FujiText 'validate.aiItems' $items.Count) }
+            foreach ($it in $items) { if (Get-FujiVarNameError $it.Name) { return (Get-FujiText 'validate.aiItemName' $it.Name) } }
+            $same = Get-FujiAiDuplicate -Values @($items | ForEach-Object { $_.Name })
+            if ($same) { return (Get-FujiText 'validate.aiItemSame' $same) }
+        }
     }
     return ''
 }
@@ -938,6 +972,8 @@ function Get-FujiStepLabel {
         }
         'GROUP_START' { return $val }
         'COMMENT' { return (Format-FujiShort $val 40) }
+        'AI_CHOOSE' { return (Get-FujiLabelText 'aiChoose' @{ name = $p['name'] }) }
+        'AI_EXTRACT' { return (Get-FujiLabelText 'aiExtract' @{ items = (Format-FujiShort ((@(Read-FujiAiItem -Text $p['items']) | ForEach-Object { $_.Name }) -join ', ') 40) }) }
     }
     return $val
 }
@@ -1418,10 +1454,16 @@ function Get-FujiDefinedVarName {
     if ($ErrorVarName) { $names.Add($ErrorVarName) }
     foreach ($s in $Steps) {
         $def = Get-FujiCommandDef -Cmd $s.cmd
+        if ($s.cmd -eq 'AI_EXTRACT') {
+            foreach ($it in (Read-FujiAiItem -Text (ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val)['items'])) { if ($it.Name -and -not $names.Contains($it.Name)) { $names.Add($it.Name) } }
+            continue
+        }
         if ($null -eq $def -or -not $def.Contains('definesVar')) { continue }
         $name = ([string](ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val)[$def['definesVar']]).Trim()
         if (-not $name -and $s.cmd -eq 'LOOP_START') { $name = [string]$def['parseDefaults']['counter'] }
         if ($name -and -not $names.Contains($name)) { $names.Add($name) }
+        $prob = $name + (Get-FujiText 'run.aiProbSuffix')
+        if ($s.cmd -eq 'AI_CHOOSE' -and $name -and -not $names.Contains($prob)) { $names.Add($prob) }
     }
     return , $names.ToArray()
 }
@@ -5726,7 +5768,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 12
+$script:FujiTextVersion = 13
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.

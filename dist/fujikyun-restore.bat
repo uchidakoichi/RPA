@@ -6,7 +6,7 @@ rem check its SHA-256 and extract the app files into this folder (overwriting th
 rem The ZIP holds only the app files: macros, settings, logs and records are left as they are.
 rem build_docs.js turns "msg" lines into ASCII-only PowerShell calls: cmd misreads
 rem a .bat that has both LF-only line endings and non-ASCII text.
-set "EXPECTED=8af44182ec3b1c9864400c74c3fdcf9bfff3c9df5b30439954acdfef78471382"
+set "EXPECTED=f70a56ca651db0366c4723e41341a1777c1bee4b44ee631b568b4eef6db482cf"
 set "HERE=%~dp0"
 set "SRC=%~1"
 if not defined SRC if exist "%HERE%fujikyun.b64.txt" set "SRC=%HERE%fujikyun.b64.txt"

@@ -278,6 +278,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <h3 id="変数データ">変数・データ</h3>
 <div class="table-wrap"><table><thead><tr><th>コマンド</th><th>動き</th></tr></thead><tbody><tr><td><strong>SET_VAR</strong> 📦 変数に値を入れる</td><td>値をそのまま、または計算して変数に入れます</td></tr><tr><td><strong>STR_OP</strong> ✂ 文字を加工する</td><td>置換・正規表現・切り出し・全角半角・ゼロ埋め・和暦・日付の計算などをして変数に入れます</td></tr><tr><td><strong>ASK</strong> ✍ 値を入力してもらう</td><td>実行中に入力欄を出して、入力された値を変数に入れます</td></tr><tr><td><strong>RECORD</strong> 🧾 結果に記録する</td><td>値を実行結果CSVの列として残します</td></tr><tr><td><strong>EXCEL_READ</strong> 📗 Excelのセルを読む</td><td>Excelの画面を開かずに、ブックのセルの値を変数に入れます</td></tr><tr><td><strong>EXCEL_WRITE</strong> 🖊 Excelのセルに書く</td><td>Excelの画面を開かずに、セルに書き込んで保存します。<strong>書き込むブックは閉じておいてください</strong></td></tr><tr><td><strong>FILE_OP</strong> 🗂 ファイルをコピー・移動・名前変更</td><td>ファイルをコピー・移動したり、名前を変えたりします（<a href="#ファイルのコピー移動名前の変更file_op">下の説明</a>）</td></tr></tbody></table></div>
 <p>使い方は <a href="#7-変数繰り返し分岐">7章</a>。</p>
+<h3 id="ai">AI</h3>
+<div class="table-wrap"><table><thead><tr><th>コマンド</th><th>動き</th></tr></thead><tbody><tr><td><strong>AI_CHOOSE</strong> 🤖 AIに選んでもらう</td><td>読ませた文を AI が読み、選択肢から1つ選んで変数に入れます（<a href="#aiに選んでもらう抜き出してもらうai_chooseai_extract">下の説明</a>）</td></tr><tr><td><strong>AI_EXTRACT</strong> 🔎 AIに抜き出してもらう</td><td>読ませた文から、決めた項目を AI が抜き出して変数に入れます</td></tr></tbody></table></div>
 <h3 id="整理">整理</h3>
 <div class="table-wrap"><table><thead><tr><th>コマンド</th><th>設定</th><th>動き</th></tr></thead><tbody><tr><td><strong>GROUP_START</strong> 📁 グループ</td><td>グループ名・実行タイミング</td><td>手順をまとめます（〜 GROUP_END）。<a href="#グループの実行タイミング">4章</a></td></tr><tr><td><strong>COMMENT</strong> 💬 コメント</td><td>メモ</td><td>実行時は何もしません。手順の説明を書いておきましょう（緑の斜体で表示）</td></tr></tbody></table></div>
 <hr>
@@ -312,6 +314,8 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p>ダウンロードした帳票を決まったフォルダに移す、処理の済んだファイルの名前に「済_」を付ける、といった作業に使います。</p>
 <div class="table-wrap"><table><thead><tr><th>すること</th><th>元のファイル</th><th>行き先</th></tr></thead><tbody><tr><td>コピーする</td><td>ファイルのパス（例 <code>C:\RPA作業\受付_{{1}}.pdf</code>）</td><td>フォルダ（最後に <code>\</code> を付ける。例 <code>C:\RPA作業\控え\</code>）か、新しいファイルのパス</td></tr><tr><td>移動する</td><td>同上</td><td>同上</td></tr><tr><td>名前を変える</td><td>同上</td><td>新しい名前だけ（例 <code>済_{{1}}.pdf</code>）。同じフォルダの中で名前を変えます</td></tr></tbody></table></div>
 <ul><li>元のファイル名に <code>*</code>（何文字でも）や <code>?</code>（1文字）を使うと、合うファイルを <strong>まとめて</strong> コピー・移動できます（例 <code>C:\RPA作業\受信\*.pdf</code>）。このとき行き先はフォルダです。名前を変えるときは使えません。</li><li>行き先のフォルダが無ければ作ります。</li><li>行き先に同じ名前のファイルがあるときは、はじめはエラーにします（上書きしません）。「上書きする」を選ぶと置き換えます。</li><li>まとめて操作するときは、先にすべての行き先を確かめてから始めます。1つでも問題があれば、どのファイルも動かしません。</li><li>「行き先のパスを入れる変数名」を決めると、行き先のパスがその変数に入ります。まとめて操作したときは <code>;</code> で区切って入るので、そのまま MAIL の添付に使えます。</li><li><code>C:\</code> などから始まらないパスは、ふじキュンのフォルダの中として扱います。パスに <code>..</code>（上のフォルダ）は使えません。</li><li>ふじキュン自身のファイル（ふじキュンのフォルダにある <code>fujikyun</code> で始まるファイル）は操作しません。</li><li>ほかのアプリで開いているファイルは、移動・名前の変更ができないことがあります。そのアプリで閉じてから実行してください。</li></ul>
+<h3 id="aiに選んでもらう抜き出してもらうai_chooseai_extract">AIに選んでもらう・抜き出してもらう（AI_CHOOSE・AI_EXTRACT）</h3>
+<p>（作成中）</p>
 <hr>
 <h2 id="8-キーの書き方sendkeys">8. キーの書き方（SendKeys）</h2>
 <p>KEY コマンドや、WAIT_FOR・WINDOW_CHECK の「押すキー」は、Windows の SendKeys の書き方です。</p>
