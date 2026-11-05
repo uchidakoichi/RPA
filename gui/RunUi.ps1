@@ -55,6 +55,9 @@ function New-FujiRunBar {
     $alerts = New-FujiButton -Text (Get-FujiText 'gui.alertSettings') -Tip (Get-FujiText 'gui.alertSettingsTip')
     $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
     [void]$row.Controls.Add($alerts)
+    $ai = New-FujiButton -Text (Get-FujiText 'gui.aiButton') -Tip (Get-FujiText 'gui.aiButtonTip')
+    $ai.Add_Click({ Invoke-FujiUi { Show-FujiAiSettingDialog } })
+    [void]$row.Controls.Add($ai)
     $touch = $false
     if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
     $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')
