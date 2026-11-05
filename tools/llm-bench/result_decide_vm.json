@@ -1,0 +1,596 @@
+{
+    "summary":  [
+                    "classify: 8/10 right, median 2572 ms; p\u003e=0.7: 1 answered, 1 right; p\u003e=0.9: 0 answered, 0 right",
+                    "judge: 10/10 right, median 5019 ms; p\u003e=0.7: 4 answered, 4 right; p\u003e=0.9: 1 answered, 1 right",
+                    "match: 3/5 right, median 4973 ms; p\u003e=0.7: 3 answered, 2 right; p\u003e=0.9: 0 answered, 0 right",
+                    "all: 21/25 right; peakMb=1473"
+                ],
+    "rows":  [
+                 {
+                     "task":  "classify",
+                     "input":  "引っ越したので住所の変更をしたいのですが、何を持っていけばいいですか。",
+                     "expect":  [
+                                    "住民票"
+                                ],
+                     "choice":  "住民票",
+                     "p":  0.3533,
+                     "ok":  true,
+                     "covered":  0.9951,
+                     "probs":  {
+                                   "住民票":  0.3533,
+                                   "住民税":  0.2942,
+                                   "児童手当":  0.0485,
+                                   "国民健康保険":  0.0856,
+                                   "ごみ":  0.056,
+                                   "その他":  0.1625
+                               },
+                     "token":  "A",
+                     "ms":  9240,
+                     "promptTokens":  96,
+                     "cached":  0,
+                     "promptMs":  9179.159
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "今年の住民税の通知書が届きません。",
+                     "expect":  [
+                                    "住民税"
+                                ],
+                     "choice":  "住民税",
+                     "p":  0.8397,
+                     "ok":  true,
+                     "covered":  0.9986,
+                     "probs":  {
+                                   "住民票":  0.0587,
+                                   "住民税":  0.8397,
+                                   "児童手当":  0.02,
+                                   "国民健康保険":  0.015,
+                                   "ごみ":  0.0088,
+                                   "その他":  0.0577
+                               },
+                     "token":  "B",
+                     "ms":  2223,
+                     "promptTokens":  22,
+                     "cached":  69,
+                     "promptMs":  2180.747
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "子どもが生まれたので手当の手続きを教えてください。",
+                     "expect":  [
+                                    "児童手当"
+                                ],
+                     "choice":  "児童手当",
+                     "p":  0.6069,
+                     "ok":  true,
+                     "covered":  0.9975,
+                     "probs":  {
+                                   "住民票":  0.0452,
+                                   "住民税":  0.0703,
+                                   "児童手当":  0.6069,
+                                   "国民健康保険":  0.2498,
+                                   "ごみ":  0.0023,
+                                   "その他":  0.0256
+                               },
+                     "token":  "C",
+                     "ms":  2195,
+                     "promptTokens":  22,
+                     "cached":  69,
+                     "promptMs":  2151.775
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "会社を辞めたので、保険証を切り替えたいです。",
+                     "expect":  [
+                                    "国民健康保険"
+                                ],
+                     "choice":  "住民税",
+                     "p":  0.3327,
+                     "ok":  false,
+                     "covered":  0.9975,
+                     "probs":  {
+                                   "住民票":  0.0811,
+                                   "住民税":  0.3327,
+                                   "児童手当":  0.0753,
+                                   "国民健康保険":  0.3151,
+                                   "ごみ":  0.0585,
+                                   "その他":  0.1374
+                               },
+                     "token":  "B",
+                     "ms":  2572,
+                     "promptTokens":  26,
+                     "cached":  69,
+                     "promptMs":  2534.923
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "冷蔵庫を捨てたいのですが、どうすればいいですか。",
+                     "expect":  [
+                                    "ごみ"
+                                ],
+                     "choice":  "ごみ",
+                     "p":  0.5331,
+                     "ok":  true,
+                     "covered":  0.9959,
+                     "probs":  {
+                                   "住民票":  0.0616,
+                                   "住民税":  0.1012,
+                                   "児童手当":  0.026,
+                                   "国民健康保険":  0.0373,
+                                   "ごみ":  0.5331,
+                                   "その他":  0.2407
+                               },
+                     "token":  "E",
+                     "ms":  2318,
+                     "promptTokens":  23,
+                     "cached":  69,
+                     "promptMs":  2275.8
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "市役所の駐車場は何時まで使えますか。",
+                     "expect":  [
+                                    "その他"
+                                ],
+                     "choice":  "その他",
+                     "p":  0.4833,
+                     "ok":  true,
+                     "covered":  0.9941,
+                     "probs":  {
+                                   "住民票":  0.0523,
+                                   "住民税":  0.0854,
+                                   "児童手当":  0.0174,
+                                   "国民健康保険":  0.0309,
+                                   "ごみ":  0.3308,
+                                   "その他":  0.4833
+                               },
+                     "token":  "F",
+                     "ms":  2286,
+                     "promptTokens":  23,
+                     "cached":  69,
+                     "promptMs":  2242.311
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "マイナンバーカードで住民票の写しをコンビニで取れますか。",
+                     "expect":  [
+                                    "住民票"
+                                ],
+                     "choice":  "住民票",
+                     "p":  0.3178,
+                     "ok":  true,
+                     "covered":  0.9962,
+                     "probs":  {
+                                   "住民票":  0.3178,
+                                   "住民税":  0.2504,
+                                   "児童手当":  0.073,
+                                   "国民健康保険":  0.1194,
+                                   "ごみ":  0.0812,
+                                   "その他":  0.1582
+                               },
+                     "token":  "A",
+                     "ms":  2762,
+                     "promptTokens":  28,
+                     "cached":  69,
+                     "promptMs":  2720.578
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "固定資産税ではなく、市県民税の納付書を再発行してほしい。",
+                     "expect":  [
+                                    "住民税"
+                                ],
+                     "choice":  "住民税",
+                     "p":  0.431,
+                     "ok":  true,
+                     "covered":  0.9927,
+                     "probs":  {
+                                   "住民票":  0.1019,
+                                   "住民税":  0.431,
+                                   "児童手当":  0.0827,
+                                   "国民健康保険":  0.0787,
+                                   "ごみ":  0.065,
+                                   "その他":  0.2408
+                               },
+                     "token":  "B",
+                     "ms":  2861,
+                     "promptTokens":  29,
+                     "cached":  69,
+                     "promptMs":  2820.61
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "資源ごみの収集日が祝日の場合はどうなりますか。",
+                     "expect":  [
+                                    "ごみ"
+                                ],
+                     "choice":  "その他",
+                     "p":  0.4728,
+                     "ok":  false,
+                     "covered":  0.99,
+                     "probs":  {
+                                   "住民票":  0.0274,
+                                   "住民税":  0.1138,
+                                   "児童手当":  0.0307,
+                                   "国民健康保険":  0.0623,
+                                   "ごみ":  0.293,
+                                   "その他":  0.4728
+                               },
+                     "token":  "F",
+                     "ms":  2384,
+                     "promptTokens":  24,
+                     "cached":  69,
+                     "promptMs":  2341.106
+                 },
+                 {
+                     "task":  "classify",
+                     "input":  "高額療養費の申請は国保の窓口でいいですか。",
+                     "expect":  [
+                                    "国民健康保険"
+                                ],
+                     "choice":  "国民健康保険",
+                     "p":  0.6777,
+                     "ok":  true,
+                     "covered":  0.9957,
+                     "probs":  {
+                                   "住民票":  0.0606,
+                                   "住民税":  0.0966,
+                                   "児童手当":  0.0513,
+                                   "国民健康保険":  0.6777,
+                                   "ごみ":  0.0426,
+                                   "その他":  0.0711
+                               },
+                     "token":  "D",
+                     "ms":  2671,
+                     "promptTokens":  27,
+                     "cached":  69,
+                     "promptMs":  2632.577
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 照会ボタンを押した\n画面のタイトル: 基幹システム\n画面の文字: 該当するデータがありません。\nボタン: OK",
+                     "expect":  [
+                                    "SKIP_ROW"
+                                ],
+                     "choice":  "SKIP_ROW",
+                     "p":  0.5086,
+                     "ok":  true,
+                     "covered":  0.9963,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.1388,
+                                   "CLOSE_ESC":  0.0446,
+                                   "SKIP_ROW":  0.5086,
+                                   "RETRY":  0.0563,
+                                   "ASK_HUMAN":  0.2158,
+                                   "STOP":  0.0358
+                               },
+                     "token":  "C",
+                     "ms":  28357,
+                     "promptTokens":  297,
+                     "cached":  0,
+                     "promptMs":  28311.53
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 保存ボタンを押した\n画面のタイトル: 確認\n画面の文字: 保存しました。\nボタン: OK",
+                     "expect":  [
+                                    "CLOSE_ENTER"
+                                ],
+                     "choice":  "CLOSE_ENTER",
+                     "p":  0.8185,
+                     "ok":  true,
+                     "covered":  0.9962,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.8185,
+                                   "CLOSE_ESC":  0.0287,
+                                   "SKIP_ROW":  0.0238,
+                                   "RETRY":  0.0164,
+                                   "ASK_HUMAN":  0.0836,
+                                   "STOP":  0.029
+                               },
+                     "token":  "A",
+                     "ms":  4170,
+                     "promptTokens":  41,
+                     "cached":  251,
+                     "promptMs":  4123.288
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 次の人を照会した\n画面のタイトル: 基幹システム\n画面の文字: セッションの有効期限が切れました。もう一度ログインしてください。\nボタン: OK",
+                     "expect":  [
+                                    "STOP",
+                                    "ASK_HUMAN"
+                                ],
+                     "choice":  "ASK_HUMAN",
+                     "p":  0.578,
+                     "ok":  true,
+                     "covered":  0.9947,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.0411,
+                                   "CLOSE_ESC":  0.0349,
+                                   "SKIP_ROW":  0.019,
+                                   "RETRY":  0.0266,
+                                   "ASK_HUMAN":  0.578,
+                                   "STOP":  0.3004
+                               },
+                     "token":  "E",
+                     "ms":  5330,
+                     "promptTokens":  53,
+                     "cached":  251,
+                     "promptMs":  5285.717
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 登録ボタンを押した\n画面のタイトル: 確認\n画面の文字: 同じ番号のデータがあります。上書きしますか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "ASK_HUMAN",
+                                    "STOP"
+                                ],
+                     "choice":  "ASK_HUMAN",
+                     "p":  0.93,
+                     "ok":  true,
+                     "covered":  0.9966,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.0069,
+                                   "CLOSE_ESC":  0.0103,
+                                   "SKIP_ROW":  0.0131,
+                                   "RETRY":  0.0105,
+                                   "ASK_HUMAN":  0.93,
+                                   "STOP":  0.0292
+                               },
+                     "token":  "E",
+                     "ms":  5019,
+                     "promptTokens":  50,
+                     "cached":  251,
+                     "promptMs":  4976.347
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 検索ボタンを押した\n画面のタイトル: お知らせ\n画面の文字: サーバーが混み合っています。しばらくしてからもう一度お試しください。\nボタン: OK",
+                     "expect":  [
+                                    "RETRY"
+                                ],
+                     "choice":  "RETRY",
+                     "p":  0.6013,
+                     "ok":  true,
+                     "covered":  0.9965,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.1726,
+                                   "CLOSE_ESC":  0.0398,
+                                   "SKIP_ROW":  0.0137,
+                                   "RETRY":  0.6013,
+                                   "ASK_HUMAN":  0.1104,
+                                   "STOP":  0.062
+                               },
+                     "token":  "D",
+                     "ms":  5019,
+                     "promptTokens":  50,
+                     "cached":  251,
+                     "promptMs":  4980.397
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 生年月日を入力した\n画面のタイトル: 入力エラー\n画面の文字: 生年月日の形式が正しくありません。\nボタン: OK",
+                     "expect":  [
+                                    "SKIP_ROW"
+                                ],
+                     "choice":  "SKIP_ROW",
+                     "p":  0.4306,
+                     "ok":  true,
+                     "covered":  0.9964,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.0391,
+                                   "CLOSE_ESC":  0.0794,
+                                   "SKIP_ROW":  0.4306,
+                                   "RETRY":  0.0334,
+                                   "ASK_HUMAN":  0.3714,
+                                   "STOP":  0.0462
+                               },
+                     "token":  "C",
+                     "ms":  4954,
+                     "promptTokens":  49,
+                     "cached":  251,
+                     "promptMs":  4910.697
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 画面を開いた\n画面のタイトル: お知らせ\n画面の文字: 本日17時から18時までシステムの保守を行います。\nボタン: 閉じる",
+                     "expect":  [
+                                    "CLOSE_ENTER",
+                                    "CLOSE_ESC"
+                                ],
+                     "choice":  "CLOSE_ENTER",
+                     "p":  0.4337,
+                     "ok":  true,
+                     "covered":  0.9962,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.4337,
+                                   "CLOSE_ESC":  0.0867,
+                                   "SKIP_ROW":  0.0505,
+                                   "RETRY":  0.1122,
+                                   "ASK_HUMAN":  0.226,
+                                   "STOP":  0.0908
+                               },
+                     "token":  "A",
+                     "ms":  4952,
+                     "promptTokens":  49,
+                     "cached":  251,
+                     "promptMs":  4906.641
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 削除ボタンを押した\n画面のタイトル: 確認\n画面の文字: 選んだ3件を削除します。元に戻せません。よろしいですか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "ASK_HUMAN",
+                                    "STOP"
+                                ],
+                     "choice":  "ASK_HUMAN",
+                     "p":  0.891,
+                     "ok":  true,
+                     "covered":  0.9974,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.0112,
+                                   "CLOSE_ESC":  0.0123,
+                                   "SKIP_ROW":  0.0164,
+                                   "RETRY":  0.0111,
+                                   "ASK_HUMAN":  0.891,
+                                   "STOP":  0.0581
+                               },
+                     "token":  "E",
+                     "ms":  5701,
+                     "promptTokens":  57,
+                     "cached":  251,
+                     "promptMs":  5662.138
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 印刷ボタンを押した\n画面のタイトル: Windows セキュリティ\n画面の文字: このアプリがデバイスに変更を加えることを許可しますか？\nボタン: はい / いいえ",
+                     "expect":  [
+                                    "STOP",
+                                    "ASK_HUMAN"
+                                ],
+                     "choice":  "ASK_HUMAN",
+                     "p":  0.8135,
+                     "ok":  true,
+                     "covered":  0.9981,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.0431,
+                                   "CLOSE_ESC":  0.0249,
+                                   "SKIP_ROW":  0.0242,
+                                   "RETRY":  0.0293,
+                                   "ASK_HUMAN":  0.8135,
+                                   "STOP":  0.0649
+                               },
+                     "token":  "E",
+                     "ms":  5301,
+                     "promptTokens":  53,
+                     "cached":  251,
+                     "promptMs":  5258.295
+                 },
+                 {
+                     "task":  "judge",
+                     "input":  "直前の操作: 次へを押した\n画面のタイトル: 処理中\n画面の文字: 処理しています。しばらくお待ちください。\nボタン: なし",
+                     "expect":  [
+                                    "RETRY"
+                                ],
+                     "choice":  "RETRY",
+                     "p":  0.6215,
+                     "ok":  true,
+                     "covered":  0.9976,
+                     "probs":  {
+                                   "CLOSE_ENTER":  0.2318,
+                                   "CLOSE_ESC":  0.0128,
+                                   "SKIP_ROW":  0.0102,
+                                   "RETRY":  0.6215,
+                                   "ASK_HUMAN":  0.049,
+                                   "STOP":  0.0747
+                               },
+                     "token":  "D",
+                     "ms":  4727,
+                     "promptTokens":  47,
+                     "cached":  251,
+                     "promptMs":  4684.932
+                 },
+                 {
+                     "task":  "match",
+                     "input":  "記録1: 髙橋 一郎、昭和50年5月5日生まれ、藤沢市朝日町1-1\n記録2: 高橋一郎、昭和50年5月5日生まれ、藤沢市朝日町1-1",
+                     "expect":  [
+                                    "true"
+                                ],
+                     "choice":  "true",
+                     "p":  0.7427,
+                     "ok":  true,
+                     "covered":  0.6788,
+                     "probs":  {
+                                   "true":  0.7427,
+                                   "false":  0.2573
+                               },
+                     "token":  "A",
+                     "ms":  15599,
+                     "promptTokens":  165,
+                     "cached":  0,
+                     "promptMs":  15560.382
+                 },
+                 {
+                     "task":  "match",
+                     "input":  "記録1: 齋藤 花子、平成元年1月10日生まれ\n記録2: 斉藤花子、平成元年1月10日生まれ",
+                     "expect":  [
+                                    "true"
+                                ],
+                     "choice":  "false",
+                     "p":  0.8219,
+                     "ok":  false,
+                     "covered":  0.8366,
+                     "probs":  {
+                                   "true":  0.1781,
+                                   "false":  0.8219
+                               },
+                     "token":  "B",
+                     "ms":  4804,
+                     "promptTokens":  49,
+                     "cached":  96,
+                     "promptMs":  4762.416
+                 },
+                 {
+                     "task":  "match",
+                     "input":  "記録1: 見本 太郎、昭和60年4月3日生まれ\n記録2: 見本 太郎、昭和61年4月3日生まれ",
+                     "expect":  [
+                                    "false"
+                                ],
+                     "choice":  "false",
+                     "p":  0.8601,
+                     "ok":  true,
+                     "covered":  0.9149,
+                     "probs":  {
+                                   "true":  0.1399,
+                                   "false":  0.8601
+                               },
+                     "token":  "B",
+                     "ms":  4817,
+                     "promptTokens":  49,
+                     "cached":  96,
+                     "promptMs":  4775.398
+                 },
+                 {
+                     "task":  "match",
+                     "input":  "記録1: ﾐﾎﾝ ﾀﾛｳ、1985年4月3日生まれ\n記録2: ミホン タロウ、1985年4月3日生まれ",
+                     "expect":  [
+                                    "true"
+                                ],
+                     "choice":  "true",
+                     "p":  0.6364,
+                     "ok":  true,
+                     "covered":  0.7436,
+                     "probs":  {
+                                   "true":  0.6364,
+                                   "false":  0.3636
+                               },
+                     "token":  "A",
+                     "ms":  5760,
+                     "promptTokens":  59,
+                     "cached":  96,
+                     "promptMs":  5721.891
+                 },
+                 {
+                     "task":  "match",
+                     "input":  "記録1: 試験 花子、平成2年12月25日生まれ\n記録2: 試験 華子、平成2年12月25日生まれ",
+                     "expect":  [
+                                    "false"
+                                ],
+                     "choice":  "true",
+                     "p":  0.5435,
+                     "ok":  false,
+                     "covered":  0.8302,
+                     "probs":  {
+                                   "true":  0.5435,
+                                   "false":  0.4565
+                               },
+                     "token":  "A",
+                     "ms":  4973,
+                     "promptTokens":  51,
+                     "cached":  96,
+                     "promptMs":  4931.056
+                 }
+             ],
+    "model":  "qwen3.5-2b-q4_k_m.gguf"
+}
