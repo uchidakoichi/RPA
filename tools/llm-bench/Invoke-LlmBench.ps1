@@ -5,7 +5,9 @@
     The questions go through Invoke-WebRequest the way fujikyun (PowerShell 5.1) would ask.
     Usage: Invoke-LlmBench.ps1 -Models a.gguf,b.gguf [-Dir C:\llm] [-Threads 4] [-Out result.json]
 #>
-param([switch]$V2, [string[]]$Models, [string]$Dir = 'C:\llm', [string]$Bin = 'bin-arm64', [int]$Threads = 4, [int]$Port = 8089, [string]$Out = '')
+param([switch]$V2, [string[]]$Models, [string]$Dir = 'C:\llm', [string]$Bin = 'bin-arm64', [int]$Threads = 4, [int]$Port = 8089, [string]$Out = '',
+    [int]$Ctx = 4096, [string]$ServerArgs = '')
+# -Ctx: llama-server context size (-c). -ServerArgs: more llama-server options, e.g. '--cache-ram 0 -np 1'.
 $ErrorActionPreference = 'Stop'
 # powershell -File passes -Models a,b as one string
 $Models = @($Models | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -68,7 +70,7 @@ foreach ($model in $Models) {
     $path = Join-Path $Dir $model
     $log = Join-Path $env:TEMP 'llama-server-bench.log'
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $p = Start-Process -FilePath $server -ArgumentList '-m', "`"$path`"", '--host', '127.0.0.1', '--port', $Port, '-c', 4096, '-t', $Threads, '--jinja' -PassThru -WindowStyle Hidden -RedirectStandardError $log
+    $p = Start-Process -FilePath $server -ArgumentList (@('-m', "`"$path`"", '--host', '127.0.0.1', '--port', $Port, '-c', $Ctx, '-t', $Threads, '--jinja') + @($ServerArgs -split ' ' | Where-Object { $_ })) -PassThru -WindowStyle Hidden -RedirectStandardError $log
     $ready = $false
     for ($i = 0; $i -lt 240 -and -not $p.HasExited; $i++) {
         Start-Sleep -Milliseconds 500

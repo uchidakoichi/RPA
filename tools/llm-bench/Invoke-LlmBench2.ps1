@@ -7,7 +7,8 @@
     Usage: Invoke-LlmBench2.ps1 -Models a.gguf,b.gguf [-Dir C:\llm] [-Bin bin-x64] [-Threads 4] [-Out result.json]
 #>
 param([string[]]$Models, [string]$Dir = 'C:\llm', [string]$Bin = 'bin-x64', [int]$Threads = 4, [int]$Port = 8089, [string]$Out = '',
-    [switch]$Think, [switch]$Official, [string[]]$Cats, [int]$ThinkTokens = 2048)
+    [switch]$Think, [switch]$Official, [string[]]$Cats, [int]$ThinkTokens = 2048, [int]$Ctx = 0, [string]$ServerArgs = '')
+# -Ctx: llama-server context size (-c; 0 = 4096, or 8192 with -Think). -ServerArgs: more llama-server options.
 # -Think: Qwen3 thinking mode (enable_thinking), with ThinkTokens more room for the thinking.
 # -Official: the sampling the Qwen3 model card recommends instead of greedy (temperature 0), fixed seed.
 # -Cats macro,agent: only these kinds of cases.
@@ -88,7 +89,7 @@ foreach ($model in $Models) {
     $path = Join-Path $Dir $model
     $log = Join-Path $env:TEMP 'llama-server-bench2.log'
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $p = Start-Process -FilePath $server -ArgumentList '-m', "`"$path`"", '--host', '127.0.0.1', '--port', $Port, '-c', $(if ($Think) { 8192 } else { 4096 }), '-t', $Threads, '--jinja' -PassThru -WindowStyle Hidden -RedirectStandardError $log
+    $p = Start-Process -FilePath $server -ArgumentList (@('-m', "`"$path`"", '--host', '127.0.0.1', '--port', $Port, '-c', $(if ($Ctx -gt 0) { $Ctx } elseif ($Think) { 8192 } else { 4096 }), '-t', $Threads, '--jinja') + @($ServerArgs -split ' ' | Where-Object { $_ })) -PassThru -WindowStyle Hidden -RedirectStandardError $log
     $ready = $false
     for ($i = 0; $i -lt 240 -and -not $p.HasExited; $i++) {
         Start-Sleep -Milliseconds 500
