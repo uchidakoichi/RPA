@@ -67,7 +67,8 @@ if ($V2) { $promptExtract = $cases.prompts.extract2; $promptJudge = $cases.promp
 
 $all = New-Object System.Collections.ArrayList
 foreach ($model in $Models) {
-    $path = Join-Path $Dir $model
+    $path = $model
+    if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $Dir $model }
     $log = Join-Path $env:TEMP 'llama-server-bench.log'
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $p = Start-Process -FilePath $server -ArgumentList (@('-m', "`"$path`"", '--host', '127.0.0.1', '--port', $Port, '-c', $Ctx, '-t', $Threads, '--jinja') + @($ServerArgs -split ' ' | Where-Object { $_ })) -PassThru -WindowStyle Hidden -RedirectStandardError $log
@@ -112,13 +113,15 @@ foreach ($model in $Models) {
     }
     $p.Refresh()
     $peakMb = [int]($p.PeakWorkingSet64 / 1MB)
+    # private memory: what the process itself holds, without the model file pages Windows can drop and read again
+    $peakPrivateMb = [int]($p.PeakPagedMemorySize64 / 1MB)
     $p.Kill(); $p.WaitForExit()
     $times = @($rows | ForEach-Object { $_.ms })
     $sorted = $times | Sort-Object
     $median = $sorted[[int][Math]::Floor($sorted.Count / 2)]
     $gen = ($rows | ForEach-Object { $_.genPerSec } | Measure-Object -Average).Average
     $pp = ($rows | ForEach-Object { $_.promptPerSec } | Measure-Object -Average).Average
-    $sum = [ordered]@{ model = $model; loadMs = $loadMs; peakMb = $peakMb; extract = "$($score.extract)/$($cases.extract.Count)"; extractFields = "$($score.extractFields)/$($cases.extract.Count * 4)"
+    $sum = [ordered]@{ model = $model; loadMs = $loadMs; peakMb = $peakMb; peakPrivateMb = $peakPrivateMb; extract = "$($score.extract)/$($cases.extract.Count)"; extractFields = "$($score.extractFields)/$($cases.extract.Count * 4)"
         classify = "$($score.classify)/$($cases.classify.Count)"; judge = "$($score.judge)/$($cases.judge.Count)"; invalidJson = $score.invalid
         medianMs = $median; maxMs = ($sorted | Select-Object -Last 1); promptTokPerSec = [Math]::Round($pp, 1); genTokPerSec = [Math]::Round($gen, 1) }
     [void]$all.Add([ordered]@{ summary = $sum; rows = $rows })

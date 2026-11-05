@@ -13,6 +13,7 @@
 | `pc-check/llm-speed.bat` | 職場の PC でモデルの速さを測る道具（llm-check.bat のあとに使う）。モデル Qwen3-1.7B Q4_K_M の base64 16個はブランチ `llm-model-q4` の `tools/llm-bench/pc-check/model/` だけに置く。公式の Q8_0 を llama-quantize で Q4_K_M に縮めたもの（VM で抜き出し 31/32、Q8_0 と同じ） |
 | （Qwen3.5-2B） | llm-speed.ps1 は Qwen3.5-2B Q4_K_M の base64 19個（ブランチ `llm-model-qwen35`）も戻して測る。部品ごとに SHA-256 を照らし、貼り直すファイルを示す |
 | `pc-check/llm-bench-pc.bat` | 職場の PC で、Qwen3.5-2B の正答率・メモリ・1問の時間を測る道具（llm-check.bat・llm-speed.bat のあとに使う）。VM と同じ2つのベンチを、`-c 4096`、`-c 4096` のメモリ節約（`--cache-ram 0 -ctxcp 4 -np 1`）、`-c 2048` のメモリ節約の3通りで流す。同じフォルダに `Invoke-LlmBench.ps1`・`Invoke-LlmBench2.ps1`・`cases.json`・`cases2.json` も置く。2つのベンチには `-Ctx` と `-ServerArgs` を足した |
+| `pc-check/llm-mem-pc.bat` | llm-bench-pc のあとに使う。ベンチ1を節約の設定で、モデルがフォルダにあるとき・ローカルディスク（`%LOCALAPPDATA%\llm-mem-test`、最後に消す）にあるとき・そこに `--no-repack` をつけたときの3通りで流し、読み込み時間とメモリ（`peakMb` はモデルのファイル分を含む、`peakPrivateMb` はプロセスだけが持つ分）を比べる |
 
 ## 結果（2026-11-03、VM）
 
