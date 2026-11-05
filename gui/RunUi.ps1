@@ -55,6 +55,9 @@ function New-FujiRunBar {
     $alerts = New-FujiButton -Text (Get-FujiText 'gui.alertSettings') -Tip (Get-FujiText 'gui.alertSettingsTip')
     $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
     [void]$row.Controls.Add($alerts)
+    $ai = New-FujiButton -Text (Get-FujiText 'gui.aiButton') -Tip (Get-FujiText 'gui.aiButtonTip')
+    $ai.Add_Click({ Invoke-FujiUi { Show-FujiAiSettingDialog } })
+    [void]$row.Controls.Add($ai)
     $touch = $false
     if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
     $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')
@@ -424,7 +427,7 @@ function New-FujiWinIo {
         Watch = { Update-FujiWatchPanel }
         Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
-        EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
+        EndRun = { Close-FujiRunExcel; Clear-FujiBackground; Stop-FujiAiServer }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
         SetField = { param($Request) Invoke-FujiRobot { Set-FujiUiaField -Request $Request } }
         GetField = { param($Request) Get-FujiUiaField -Request $Request }
@@ -434,6 +437,10 @@ function New-FujiWinIo {
         TypeSecret = { param($Text) Invoke-FujiRobot { [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) } }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
+        AiChat = { param($Body) Invoke-FujiAiRunChat -Body $Body }
+        AiPick = { param($Caption, $Message, $Options, $Initial) Invoke-FujiRobot { Show-FujiRunAiPick -Caption $Caption -Message $Message -Options $Options -Initial $Initial } }
+        AiTookFocus = { $f = $script:FujiAiShowedWindow; $script:FujiAiShowedWindow = $false; return $f }
+        AiReview = { param($Row) [void](Add-FujiAiReviewRow -Directory $script:Ed.Directory -Now (Get-Date) -Row $Row) }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }
     }
 }

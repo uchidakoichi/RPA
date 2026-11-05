@@ -22,6 +22,10 @@
 #    Break {Message} -> 'step' (stop again before the next step) | 'run'; throws when stopped
 #    SetField {Request} -> 'SET' (value put in) | 'FOCUSED' (the field has the focus: paste)
 #    GetField {Request} -> text   ReadTable {Request} -> @{ Header; Rows }   SaveText {Path, Text}
+#    AiChat {Body} -> llama-server's answer (ConvertFrom-Json); throws when it cannot ask
+#    AiPick {Caption, Message, Options (@{ Value; P }), Initial} -> @{ Choice = 'continue'|'stop'; Value }
+#    AiReview {Row} -> writes one line of the AI review list
+#    AiTookFocus {} -> $true once after the AI showed a window of its own (choose the folder, copy)
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
 #    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
 #    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
@@ -1192,6 +1196,8 @@ function Invoke-FujiRunCommand {
             return (Get-FujiRunNext 0)
         }
         'ASK' { return (Invoke-FujiAsk -Run $Run -Settings $p) }
+        'AI_CHOOSE' { return (Invoke-FujiAiChoose -Run $Run -Settings $p) }
+        'AI_EXTRACT' { return (Invoke-FujiAiExtract -Run $Run -Settings $p) }
         'RECORD' {
             $value = Expand-FujiRunText -Run $Run -Text $p['value']
             Add-FujiResultValue -Run $Run -Name $p['name'].Trim() -Value $value
@@ -1314,6 +1320,142 @@ function Invoke-FujiAsk {
         return @{ Action = 'skipRow' }
     }
     throw (New-FujiStopException (Get-FujiText 'run.askStop'))
+}
+
+# ----------------------------------------------------------------- AI commands
+# One line for the review list (Io.AiReview): where in the run, what was read, what the AI said
+function Add-FujiRunAiReview {
+    param([hashtable]$Run, [string]$Cmd, [string]$Name, [string]$Source, [string]$Answer, [string]$P, [string]$Probs, [string]$Reason)
+    $row = Get-FujiRunCurrentRow $Run
+    $rowNo = ''
+    if ($row.No -gt 0) { $rowNo = [string]$row.No }
+    try {
+        & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
+                command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+    } catch [System.OperationCanceledException] {
+        throw
+    } catch {
+        # the list is only a help for checking later: a run that is told to go on does not stop for it
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiReviewFailed' $_.Exception.Message) 'warn'
+        return
+    }
+    Write-FujiRunLog $Run (Get-FujiText 'run.aiReview' $Name $Reason) 'warn'
+}
+
+# Sends a request; returns @{ Response; Ms } or @{ Error = step result }
+function Invoke-FujiRunAiChat {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Body)
+    if ($Body['Truncated']) { Write-FujiRunLog $Run (Get-FujiText 'run.aiCut') 'warn' }
+    $Body.Remove('Truncated')
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $r = & $Run.Io.AiChat $Body
+    } catch [System.OperationCanceledException] {
+        throw
+    } catch {
+        return @{ Error = (Get-FujiRunError (Get-FujiText 'run.aiFailed' $_.Exception.Message)) }
+    }
+    $ms = [long]$sw.ElapsedMilliseconds
+    # the first AI step may have shown a window (choose the folder, copy): the input goes back to the target
+    if (& $Run.Io.AiTookFocus) {
+        $back = Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed'
+        if ($back.Action -eq 'error') { return @{ Error = $back } }
+    }
+    return @{ Response = $r; Ms = $ms }
+}
+
+function Format-FujiAiProbability {
+    param([double]$P)
+    return $P.ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Invoke-FujiAiChoose {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $name = $Settings['name'].Trim()
+    $unknown = [string]$Settings['unknown']
+    $src = Expand-FujiRunText -Run $Run -Text $Settings['src']
+    $options = Read-FujiAiOption -Text $Settings['options']
+    $threshold = 0.5
+    [void][double]::TryParse(([string]$Settings['threshold']).Trim(), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$threshold)
+    $probName = $name + (Get-FujiText 'run.aiProbSuffix')
+    if ($src.Trim() -eq '') {
+        $Run.Vars[$name] = $unknown
+        $Run.Vars[$probName] = (Format-FujiAiProbability 0)
+        Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer '' -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonEmpty')
+        & $Run.Io.Watch
+        return (Get-FujiRunNext 0)
+    }
+    $body = New-FujiAiChooseBody -Question (Expand-FujiRunText -Run $Run -Text $Settings['question']) -Options $options -Source $src
+    $sent = Invoke-FujiRunAiChat -Run $Run -Body $body
+    if ($sent.Contains('Error')) { return $sent.Error }
+    $c = Read-FujiAiChoice -Response $sent.Response -Options $options
+    $pText = Format-FujiAiProbability $c.P
+    $probs = (@($c.Probs.Keys | ForEach-Object { $_ + '=' + (Format-FujiAiProbability $c.Probs[$_]) }) -join ';')
+    $answered = $c.Covered -ge 0.5 -and $c.Value -ne ''
+    $picked = $false
+    $value = $c.Value
+    if (-not $answered -or ($c.P -lt $threshold -and $Settings['low'] -ne 'USE')) {
+        $reason = Get-FujiText 'run.aiReasonLow'
+        if (-not $answered) { $reason = Get-FujiText 'run.aiReasonNoLetter' }
+        $low = [string]$Settings['low']
+        if (-not $answered -and $low -eq 'USE') { $low = 'REVIEW' }
+        switch ($low) {
+            'ASK' {
+                $picks = @(foreach ($o in $options) { @{ Value = $o.Value; P = $c.Probs[$o.Value] } })
+                $message = (Expand-FujiRunText -Run $Run -Text $Settings['question']) + "`n`n" + (Format-FujiShort $src 500)
+                $caption = Get-FujiText 'run.aiPickTitle' (Get-FujiRunRowCaption (Get-FujiRunCurrentRow $Run))
+                Update-FujiRunProgress -Run $Run -Extra (Get-FujiText 'run.aiPickWait')
+                $answer = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.AiPick $caption $message $picks $c.Value }
+                if ($answer.Choice -ne 'continue') { throw (New-FujiStopException (Get-FujiText 'run.aiPickStop')) }
+                $value = [string]$answer.Value
+                $picked = $true
+            }
+            'STOP' { return (Get-FujiRunError (Get-FujiText 'run.aiLowStop' $c.Value $pText)) }
+            default {
+                Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer $c.Value -P $pText -Probs $probs -Reason $reason
+                $value = $unknown
+            }
+        }
+    }
+    $Run.Vars[$name] = $value
+    $Run.Vars[$probName] = $pText
+    Write-FujiRunLog $Run (Get-FujiText 'run.aiChoose' $name (Format-FujiShort $value 40) $pText $sent.Ms)
+    & $Run.Io.Watch
+    # after the pick window the input goes back to the target window (as ASK)
+    if ($picked) { return (Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed') }
+    return (Get-FujiRunNext 0)
+}
+
+function Invoke-FujiAiExtract {
+    param([hashtable]$Run, [System.Collections.IDictionary]$Settings)
+    $items = Read-FujiAiItem -Text $Settings['items']
+    $src = Expand-FujiRunText -Run $Run -Text $Settings['src']
+    if ($src.Trim() -eq '') {
+        foreach ($it in $items) { $Run.Vars[$it.Name] = '' }
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiExtract' $items.Count 0 0) 'warn'
+        & $Run.Io.Watch
+        return (Get-FujiRunNext 0)
+    }
+    $body = New-FujiAiExtractBody -Items $items -Note (Expand-FujiRunText -Run $Run -Text $Settings['note']) -Source $src
+    $sent = Invoke-FujiRunAiChat -Run $Run -Body $body
+    if ($sent.Contains('Error')) { return $sent.Error }
+    $answer = $null
+    try { $answer = ConvertFrom-FujiJson -Json ([string]$sent.Response.choices[0].message.content) } catch { $answer = $null }
+    if ($answer -isnot [System.Collections.IDictionary]) { return (Get-FujiRunError (Get-FujiText 'run.aiBadAnswer')) }
+    $filled = 0
+    foreach ($it in $items) {
+        $v = ''
+        if ($answer.Contains($it.Name) -and $null -ne $answer[$it.Name]) { $v = ([string]$answer[$it.Name]).Trim() }
+        if ($v -ne '' -and $Settings['strict'] -ne 'OFF' -and -not (Test-FujiAiInSource -Value $v -Source $src)) {
+            Add-FujiRunAiReview -Run $Run -Cmd 'AI_EXTRACT' -Name $it.Name -Source $src -Answer $v -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonNotInSource')
+            $v = ''
+        }
+        if ($v -ne '') { $filled++ }
+        $Run.Vars[$it.Name] = $v
+    }
+    Write-FujiRunLog $Run (Get-FujiText 'run.aiExtract' $items.Count $filled $sent.Ms)
+    & $Run.Io.Watch
+    return (Get-FujiRunNext 0)
 }
 
 function Invoke-FujiLoopStart {

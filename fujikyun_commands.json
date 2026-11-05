@@ -1,6 +1,6 @@
 {
   "_about": "コマンド定義（画面の表示名・説明・入力欄・パレット・キー一覧など）。このファイルが元データ。",
-  "commandsVersion": 2,
+  "commandsVersion": 3,
   "commands": {
     "KEY": {
       "title": "キー送信",
@@ -1634,6 +1634,141 @@
         }
       ],
       "doc": "整理"
+    },
+    "AI_CHOOSE": {
+      "title": "AIに選んでもらう",
+      "icon": "🤖",
+      "category": "ai",
+      "format": "json",
+      "help": "読ませた文を AI が読んで、選択肢から1つ選んで変数に入れるキュン。問い合わせの担当の仕分けや、思わぬ画面が出たときの判断に使えるよ。AI の自信（0〜1）は {{$変数名_確率}} に入るよ。自信がしきい値より低いときは、最初の設定では「あとで確認」の一覧（fujikyun_logs の ai_review_日付.csv）に書いて「わからないときの値」を入れて続けるよ。AI は間違えることもあるから、消す・送るの前には確認ポイントを入れてね。",
+      "defaultVal": "{\"name\":\"\",\"src\":\"\",\"question\":\"\",\"options\":\"\",\"threshold\":\"0.5\",\"low\":\"REVIEW\",\"unknown\":\"不明\"}",
+      "fields": [
+        {
+          "id": "name",
+          "label": "答えを入れる変数名",
+          "type": "text",
+          "placeholder": "例: 担当"
+        },
+        {
+          "id": "src",
+          "label": "AI に読ませる文（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{$読んだ文字}}",
+          "placeholders": true
+        },
+        {
+          "id": "question",
+          "label": "何を選ぶか（差し込み可）",
+          "type": "text",
+          "placeholder": "例: この問い合わせはどの担当の内容か",
+          "placeholders": true
+        },
+        {
+          "id": "options",
+          "label": "選択肢（1行に1つ。「値: 説明」とも書けるよ。2〜10個）",
+          "type": "textarea",
+          "raw": true
+        },
+        {
+          "id": "threshold",
+          "label": "自信のしきい値（0〜1。これより低いと下の動きになるよ）",
+          "type": "text",
+          "placeholder": "例: 0.5"
+        },
+        {
+          "id": "low",
+          "label": "自信が低いとき",
+          "type": "select",
+          "options": [
+            [
+              "REVIEW",
+              "あとで確認の一覧に書いて、わからないときの値を入れて続ける"
+            ],
+            [
+              "ASK",
+              "止めて人に選んでもらう"
+            ],
+            [
+              "STOP",
+              "エラーにして止める"
+            ],
+            [
+              "USE",
+              "AI の答えをそのまま使う"
+            ]
+          ]
+        },
+        {
+          "id": "unknown",
+          "label": "わからないときの値",
+          "type": "text",
+          "placeholder": "例: 不明"
+        }
+      ],
+      "parseDefaults": {
+        "name": "",
+        "src": "",
+        "question": "",
+        "options": "",
+        "threshold": "0.5",
+        "low": "REVIEW",
+        "unknown": "不明"
+      },
+      "definesVar": "name",
+      "hideVal": true,
+      "doc": "aiに選んでもらう抜き出してもらうai_chooseai_extract"
+    },
+    "AI_EXTRACT": {
+      "title": "AIに抜き出してもらう",
+      "icon": "🔎",
+      "category": "ai",
+      "format": "json",
+      "help": "読ませた文から、氏名・生年月日・電話番号などの項目を AI が抜き出して、項目ごとの変数に入れるキュン。書いていない項目は空になるよ。「文に無い値は入れない」がオンなら、元の文に無い値（AI の思い違い）は空にして「あとで確認」の一覧に書くよ。日付の書き換え（和暦→西暦など）は「文字を加工する」でしてね。",
+      "defaultVal": "{\"src\":\"\",\"items\":\"\",\"note\":\"\",\"strict\":\"ON\"}",
+      "fields": [
+        {
+          "id": "src",
+          "label": "AI に読ませる文（差し込み可）",
+          "type": "text",
+          "placeholder": "例: {{$読んだ文字}}",
+          "placeholders": true
+        },
+        {
+          "id": "items",
+          "label": "抜き出す項目（1行に1つ、「変数名: 説明」。1〜10個）",
+          "type": "textarea",
+          "raw": true
+        },
+        {
+          "id": "note",
+          "label": "指示を足す（なくてもいいよ・差し込み可）",
+          "type": "text",
+          "placeholders": true
+        },
+        {
+          "id": "strict",
+          "label": "文に無い値は入れない",
+          "type": "select",
+          "options": [
+            [
+              "ON",
+              "入れない（空にして、あとで確認の一覧に書く）"
+            ],
+            [
+              "OFF",
+              "AI の答えをそのまま入れる"
+            ]
+          ]
+        }
+      ],
+      "parseDefaults": {
+        "src": "",
+        "items": "",
+        "note": "",
+        "strict": "ON"
+      },
+      "hideVal": true,
+      "doc": "aiに選んでもらう抜き出してもらうai_chooseai_extract"
     }
   },
   "palette": [
@@ -1708,6 +1843,14 @@
         "EXCEL_READ",
         "EXCEL_WRITE",
         "FILE_OP"
+      ]
+    },
+    {
+      "category": "ai",
+      "label": "AI",
+      "cmds": [
+        "AI_CHOOSE",
+        "AI_EXTRACT"
       ]
     },
     {
