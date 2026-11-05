@@ -840,6 +840,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
+        AiReply = $null; AiThrow = ''; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true; FileFails = $false
     }
     return @{
@@ -874,6 +875,9 @@ function New-FakeIo {
         Alarm = { $script:Fake.Calls.Add('ALARM') }
         Notify = { $script:Fake.Calls.Add('NOTIFY') }
         EndRun = { $script:Fake.Calls.Add('END') }
+        AiChat = { param($Body) $script:Fake.AiBodies.Add($Body); if ($script:Fake.AiThrow) { throw $script:Fake.AiThrow }; return $script:Fake.AiReply }
+        AiPick = { param($Caption, $Message, $Options, $Initial) $null = $Caption; $script:Fake.AiPicks.Add(@{ Message = $Message; Options = $Options; Initial = $Initial }); return $script:Fake.Answers.Dequeue() }
+        AiReview = { param($Row) $script:Fake.AiReviews.Add($Row) }
         Break = { param($Message) $script:Fake.Breaks.Add($Message); $script:Fake.Calls.Add('BREAK'); return $script:Fake.Answers.Dequeue() }
         SetField = { param($Request)
             $script:Fake.Calls.Add(('FIELD {0}#{1}={2} {3}' -f $Request.Name, $Request.Nth, $Request.Text, $Request.Mode))
@@ -1273,6 +1277,76 @@ Assert-True ($watch.Count -eq 2 -and $watch[0][1][0][0] -eq '$v' -and $watch[1][
 # on an empty List. Many runs in a row with empty and full lists must keep working.
 for ($i = 0; $i -lt 40; $i++) { [void](Test-FujiExpandValue (Get-FujiCommandDef 'TEXT')); [void](Test-FujiExpandValue (Get-FujiCommandDef 'ELSE')) }
 Assert-True $true 'expand-value check survives compilation'
+
+# AI commands (fake AiChat: a logprobs answer for AI_CHOOSE, a JSON content for AI_EXTRACT)
+function New-AiChoiceReply { param([hashtable]$P) $top = @(foreach ($k in $P.Keys) { @{ token = $k; logprob = [Math]::Log($P[$k]) } }); return (ConvertTo-FujiJson -InputObject @{ choices = @(@{ logprobs = @{ content = @(@{ top_logprobs = $top }) } }) } -Indent 0 | ConvertFrom-Json) }
+function New-AiTextReply { param([string]$Content) return (ConvertTo-FujiJson -InputObject @{ choices = @(@{ message = @{ content = $Content } }) } -Indent 0 | ConvertFrom-Json) }
+function New-AiChooseStep { param([string]$Low = 'REVIEW', [string]$Src = 'text {{1}}') return @('AI_CHOOSE', (& $J ([ordered]@{ name = 'desk'; src = $Src; question = 'which desk'; options = "resident`ngarbage`nother"; threshold = '0.5'; low = $Low; unknown = 'unknown' }))) }
+$probVar = 'desk' + (Get-FujiText 'run.aiProbSuffix')
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.8; 'B' = 0.2 }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'ai run: choose done'
+Assert-True ($run.Vars['desk'] -eq 'resident' -and $run.Vars[$probVar] -eq '0.80') 'ai run: choose above threshold'
+Assert-Equal 0 $script:Fake.AiReviews.Count 'ai run: sure answer not reviewed'
+Assert-Equal 'text a' $script:Fake.AiBodies[0].messages[1].content 'ai run: source with placeholders'
+Assert-True (-not $script:Fake.AiBodies[0].Contains('Truncated')) 'ai run: Truncated is not sent'
+$run = New-TestRun -Target '' -Steps @((New-AiChooseStep), @('KEY', 'next')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+Assert-Equal 'done' (Invoke-FujiRun -Run $run) 'ai run: REVIEW keeps running'
+Assert-True ($run.Vars['desk'] -eq 'unknown' -and $run.Vars[$probVar] -eq '0.40' -and (Get-FakeCall 'KEYS') -eq 'KEYS next') 'ai run: choose below threshold REVIEW'
+Assert-True ($script:Fake.AiReviews.Count -eq 1 -and $script:Fake.AiReviews[0]['reason'] -eq (Get-FujiText 'run.aiReasonLow') -and $script:Fake.AiReviews[0]['answer'] -eq 'resident' -and $script:Fake.AiReviews[0]['source'] -eq 'text a' -and $script:Fake.AiReviews[0]['row'] -eq '1' -and $script:Fake.AiReviews[0]['probs'] -eq 'resident=0.40;garbage=0.35;other=0.25') 'ai run: review row'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'ASK') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'continue'; Value = 'garbage' })
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['desk'] -eq 'garbage' -and $script:Fake.AiPicks.Count -eq 1 -and $script:Fake.AiPicks[0].Initial -eq 'resident' -and $script:Fake.AiPicks[0].Message.Contains('text a')) 'ai run: choose ASK'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'ASK') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'stop'; Value = '' })
+Assert-Equal 'stopped' (Invoke-FujiRun -Run $run) 'ai run: ASK stop'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'STOP') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'ai run: choose STOP'
+$run = New-TestRun -Target '' -Steps @(@('TRY_START', 't'), (New-AiChooseStep -Low 'STOP'), @('CATCH', ''), @('KEY', 'caught'), @('TRY_END', '')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'done' -and (Get-FakeCall 'KEYS') -eq 'KEYS caught') 'ai run: STOP caught by TRY'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'USE') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['desk'] -eq 'resident' -and $script:Fake.AiReviews.Count -eq 0) 'ai run: choose USE'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'USE') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'x' = 0.9; 'y' = 0.1 }
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['desk'] -eq 'unknown' -and $script:Fake.AiReviews.Count -eq 1 -and $script:Fake.AiReviews[0]['reason'] -eq (Get-FujiText 'run.aiReasonNoLetter')) 'ai run: letters not answered'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Src '{{2}}') -Rows @(, [string[]]@('a', ' '))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['desk'] -eq 'unknown' -and $script:Fake.AiBodies.Count -eq 0 -and $script:Fake.AiReviews.Count -eq 1 -and $script:Fake.AiReviews[0]['reason'] -eq (Get-FujiText 'run.aiReasonEmpty')) 'ai run: empty source'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Src ('{{1}}' + ('z' * 3100))) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.9 }
+[void](Invoke-FujiRun -Run $run)
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiCut')) }).Count -eq 1) 'ai run: cut source logged'
+$exStep = @('AI_EXTRACT', (& $J ([ordered]@{ src = '{{1}}'; items = "name: the applicant`nphone"; note = ''; strict = 'ON' })))
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sakura 0466-12-3456'))
+$script:Fake.AiReply = New-AiTextReply '{"name":"Nakamura Hanako","phone":" 0466-12-3456 "}'
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['name'] -eq '' -and $run.Vars['phone'] -eq '0466-12-3456') 'ai run: extract strict'
+Assert-True ($script:Fake.AiReviews.Count -eq 1 -and $script:Fake.AiReviews[0]['reason'] -eq (Get-FujiText 'run.aiReasonNotInSource') -and $script:Fake.AiReviews[0]['answer'] -eq 'Nakamura Hanako' -and $script:Fake.AiReviews[0]['name'] -eq 'name') 'ai run: extract review row'
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains('Sakura') -or $_.Contains('0466') }).Count -eq 0) 'ai run: log has no source text'
+$run = New-TestRun -Target '' -Steps @('AI_EXTRACT', (& $J ([ordered]@{ src = '{{1}}'; items = "name`nphone"; note = ''; strict = 'OFF' }))) -Rows @(, [string[]]@('Nakamura Sakura'))
+$script:Fake.AiReply = New-AiTextReply ('{"name":"Nakamura \"Hana\", ko' + '\n' + 'x","phone":""}')
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['name'] -eq ('Nakamura "Hana", ko' + "`n" + 'x') -and $run.Vars['phone'] -eq '' -and $script:Fake.AiReviews.Count -eq 0) 'ai run: extract strict OFF keeps quotes, comma, newline'
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('x'))
+$script:Fake.AiReply = New-AiTextReply '{"name":'
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'ai run: extract broken JSON'
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiBadAnswer')) }).Count -ge 1) 'ai run: broken JSON message'
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@(' '))
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiBodies.Count -eq 0 -and $run.Vars['name'] -eq '' -and $run.Vars['phone'] -eq '') 'ai run: extract empty source'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiThrow = 'server gone'
+Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'ai run: AiChat throws'
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains('server gone') }).Count -ge 1) 'ai run: AiChat error text in the log'
 
 # ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
 # breakpoints and stepping
