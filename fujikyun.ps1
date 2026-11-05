@@ -217,6 +217,19 @@ function Add-FujiAiReviewRow {
     return $path
 }
 
+# The shared AI folder this PC uses (fujikyun_settings.json "ai": { "folder" }), '' when not chosen
+function Get-FujiAiFolderSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    if ($Settings.Contains('ai') -and $Settings['ai'] -is [System.Collections.IDictionary] -and $Settings['ai'].Contains('folder')) { return ([string]$Settings['ai']['folder']).Trim() }
+    return ''
+}
+
+function Set-FujiAiFolderSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [AllowEmptyString()][string]$Folder)
+    if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
+    $Settings['ai']['folder'] = ([string]$Folder).Trim()
+}
+
 # ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used
 function Read-FujiAiManifest {
     param([Parameter(Mandatory)][string]$Path)
@@ -3362,11 +3375,13 @@ function Initialize-FujiLogFile {
     try {
         if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir -ErrorAction Stop) }
         $oldest = $Now.Date.AddDays(-$script:FujiLogKeepDays)
-        foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_log_*.txt')) {
-            $m = [regex]::Match($f.Name, '^fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt$')
+        # the log, the AI review lists and llama-server's own output (AI commands)
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File)) {
+            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
             if (-not $m.Success) { continue }
             $day = [datetime]::MinValue
-            if (-not [datetime]::TryParseExact($m.Groups[1].Value, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$day)) { continue }
+            $date = $m.Groups[1].Value + $m.Groups[2].Value + $m.Groups[3].Value
+            if (-not [datetime]::TryParseExact($date, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$day)) { continue }
             if ($day -lt $oldest) {
                 Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
                 $removed.Add($f.Name)
@@ -5579,6 +5594,8 @@ function Read-FujiSetting {
     # how the app calls a person (Alert.ps1 checks each value when it is used)
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('alerts') -and $s['alerts'] -is [System.Collections.IDictionary]) { $settings['alerts'] = $s['alerts'] }
     # minutes by hand per macro and pay per hour (Effect.ps1 checks each value when it is used)
+    # where the shared AI folder is (Ai.ps1)
+    if ($s -is [System.Collections.IDictionary] -and $s.Contains('ai') -and $s['ai'] -is [System.Collections.IDictionary]) { $settings['ai'] = $s['ai'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('effect') -and $s['effect'] -is [System.Collections.IDictionary]) { $settings['effect'] = $s['effect'] }
     if ($s -is [System.Collections.IDictionary] -and $s.Contains('schedules') -and $s['schedules'] -is [System.Collections.IList]) {
         foreach ($x in $s['schedules']) {
@@ -6458,6 +6475,201 @@ function Get-FujiOcrRect {
 function Get-FujiOcrScale {
     param([int]$Width, [int]$Height, [int]$MaxDimension)
     return [Math]::Min(2.0, $MaxDimension / [double]([Math]::Max(1, [Math]::Max($Width, $Height))))
+}
+
+# ===== gui/AiServer.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  AI: the copy on this PC and llama-server (Windows processes and HTTP; see src/Ai.ps1)
+#  The shared AI folder (read only, one for the office) is copied to %LOCALAPPDATA%\fujikyun\ai the
+#  first time and again when its ai.json version changes: reading the model from a network drive
+#  takes about two minutes, from the local disk about six seconds. llama-server is started when a
+#  run reaches its first AI step and stopped when the run ends or the app closes.
+# ---------------------------------------------------------------------------------------------
+$script:FujiAiServer = $null
+$script:FujiAiChunk = 1MB
+
+function Get-FujiAiLocalDir {
+    return (Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'fujikyun') 'ai')
+}
+
+# The copy's ai.json, or $null when there is no usable copy
+function Get-FujiAiLocalManifest {
+    param([Parameter(Mandatory)][string]$LocalDir)
+    $path = Join-Path $LocalDir 'ai.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    try { return (Read-FujiAiManifest -Path $path) } catch { return $null }
+}
+
+# Copies every file listed in the shared ai.json: each to <name>.part with its SHA-256 worked out on
+# the way, then all put in place, ai.json last (a copy stopped halfway is never taken as complete).
+# Progress {Done; Total} in bytes; Cancel {} -> $true to stop. Returns 'copied' | 'canceled'.
+function Copy-FujiAiLocal {
+    param([Parameter(Mandatory)][string]$SharedDir, [string]$LocalDir = (Get-FujiAiLocalDir), [scriptblock]$Progress = { param($Done, $Total) }, [scriptblock]$Cancel = { $false }, [long]$MinFreeBytes = 2GB)
+    $manifest = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json')
+    if (-not (Test-Path -LiteralPath $LocalDir)) { [void](New-Item -ItemType Directory -Path $LocalDir) }
+    $free = (New-Object -TypeName System.IO.DriveInfo -ArgumentList ([System.IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $LocalDir).Path))).AvailableFreeSpace
+    if ($free -lt $MinFreeBytes) { throw (Get-FujiText 'run.aiDiskShort' ([Math]::Round($free / 1GB, 1))) }
+    $total = [long]0
+    foreach ($k in $manifest.Files.Keys) { $total += [long]$manifest.Files[$k]['size'] }
+    $localJson = Join-Path $LocalDir 'ai.json'
+    if (Test-Path -LiteralPath $localJson) { Remove-Item -LiteralPath $localJson -Force }
+    $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $done = [long]0
+    $buffer = New-Object -TypeName 'byte[]' -ArgumentList $script:FujiAiChunk
+    try {
+        foreach ($rel in @($manifest.Files.Keys)) {
+            $src = Join-Path $SharedDir ($rel.Replace('/', '\'))
+            $dest = Join-Path $LocalDir ($rel.Replace('/', '\'))
+            $destDir = Split-Path -Parent $dest
+            if (-not (Test-Path -LiteralPath $destDir)) { [void](New-Item -ItemType Directory -Path $destDir) }
+            $part = $dest + '.part'
+            $parts.Add($part)
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $in = [System.IO.File]::Open($src, 'Open', 'Read', 'Read')
+            $out = [System.IO.File]::Open($part, 'Create', 'Write', 'None')
+            try {
+                while (($n = $in.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $out.Write($buffer, 0, $n)
+                    [void]$sha.TransformBlock($buffer, 0, $n, $null, 0)
+                    $done += $n
+                    & $Progress $done $total
+                    if (& $Cancel) { return 'canceled' }
+                }
+                [void]$sha.TransformFinalBlock($buffer, 0, 0)
+            } finally { $in.Dispose(); $out.Dispose() }
+            $want = ''
+            if ($manifest.Files[$rel].Contains('sha256')) { $want = ([string]$manifest.Files[$rel]['sha256']).ToLowerInvariant() }
+            $got = -join ($sha.Hash | ForEach-Object { $_.ToString('x2') })
+            if ($want -and $got -ne $want) { throw (Get-FujiText 'run.aiCopyBad' $rel) }
+        }
+        foreach ($part in $parts) {
+            $dest = $part.Substring(0, $part.Length - 5)
+            try {
+                if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force -ErrorAction Stop }
+                Move-Item -LiteralPath $part -Destination $dest -ErrorAction Stop
+            } catch { throw (Get-FujiText 'run.aiCopyBusy' $dest) }
+        }
+        $parts.Clear()
+        Copy-Item -LiteralPath (Join-Path $SharedDir 'ai.json') -Destination $localJson
+        return 'copied'
+    } finally {
+        foreach ($part in $parts) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# The folder to start llama-server from: the copy, made or renewed first when the shared folder has
+# a new version (Copy {} -> 'copied' | 'canceled', shows the copy window). When the shared folder
+# cannot be reached but there is a copy, the copy is used (Log {Message} says so).
+function Resolve-FujiAiReady {
+    param([AllowEmptyString()][string]$SharedDir, [string]$LocalDir = (Get-FujiAiLocalDir), [Parameter(Mandatory)][scriptblock]$Copy, [scriptblock]$Log = { param($Message) })
+    $localManifest = Get-FujiAiLocalManifest -LocalDir $LocalDir
+    $shared = $null
+    if ($SharedDir) { try { $shared = Read-FujiAiManifest -Path (Join-Path $SharedDir 'ai.json') } catch { $shared = $null } }
+    if ($null -eq $shared) {
+        if ($null -ne $localManifest -and (Test-Path -LiteralPath (Join-Path $LocalDir $localManifest.Model) -PathType Leaf)) {
+            & $Log (Get-FujiText 'run.aiSharedOffline' $SharedDir)
+            return $LocalDir
+        }
+        if (-not $SharedDir) { throw (Get-FujiText 'run.aiNoFolder') }
+        throw (Get-FujiText 'run.aiSharedMissing' $SharedDir)
+    }
+    if ((Test-FujiAiCopyNeeded -Shared $shared -Local $localManifest -LocalDir $LocalDir) -eq 'copy') {
+        if ((& $Copy) -ne 'copied') { throw (Get-FujiText 'run.aiCopyCanceled') }
+    }
+    return $LocalDir
+}
+
+function Get-FujiFreeMemoryMb {
+    return [int]((Get-CimInstance -ClassName Win32_OperatingSystem).FreePhysicalMemory / 1024)
+}
+
+# Starts llama-server from the copy on a free local port and waits until it answers /health.
+# Returns @{ Process; Port; LogDir }.
+function Start-FujiAiServer {
+    param([Parameter(Mandatory)][string]$LocalDir, [Parameter(Mandatory)][string]$LogDir, [int]$MinFreeMb = 1024, [int]$TimeoutSec = 60)
+    $manifest = Get-FujiAiLocalManifest -LocalDir $LocalDir
+    if ($null -eq $manifest) { throw (Get-FujiText 'run.aiNoCopy' $LocalDir) }
+    $free = Get-FujiFreeMemoryMb
+    if ($free -lt $MinFreeMb) { throw (Get-FujiText 'run.aiMemoryShort' $free $MinFreeMb) }
+    if (-not (Test-Path -LiteralPath $LogDir)) { [void](New-Item -ItemType Directory -Path $LogDir) }
+    $listener = New-Object -TypeName System.Net.Sockets.TcpListener -ArgumentList ([System.Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = $listener.LocalEndpoint.Port
+    $listener.Stop()
+    $exe = Join-Path $LocalDir 'llama-x64\llama-server.exe'
+    $argList = @('-m', ('"' + (Join-Path $LocalDir $manifest.Model) + '"'), '--host', '127.0.0.1', '--port', [string]$port) + @($manifest.ServerArgs -split ' ' | Where-Object { $_ })
+    $log = Join-Path $LogDir ('llama-server_' + (Get-Date).ToString('yyyy-MM-dd_HHmmss', [System.Globalization.CultureInfo]::InvariantCulture) + '.log')
+    $p = Start-Process -FilePath $exe -ArgumentList $argList -PassThru -WindowStyle Hidden -RedirectStandardError $log
+    $server = @{ Process = $p; Port = $port; LogDir = $LogDir }
+    [System.IO.File]::WriteAllText((Join-Path $LogDir 'llama-server.pid'), [string]$p.Id)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt $TimeoutSec) {
+        if ($p.HasExited) {
+            Stop-FujiAiServer -Server $server
+            $tail = ''
+            try { $tail = (@(Get-Content -LiteralPath $log -Tail 5) -join ' / ') } catch { $tail = '' }
+            throw (Get-FujiText 'run.aiServerExited' $tail)
+        }
+        try {
+            if ((Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:{0}/health' -f $port) -TimeoutSec 2).StatusCode -eq 200) { return $server }
+        } catch { $null = $_ }
+        Start-Sleep -Milliseconds 300
+    }
+    Stop-FujiAiServer -Server $server
+    throw (Get-FujiText 'run.aiServerSlow' $TimeoutSec)
+}
+
+# One request to llama-server's chat endpoint; returns the answer (ConvertFrom-Json)
+function Invoke-FujiAiChat {
+    param([Parameter(Mandatory)][hashtable]$Server, [Parameter(Mandatory)][System.Collections.IDictionary]$Body, [int]$TimeoutSec = 60)
+    $utf8 = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
+    $bytes = $utf8.GetBytes((ConvertTo-Json -InputObject $Body -Depth 30 -Compress))
+    $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:{0}/v1/chat/completions' -f $Server.Port) -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec $TimeoutSec
+    return ($utf8.GetString($r.RawContentStream.ToArray()) | ConvertFrom-Json)
+}
+
+# Stops the server (any number of times) and removes its pid file
+function Stop-FujiAiServer {
+    param([hashtable]$Server = $script:FujiAiServer)
+    if ($null -eq $Server) { return }
+    try { if (-not $Server.Process.HasExited) { $Server.Process.Kill(); [void]$Server.Process.WaitForExit(5000) } } catch { $null = $_ }
+    Remove-Item -LiteralPath (Join-Path $Server.LogDir 'llama-server.pid') -Force -ErrorAction SilentlyContinue
+    if ($Server -eq $script:FujiAiServer) { $script:FujiAiServer = $null }
+}
+
+# A llama-server left by an app that did not close normally (its pid file is still there)
+function Clear-FujiAiLeftover {
+    param([Parameter(Mandatory)][string]$LogDir)
+    $pidFile = Join-Path $LogDir 'llama-server.pid'
+    if (-not (Test-Path -LiteralPath $pidFile -PathType Leaf)) { return }
+    $id = 0
+    if ([int]::TryParse(([System.IO.File]::ReadAllText($pidFile)).Trim(), [ref]$id)) {
+        $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+        if ($null -ne $p -and $p.ProcessName -eq 'llama-server') { try { $p.Kill(); [void]$p.WaitForExit(5000) } catch { $null = $_ } }
+    }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+}
+
+# Io.AiChat of a run: the first AI step chooses the shared folder if none is set, copies when
+# needed (copy window), and starts llama-server; later steps ask the same server
+function Invoke-FujiAiRunChat {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Body)
+    $srv = $script:FujiAiServer
+    if ($null -eq $srv -or $srv.Process.HasExited) {
+        $folder = Get-FujiAiFolderSetting -Settings $script:Settings
+        if (-not $folder) {
+            $folder = Select-FujiAiFolderUi
+            if (-not $folder) { throw (Get-FujiText 'run.aiNoFolder') }
+            Set-FujiAiFolderSetting -Settings $script:Settings -Folder $folder
+            Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
+        }
+        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
+        $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
+        [System.Windows.Forms.Application]::DoEvents()
+        $script:FujiAiServer = Start-FujiAiServer -LocalDir $dir -LogDir (Join-Path $script:Ed.Directory $script:FujiLogFolder)
+        $srv = $script:FujiAiServer
+    }
+    return (Invoke-FujiAiChat -Server $srv -Body $Body)
 }
 
 # ===== gui/Alert.ps1 =====
@@ -8011,7 +8223,7 @@ function Show-FujiMainForm {
             # a restart for the new text size waits for the next close if this one was called off
             if ($e.Cancel) { $script:RestartAfterClose = $false }
         })
-    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
+    $form.Add_FormClosed({ Invoke-FujiUi { Stop-FujiAiServer; Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
                 Restore-FujiSplitPlacement
@@ -9990,7 +10202,7 @@ function New-FujiWinIo {
         Watch = { Update-FujiWatchPanel }
         Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
-        EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
+        EndRun = { Close-FujiRunExcel; Clear-FujiBackground; Stop-FujiAiServer }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
         SetField = { param($Request) Invoke-FujiRobot { Set-FujiUiaField -Request $Request } }
         GetField = { param($Request) Get-FujiUiaField -Request $Request }
@@ -10000,6 +10212,9 @@ function New-FujiWinIo {
         TypeSecret = { param($Text) Invoke-FujiRobot { [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) } }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
+        AiChat = { param($Body) Invoke-FujiAiRunChat -Body $Body }
+        AiPick = { param($Caption, $Message, $Options, $Initial) Invoke-FujiRobot { Show-FujiRunAiPick -Caption $Caption -Message $Message -Options $Options -Initial $Initial } }
+        AiReview = { param($Row) [void](Add-FujiAiReviewRow -Directory $script:Ed.Directory -Now (Get-Date) -Row $Row) }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }
     }
 }
@@ -12445,6 +12660,8 @@ function Show-FujiWatchRuleDialog {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     [void](Initialize-FujiLogFile -Directory $here)
+    # an AI server left by an app that did not close normally
+    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     # one app per folder (kept until the app ends)
     $script:AppLock = Enter-FujiAppLock -Directory $here
     if ($null -eq $script:AppLock) {

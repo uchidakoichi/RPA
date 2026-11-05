@@ -25,11 +25,13 @@ function Initialize-FujiLogFile {
     try {
         if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir -ErrorAction Stop) }
         $oldest = $Now.Date.AddDays(-$script:FujiLogKeepDays)
-        foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter 'fujikyun_log_*.txt')) {
-            $m = [regex]::Match($f.Name, '^fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt$')
+        # the log, the AI review lists and llama-server's own output (AI commands)
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File)) {
+            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
             if (-not $m.Success) { continue }
             $day = [datetime]::MinValue
-            if (-not [datetime]::TryParseExact($m.Groups[1].Value, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$day)) { continue }
+            $date = $m.Groups[1].Value + $m.Groups[2].Value + $m.Groups[3].Value
+            if (-not [datetime]::TryParseExact($date, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$day)) { continue }
             if ($day -lt $oldest) {
                 Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
                 $removed.Add($f.Name)

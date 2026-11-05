@@ -54,6 +54,8 @@ try {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     [void](Initialize-FujiLogFile -Directory $here)
+    # an AI server left by an app that did not close normally
+    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     # one app per folder (kept until the app ends)
     $script:AppLock = Enter-FujiAppLock -Directory $here
     if ($null -eq $script:AppLock) {

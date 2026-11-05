@@ -424,7 +424,7 @@ function New-FujiWinIo {
         Watch = { Update-FujiWatchPanel }
         Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
-        EndRun = { Close-FujiRunExcel; Clear-FujiBackground }
+        EndRun = { Close-FujiRunExcel; Clear-FujiBackground; Stop-FujiAiServer }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
         SetField = { param($Request) Invoke-FujiRobot { Set-FujiUiaField -Request $Request } }
         GetField = { param($Request) Get-FujiUiaField -Request $Request }
@@ -434,6 +434,9 @@ function New-FujiWinIo {
         TypeSecret = { param($Text) Invoke-FujiRobot { [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-FujiSendKeyLiteral $Text)) } }
         ForegroundWindow = { Get-FujiForegroundWindowInfo }
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
+        AiChat = { param($Body) Invoke-FujiAiRunChat -Body $Body }
+        AiPick = { param($Caption, $Message, $Options, $Initial) Invoke-FujiRobot { Show-FujiRunAiPick -Caption $Caption -Message $Message -Options $Options -Initial $Initial } }
+        AiReview = { param($Row) [void](Add-FujiAiReviewRow -Directory $script:Ed.Directory -Now (Get-Date) -Row $Row) }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }
     }
 }

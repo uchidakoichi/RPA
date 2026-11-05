@@ -71,7 +71,7 @@ function Show-FujiMainForm {
             # a restart for the new text size waits for the next close if this one was called off
             if ($e.Cancel) { $script:RestartAfterClose = $false }
         })
-    $form.Add_FormClosed({ Invoke-FujiUi { Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
+    $form.Add_FormClosed({ Invoke-FujiUi { Stop-FujiAiServer; Close-FujiAlert; Save-FujiWindowPlacement; Save-FujiEditTimeUi; if ($script:RestartAfterClose) { Start-FujiAppAgain } } })
     $form.Add_Shown({
             Invoke-FujiUi {
                 Restore-FujiSplitPlacement

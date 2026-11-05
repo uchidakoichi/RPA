@@ -86,6 +86,13 @@ try {
     $bytes = [System.IO.File]::ReadAllBytes($logPath)
     Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF -and $bytes[3] -ne 0xEF) 'log file: one BOM at the start'
     Assert-Equal ("[10:41:02] a`r`nb`r`n[10:41:03] [error] stop`r`n") (Read-FujiUtf8File -Path $logPath) 'log file: lines'
+    Write-FujiTextFile -Path (Join-Path $logDir 'ai_review_2026-09-21.csv') -Text 'old'
+    Write-FujiTextFile -Path (Join-Path $logDir 'ai_review_2026-09-22.csv') -Text 'kept'
+    Write-FujiTextFile -Path (Join-Path $logDir 'llama-server_2026-09-21_101500.log') -Text 'old'
+    Write-FujiTextFile -Path (Join-Path $logDir 'llama-server_2026-09-22_101500.log') -Text 'kept'
+    $removed = Initialize-FujiLogFile -Directory $work -Now ([datetime]'2026-10-22 09:00')
+    Assert-Equal 'ai_review_2026-09-21.csv,llama-server_2026-09-21_101500.log' ((@($removed) | Sort-Object) -join ',') 'log file: old AI review lists and llama-server logs removed too'
+    Assert-True ((Test-Path -LiteralPath (Join-Path $logDir 'ai_review_2026-09-22.csv')) -and (Test-Path -LiteralPath (Join-Path $logDir 'llama-server_2026-09-22_101500.log'))) 'log file: newer AI files kept'
     Remove-Item -LiteralPath $logDir -Recurse -Force
     Write-FujiTextFile -Path $logDir -Text 'a file where the folder should be'
     Assert-True ((Write-FujiLogFile -Message 'x') -ne '') 'log file: a failure is reported'
@@ -137,6 +144,10 @@ $work = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_alert_' + [guid]:
 try {
     Save-FujiSetting -Directory $work -Settings $alSet
     Assert-Equal 'full' (Get-FujiAlertSetting -Settings (Read-FujiSetting -Directory $work) -Kind 'confirm').style 'alert: kept in the settings file'
+    Assert-Equal '' (Get-FujiAiFolderSetting -Settings $alSet) 'ai: no AI folder set yet'
+    Set-FujiAiFolderSetting -Settings $alSet -Folder ' \\server\share\AI '
+    Save-FujiSetting -Directory $work -Settings $alSet
+    Assert-Equal '\\server\share\AI' (Get-FujiAiFolderSetting -Settings (Read-FujiSetting -Directory $work)) 'ai: AI folder kept in the settings file'
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force
 }

@@ -163,6 +163,19 @@ function Add-FujiAiReviewRow {
     return $path
 }
 
+# The shared AI folder this PC uses (fujikyun_settings.json "ai": { "folder" }), '' when not chosen
+function Get-FujiAiFolderSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    if ($Settings.Contains('ai') -and $Settings['ai'] -is [System.Collections.IDictionary] -and $Settings['ai'].Contains('folder')) { return ([string]$Settings['ai']['folder']).Trim() }
+    return ''
+}
+
+function Set-FujiAiFolderSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [AllowEmptyString()][string]$Folder)
+    if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
+    $Settings['ai']['folder'] = ([string]$Folder).Trim()
+}
+
 # ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used
 function Read-FujiAiManifest {
     param([Parameter(Mandatory)][string]$Path)
