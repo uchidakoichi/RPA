@@ -82,6 +82,17 @@ try {
     Check ($null -eq (Get-Process -Id $procId -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath (Join-Path $logs 'llama-server.pid'))) 'stop: process and pid file gone'
     Stop-FujiAiServer -Server $srv
     Check $true 'stop: twice is fine'
+    # right after a stop the files are replaced (Windows may hold the DLLs a moment after the process ends)
+    foreach ($round in 1..3) {
+        $s3 = Start-FujiAiServer -LocalDir $local -LogDir $logs
+        Stop-FujiAiServer -Server $s3
+        $m3 = $manifest; $m3.aiVersion = 10 + $round
+        Write-FujiTextFile -Path (Join-Path $shared 'ai.json') -Text (ConvertTo-FujiJson -InputObject $m3 -Indent 2)
+        $ok3 = $true; try { [void](Copy-FujiAiLocal -SharedDir $shared -LocalDir $local) } catch { $ok3 = $false; Write-Output $_.Exception.Message }
+        Check $ok3 ('copy: right after a stop, round ' + $round)
+        $ok4 = $true; try { Remove-FujiAiCopy -LocalDir $local; [void](Copy-FujiAiLocal -SharedDir $shared -LocalDir $local) } catch { $ok4 = $false; Write-Output $_.Exception.Message }
+        Check ($ok4 -and (Test-Path -LiteralPath (Join-Path $local 'ai.json'))) ('delete the copy and copy again, round ' + $round)
+    }
     # a leftover from a crash is cleared at the next start
     $left = Start-Process -FilePath (Join-Path $local 'llama-x64\llama-server.exe') -ArgumentList '--version' -PassThru -WindowStyle Hidden
     $left2 = Start-FujiAiServer -LocalDir $local -LogDir $logs

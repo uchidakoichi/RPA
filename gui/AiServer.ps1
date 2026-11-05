@@ -12,6 +12,21 @@ function Get-FujiAiLocalDir {
     return (Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'fujikyun') 'ai')
 }
 
+# Windows may hold llama-server's files a moment after the process ended: tries again for about 3 s
+function Invoke-FujiAiFileRetry {
+    param([Parameter(Mandatory)][scriptblock]$Do)
+    for ($i = 1; ; $i++) {
+        try { & $Do; return } catch { if ($i -ge 10) { throw }; Start-Sleep -Milliseconds 300 }
+    }
+}
+
+# Removes the copy on this PC (the AI settings' "delete the copy")
+function Remove-FujiAiCopy {
+    param([string]$LocalDir = (Get-FujiAiLocalDir))
+    if (-not (Test-Path -LiteralPath $LocalDir)) { return }
+    Invoke-FujiAiFileRetry { Remove-Item -LiteralPath $LocalDir -Recurse -Force -ErrorAction Stop }
+}
+
 # The copy's ai.json, or $null when there is no usable copy
 function Get-FujiAiLocalManifest {
     param([Parameter(Mandatory)][string]$LocalDir)
@@ -65,8 +80,10 @@ function Copy-FujiAiLocal {
         foreach ($part in $parts) {
             $dest = $part.Substring(0, $part.Length - 5)
             try {
-                if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force -ErrorAction Stop }
-                Move-Item -LiteralPath $part -Destination $dest -ErrorAction Stop
+                Invoke-FujiAiFileRetry {
+                    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force -ErrorAction Stop }
+                    Move-Item -LiteralPath $part -Destination $dest -ErrorAction Stop
+                }
             } catch { throw (Get-FujiText 'run.aiCopyBusy' $dest) }
         }
         $parts.Clear()

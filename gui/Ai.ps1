@@ -194,7 +194,7 @@ function Show-FujiAiSettingDialog {
     $deleteBtn.Add_Click({ Invoke-FujiUi {
                 if ((Show-FujiChoice -Title (Get-FujiText 'gui.aiTitle') -Message (Get-FujiText 'gui.aiDeleteConfirm' (Get-FujiAiLocalDir)) -Buttons @((Get-FujiText 'gui.aiDeleteCopy'), (Get-FujiText 'gui.cancel'))) -ne 0) { return }
                 Stop-FujiAiServer
-                try { Remove-Item -LiteralPath (Get-FujiAiLocalDir) -Recurse -Force -ErrorAction Stop } catch { $ctx.Status.AppendText("`r`n" + $_.Exception.Message) }
+                try { Remove-FujiAiCopy } catch { $ctx.Status.AppendText("`r`n" + $_.Exception.Message) }
                 & $refresh
             } })
     $testBtn.Add_Click({ Invoke-FujiUi {
