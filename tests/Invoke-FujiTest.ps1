@@ -479,6 +479,10 @@ try {
     Assert-Equal 11 $recs[0].Count 'ai: review csv 11 columns'
     Assert-Equal ("a,b`n""c""" + ('y' * 93)) $recs[1][6] 'ai: review csv keeps comma, quote, newline; source cut to 100'
     Assert-Equal "'=bad" $recs[2][7] 'ai: review csv answer cannot run as a formula'
+    # the day's list is open in Excel (locked): the line goes to the next free name
+    $lock = [System.IO.File]::Open($p1, 'Open', 'ReadWrite', 'None')
+    try { $p2 = Add-FujiAiReviewRow -Directory $aiWork -Now ([datetime]'2026-11-10 09:10') -Row ([ordered]@{ time = '09:10'; macro = 'm'; step = 1; row = 3; command = 'AI_CHOOSE'; name = 'desk'; source = 'x'; answer = 'a'; p = '0.3'; probs = ''; reason = 'r3' }) } finally { $lock.Dispose() }
+    Assert-Equal (Join-Path (Join-Path $aiWork 'fujikyun_logs') 'ai_review_2026-11-10_2.csv') $p2 'ai: review csv locked, next name used'
     $m = Join-Path $aiWork 'ai.json'
     Write-FujiTextFile -Path $m -Text '{"aiVersion":2,"model":"m.gguf","files":{"m.gguf":{"size":5,"sha256":"ab"}},"serverArgs":"-c 4096"}'
     $man = Read-FujiAiManifest -Path $m
@@ -851,7 +855,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        AiReply = $null; AiThrow = ''; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
+        AiReply = $null; AiThrow = ''; AiFocus = $false; AiReviewFails = $false; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true; FileFails = $false
     }
     return @{
@@ -886,9 +890,10 @@ function New-FakeIo {
         Alarm = { $script:Fake.Calls.Add('ALARM') }
         Notify = { $script:Fake.Calls.Add('NOTIFY') }
         EndRun = { $script:Fake.Calls.Add('END') }
-        AiChat = { param($Body) $script:Fake.AiBodies.Add($Body); if ($script:Fake.AiThrow) { throw $script:Fake.AiThrow }; return $script:Fake.AiReply }
-        AiPick = { param($Caption, $Message, $Options, $Initial) $null = $Caption; $script:Fake.AiPicks.Add(@{ Message = $Message; Options = $Options; Initial = $Initial }); return $script:Fake.Answers.Dequeue() }
-        AiReview = { param($Row) $script:Fake.AiReviews.Add($Row) }
+        AiChat = { param($Body) $script:Fake.Calls.Add('AICHAT'); $script:Fake.AiBodies.Add($Body); if ($script:Fake.AiThrow -is [System.Exception]) { throw $script:Fake.AiThrow }; if ($script:Fake.AiThrow) { throw $script:Fake.AiThrow }; return $script:Fake.AiReply }
+        AiTookFocus = { $f = $script:Fake.AiFocus; $script:Fake.AiFocus = $false; return $f }
+        AiPick = { param($Caption, $Message, $Options, $Initial) $null = $Caption; $script:Fake.Calls.Add('AIPICK'); $script:Fake.AiPicks.Add(@{ Message = $Message; Options = $Options; Initial = $Initial }); return $script:Fake.Answers.Dequeue() }
+        AiReview = { param($Row) if ($script:Fake.AiReviewFails) { throw 'review list is open in Excel' }; $script:Fake.AiReviews.Add($Row) }
         Break = { param($Message) $script:Fake.Breaks.Add($Message); $script:Fake.Calls.Add('BREAK'); return $script:Fake.Answers.Dequeue() }
         SetField = { param($Request)
             $script:Fake.Calls.Add(('FIELD {0}#{1}={2} {3}' -f $Request.Name, $Request.Nth, $Request.Text, $Request.Mode))
@@ -1358,6 +1363,29 @@ $run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a
 $script:Fake.AiThrow = 'server gone'
 Assert-Equal 'error' (Invoke-FujiRun -Run $run) 'ai run: AiChat throws'
 Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains('server gone') }).Count -ge 1) 'ai run: AiChat error text in the log'
+# the person called the AI off (no folder chosen, copy cancelled): the run stops, no window per row
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @([string[]]@('a'), [string[]]@('b'))
+$script:Fake.AiThrow = New-Object -TypeName System.OperationCanceledException -ArgumentList 'called off'
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'stopped' -and $script:Fake.AiBodies.Count -eq 1) 'ai run: called off stops the run'
+# after the pick window the input goes back to the target window (as ASK)
+$run = New-TestRun -Steps @((New-AiChooseStep -Low 'ASK'), @('KEY', '{ENTER}')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'continue'; Value = 'garbage' })
+[void](Invoke-FujiRun -Run $run)
+$pickAt = $script:Fake.Calls.IndexOf('AIPICK')
+Assert-True ($pickAt -ge 0 -and $script:Fake.Calls.IndexOf('ACT App', $pickAt) -gt $pickAt) 'ai run: back to the target after the pick window'
+# a window the AI showed (choose the folder, copy) also gives the focus back
+$run = New-TestRun -Steps @((New-AiChooseStep), @('KEY', '{ENTER}')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.9 }
+$script:Fake.AiFocus = $true
+[void](Invoke-FujiRun -Run $run)
+$chatAt = $script:Fake.Calls.IndexOf('AICHAT')
+Assert-True ($chatAt -ge 0 -and $script:Fake.Calls.IndexOf('ACT App', $chatAt) -gt $chatAt) 'ai run: back to the target after a window the AI showed'
+# the review list cannot be written (open in Excel): warned, the run goes on
+$run = New-TestRun -Target '' -Steps @((New-AiChooseStep), @('KEY', 'next')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.AiReviewFails = $true
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'done' -and (Get-FakeCall 'KEYS') -eq 'KEYS next' -and @($script:Fake.Logs | Where-Object { $_ -like 'warn*' -and $_.Contains('Excel') }).Count -ge 1) 'ai run: review list not writable, the run goes on'
 
 # ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
 # breakpoints and stepping
@@ -1911,6 +1939,11 @@ Assert-True ($seen -gt 300) ('text keys found in the sources ({0})' -f $seen)
 Assert-True ($missing.Count -eq 0) ('every text key exists in fujikyun_ja.json: ' + ($missing -join ', '))
 
 # ----------------------------------------------------------------- source rules
+# a second start (a scheduled task while the app is open) must not stop the open app's AI server:
+# leftovers are cleared only once this app holds the folder's lock
+$mainText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'build') 'Main.ps1'))
+Assert-True ($mainText.IndexOf('Clear-FujiAiLeftover') -gt $mainText.IndexOf('Enter-FujiAppLock')) 'ai: leftover AI server cleared only after the app lock'
+
 # The app file handed out must be the current build of the sources
 $built = & (Join-Path $psRoot 'build/Build-FujiBundle.ps1') -PassThru
 $current = ([System.IO.File]::ReadAllText((Join-Path $psRoot 'fujikyun.ps1'))) -replace "`r`n", "`n"

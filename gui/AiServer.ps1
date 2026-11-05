@@ -7,6 +7,8 @@
 # ---------------------------------------------------------------------------------------------
 $script:FujiAiServer = $null
 $script:FujiAiChunk = 1MB
+# set when the AI showed a window of its own during a run (Io.AiTookFocus reads and clears it)
+$script:FujiAiShowedWindow = $false
 
 function Get-FujiAiLocalDir {
     return (Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'fujikyun') 'ai')
@@ -107,11 +109,12 @@ function Resolve-FujiAiReady {
             & $Log (Get-FujiText 'run.aiSharedOffline' $SharedDir)
             return $LocalDir
         }
-        if (-not $SharedDir) { throw (Get-FujiText 'run.aiNoFolder') }
+        if (-not $SharedDir) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
         throw (Get-FujiText 'run.aiSharedMissing' $SharedDir)
     }
     if ((Test-FujiAiCopyNeeded -Shared $aiReadyShared -Local $aiReadyLocal -LocalDir $LocalDir) -eq 'copy') {
-        if ((& $Copy) -ne 'copied') { throw (Get-FujiText 'run.aiCopyCanceled') }
+        # the person called it off: the run stops (rather than asking again on every row)
+        if ((& $Copy) -ne 'copied') { throw (New-FujiStopException (Get-FujiText 'run.aiCopyCanceled')) }
     }
     return $LocalDir
 }
@@ -195,12 +198,13 @@ function Invoke-FujiAiRunChat {
     if ($null -eq $srv -or $srv.Process.HasExited) {
         $folder = Get-FujiAiFolderSetting -Settings $script:Settings
         if (-not $folder) {
+            $script:FujiAiShowedWindow = $true
             $folder = Select-FujiAiFolderUi
-            if (-not $folder) { throw (Get-FujiText 'run.aiNoFolder') }
+            if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
             Set-FujiAiFolderSetting -Settings $script:Settings -Folder $folder
             Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
         }
-        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
+        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
         $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
         [System.Windows.Forms.Application]::DoEvents()
         $script:FujiAiServer = Start-FujiAiServer -LocalDir $dir -LogDir (Join-Path $script:Ed.Directory $script:FujiLogFolder)

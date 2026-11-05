@@ -54,8 +54,6 @@ try {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     [void](Initialize-FujiLogFile -Directory $here)
-    # an AI server left by an app that did not close normally
-    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     # one app per folder (kept until the app ends)
     $script:AppLock = Enter-FujiAppLock -Directory $here
     if ($null -eq $script:AppLock) {
@@ -68,6 +66,9 @@ try {
         [void][System.Windows.Forms.MessageBox]::Show((Get-FujiText 'gui.alreadyOpen' $here), (Get-FujiText 'gui.title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         exit 0
     }
+    # an AI server left by an app of this folder that did not close normally (only now: before the lock
+    # a second start, a scheduled task while the app is open, would stop the open app's server)
+    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     # this PC's settings first: the text size is needed before any window is made
     $script:Settings = Read-FujiSetting -Directory $here

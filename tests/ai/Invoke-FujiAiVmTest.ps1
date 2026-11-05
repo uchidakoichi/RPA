@@ -56,6 +56,8 @@ try {
     Check ($dir -eq $local -and $logged.Count -eq 1) 'ready: shared folder offline, the copy is used'
     $threw = $false; try { [void](Resolve-FujiAiReady -SharedDir (Join-Path $root 'no-such-share') -LocalDir (Join-Path $root 'empty') -Copy { 'copied' } -Log { param($m) }) } catch { $threw = $true }
     Check $threw 'ready: no share and no copy is an error'
+    $kind = ''; try { [void](Resolve-FujiAiReady -SharedDir $shared -LocalDir (Join-Path $root 'empty2') -Copy { 'canceled' } -Log { param($m) }) } catch { $kind = $_.Exception.GetType().Name }
+    Check ($kind -eq 'OperationCanceledException') 'ready: a cancelled copy stops the run'
 
     # start: not enough memory
     $threw = $false; try { [void](Start-FujiAiServer -LocalDir $local -LogDir $logs -MinFreeMb 1048576) } catch { $threw = $true }

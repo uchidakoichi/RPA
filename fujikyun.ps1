@@ -199,7 +199,7 @@ function Add-FujiAiReviewRow {
     param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][datetime]$Now, [Parameter(Mandatory)][System.Collections.IDictionary]$Row)
     $dir = Join-Path $Directory $script:FujiLogFolder
     if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir) }
-    $path = Join-Path $dir ('ai_review_' + $Now.ToString('yyyy-MM-dd') + '.csv')
+    $day = $Now.ToString('yyyy-MM-dd')
     $src = [string]$Row['source']
     if ($src.Length -gt $script:FujiAiReviewSourceMax) { $src = $src.Substring(0, $script:FujiAiReviewSourceMax) }
     $cells = foreach ($k in @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason')) {
@@ -208,13 +208,23 @@ function Add-FujiAiReviewRow {
         ConvertTo-FujiSafeCsvValue -Value $v
     }
     $line = ConvertTo-FujiCsvText -Rows @(, @($cells))
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        [System.IO.File]::AppendAllText($path, $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
-    } else {
-        $head = ConvertTo-FujiCsvText -Rows @(, @((Get-FujiText 'run.aiReviewHeader') -split ','))
-        Write-FujiTextFile -Path $path -Text ($head + $line) -Bom
+    # the day's list may be open in Excel (locked): then the next name, ai_review_<date>_2.csv ...
+    for ($n = 1; ; $n++) {
+        $name = 'ai_review_' + $day + '.csv'
+        if ($n -gt 1) { $name = 'ai_review_' + $day + '_' + $n + '.csv' }
+        $path = Join-Path $dir $name
+        try {
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                [System.IO.File]::AppendAllText($path, $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
+            } else {
+                $head = ConvertTo-FujiCsvText -Rows @(, @((Get-FujiText 'run.aiReviewHeader') -split ','))
+                Write-FujiTextFile -Path $path -Text ($head + $line) -Bom
+            }
+            return $path
+        } catch {
+            if ($n -ge 9 -or -not (Test-FujiFileBusy -Exception $_.Exception) -and -not ([string]$_.Exception.Message).Contains($path)) { throw }
+        }
     }
-    return $path
 }
 
 # The shared AI folder this PC uses (fujikyun_settings.json "ai": { "folder" }), '' when not chosen
@@ -3377,7 +3387,7 @@ function Initialize-FujiLogFile {
         $oldest = $Now.Date.AddDays(-$script:FujiLogKeepDays)
         # the log, the AI review lists and llama-server's own output (AI commands)
         foreach ($f in @(Get-ChildItem -LiteralPath $dir -File)) {
-            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
+            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})(?:_\d+)?\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
             if (-not $m.Success) { continue }
             $day = [datetime]::MinValue
             $date = $m.Groups[1].Value + $m.Groups[2].Value + $m.Groups[3].Value
@@ -3806,6 +3816,7 @@ function Add-FujiRecordedStep {
 #    AiChat {Body} -> llama-server's answer (ConvertFrom-Json); throws when it cannot ask
 #    AiPick {Caption, Message, Options (@{ Value; P }), Initial} -> @{ Choice = 'continue'|'stop'; Value }
 #    AiReview {Row} -> writes one line of the AI review list
+#    AiTookFocus {} -> $true once after the AI showed a window of its own (choose the folder, copy)
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
 #    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
 #    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
@@ -5109,8 +5120,16 @@ function Add-FujiRunAiReview {
     $row = Get-FujiRunCurrentRow $Run
     $rowNo = ''
     if ($row.No -gt 0) { $rowNo = [string]$row.No }
-    & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
-            command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+    try {
+        & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
+                command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+    } catch [System.OperationCanceledException] {
+        throw
+    } catch {
+        # the list is only a help for checking later: a run that is told to go on does not stop for it
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiReviewFailed' $_.Exception.Message) 'warn'
+        return
+    }
     Write-FujiRunLog $Run (Get-FujiText 'run.aiReview' $Name $Reason) 'warn'
 }
 
@@ -5127,7 +5146,13 @@ function Invoke-FujiRunAiChat {
     } catch {
         return @{ Error = (Get-FujiRunError (Get-FujiText 'run.aiFailed' $_.Exception.Message)) }
     }
-    return @{ Response = $r; Ms = [long]$sw.ElapsedMilliseconds }
+    $ms = [long]$sw.ElapsedMilliseconds
+    # the first AI step may have shown a window (choose the folder, copy): the input goes back to the target
+    if (& $Run.Io.AiTookFocus) {
+        $back = Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed'
+        if ($back.Action -eq 'error') { return @{ Error = $back } }
+    }
+    return @{ Response = $r; Ms = $ms }
 }
 
 function Format-FujiAiProbability {
@@ -5158,6 +5183,7 @@ function Invoke-FujiAiChoose {
     $pText = Format-FujiAiProbability $c.P
     $probs = (@($c.Probs.Keys | ForEach-Object { $_ + '=' + (Format-FujiAiProbability $c.Probs[$_]) }) -join ';')
     $answered = $c.Covered -ge 0.5 -and $c.Value -ne ''
+    $picked = $false
     $value = $c.Value
     if (-not $answered -or ($c.P -lt $threshold -and $Settings['low'] -ne 'USE')) {
         $reason = Get-FujiText 'run.aiReasonLow'
@@ -5173,6 +5199,7 @@ function Invoke-FujiAiChoose {
                 $answer = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.AiPick $caption $message $picks $c.Value }
                 if ($answer.Choice -ne 'continue') { throw (New-FujiStopException (Get-FujiText 'run.aiPickStop')) }
                 $value = [string]$answer.Value
+                $picked = $true
             }
             'STOP' { return (Get-FujiRunError (Get-FujiText 'run.aiLowStop' $c.Value $pText)) }
             default {
@@ -5185,6 +5212,8 @@ function Invoke-FujiAiChoose {
     $Run.Vars[$probName] = $pText
     Write-FujiRunLog $Run (Get-FujiText 'run.aiChoose' $name (Format-FujiShort $value 40) $pText $sent.Ms)
     & $Run.Io.Watch
+    # after the pick window the input goes back to the target window (as ASK)
+    if ($picked) { return (Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed') }
     return (Get-FujiRunNext 0)
 }
 
@@ -6707,6 +6736,8 @@ function Show-FujiAiSettingDialog {
 # ---------------------------------------------------------------------------------------------
 $script:FujiAiServer = $null
 $script:FujiAiChunk = 1MB
+# set when the AI showed a window of its own during a run (Io.AiTookFocus reads and clears it)
+$script:FujiAiShowedWindow = $false
 
 function Get-FujiAiLocalDir {
     return (Join-Path (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'fujikyun') 'ai')
@@ -6807,11 +6838,12 @@ function Resolve-FujiAiReady {
             & $Log (Get-FujiText 'run.aiSharedOffline' $SharedDir)
             return $LocalDir
         }
-        if (-not $SharedDir) { throw (Get-FujiText 'run.aiNoFolder') }
+        if (-not $SharedDir) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
         throw (Get-FujiText 'run.aiSharedMissing' $SharedDir)
     }
     if ((Test-FujiAiCopyNeeded -Shared $aiReadyShared -Local $aiReadyLocal -LocalDir $LocalDir) -eq 'copy') {
-        if ((& $Copy) -ne 'copied') { throw (Get-FujiText 'run.aiCopyCanceled') }
+        # the person called it off: the run stops (rather than asking again on every row)
+        if ((& $Copy) -ne 'copied') { throw (New-FujiStopException (Get-FujiText 'run.aiCopyCanceled')) }
     }
     return $LocalDir
 }
@@ -6895,12 +6927,13 @@ function Invoke-FujiAiRunChat {
     if ($null -eq $srv -or $srv.Process.HasExited) {
         $folder = Get-FujiAiFolderSetting -Settings $script:Settings
         if (-not $folder) {
+            $script:FujiAiShowedWindow = $true
             $folder = Select-FujiAiFolderUi
-            if (-not $folder) { throw (Get-FujiText 'run.aiNoFolder') }
+            if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
             Set-FujiAiFolderSetting -Settings $script:Settings -Folder $folder
             Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
         }
-        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
+        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
         $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
         [System.Windows.Forms.Application]::DoEvents()
         $script:FujiAiServer = Start-FujiAiServer -LocalDir $dir -LogDir (Join-Path $script:Ed.Directory $script:FujiLogFolder)
@@ -10472,6 +10505,7 @@ function New-FujiWinIo {
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
         AiChat = { param($Body) Invoke-FujiAiRunChat -Body $Body }
         AiPick = { param($Caption, $Message, $Options, $Initial) Invoke-FujiRobot { Show-FujiRunAiPick -Caption $Caption -Message $Message -Options $Options -Initial $Initial } }
+        AiTookFocus = { $f = $script:FujiAiShowedWindow; $script:FujiAiShowedWindow = $false; return $f }
         AiReview = { param($Row) [void](Add-FujiAiReviewRow -Directory $script:Ed.Directory -Now (Get-Date) -Row $Row) }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }
     }
@@ -12918,8 +12952,6 @@ function Show-FujiWatchRuleDialog {
     $textReady = $true
     Import-FujiCommand -Path (Join-Path $here 'fujikyun_commands.json')
     [void](Initialize-FujiLogFile -Directory $here)
-    # an AI server left by an app that did not close normally
-    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     # one app per folder (kept until the app ends)
     $script:AppLock = Enter-FujiAppLock -Directory $here
     if ($null -eq $script:AppLock) {
@@ -12932,6 +12964,9 @@ function Show-FujiWatchRuleDialog {
         [void][System.Windows.Forms.MessageBox]::Show((Get-FujiText 'gui.alreadyOpen' $here), (Get-FujiText 'gui.title'), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         exit 0
     }
+    # an AI server left by an app of this folder that did not close normally (only now: before the lock
+    # a second start, a scheduled task while the app is open, would stop the open app's server)
+    try { Clear-FujiAiLeftover -LogDir (Join-Path $here $script:FujiLogFolder) } catch { $null = $_ }
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     # this PC's settings first: the text size is needed before any window is made
     $script:Settings = Read-FujiSetting -Directory $here

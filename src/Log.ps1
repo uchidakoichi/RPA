@@ -27,7 +27,7 @@ function Initialize-FujiLogFile {
         $oldest = $Now.Date.AddDays(-$script:FujiLogKeepDays)
         # the log, the AI review lists and llama-server's own output (AI commands)
         foreach ($f in @(Get-ChildItem -LiteralPath $dir -File)) {
-            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
+            $m = [regex]::Match($f.Name, '^(?:fujikyun_log_(\d{4}-\d{2}-\d{2})\.txt|ai_review_(\d{4}-\d{2}-\d{2})(?:_\d+)?\.csv|llama-server_(\d{4}-\d{2}-\d{2})(?:_\d{6})?\.log)$')
             if (-not $m.Success) { continue }
             $day = [datetime]::MinValue
             $date = $m.Groups[1].Value + $m.Groups[2].Value + $m.Groups[3].Value

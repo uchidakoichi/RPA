@@ -25,6 +25,7 @@
 #    AiChat {Body} -> llama-server's answer (ConvertFrom-Json); throws when it cannot ask
 #    AiPick {Caption, Message, Options (@{ Value; P }), Initial} -> @{ Choice = 'continue'|'stop'; Value }
 #    AiReview {Row} -> writes one line of the AI review list
+#    AiTookFocus {} -> $true once after the AI showed a window of its own (choose the folder, copy)
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
 #    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
 #    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
@@ -1328,8 +1329,16 @@ function Add-FujiRunAiReview {
     $row = Get-FujiRunCurrentRow $Run
     $rowNo = ''
     if ($row.No -gt 0) { $rowNo = [string]$row.No }
-    & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
-            command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+    try {
+        & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
+                command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+    } catch [System.OperationCanceledException] {
+        throw
+    } catch {
+        # the list is only a help for checking later: a run that is told to go on does not stop for it
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiReviewFailed' $_.Exception.Message) 'warn'
+        return
+    }
     Write-FujiRunLog $Run (Get-FujiText 'run.aiReview' $Name $Reason) 'warn'
 }
 
@@ -1346,7 +1355,13 @@ function Invoke-FujiRunAiChat {
     } catch {
         return @{ Error = (Get-FujiRunError (Get-FujiText 'run.aiFailed' $_.Exception.Message)) }
     }
-    return @{ Response = $r; Ms = [long]$sw.ElapsedMilliseconds }
+    $ms = [long]$sw.ElapsedMilliseconds
+    # the first AI step may have shown a window (choose the folder, copy): the input goes back to the target
+    if (& $Run.Io.AiTookFocus) {
+        $back = Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed'
+        if ($back.Action -eq 'error') { return @{ Error = $back } }
+    }
+    return @{ Response = $r; Ms = $ms }
 }
 
 function Format-FujiAiProbability {
@@ -1377,6 +1392,7 @@ function Invoke-FujiAiChoose {
     $pText = Format-FujiAiProbability $c.P
     $probs = (@($c.Probs.Keys | ForEach-Object { $_ + '=' + (Format-FujiAiProbability $c.Probs[$_]) }) -join ';')
     $answered = $c.Covered -ge 0.5 -and $c.Value -ne ''
+    $picked = $false
     $value = $c.Value
     if (-not $answered -or ($c.P -lt $threshold -and $Settings['low'] -ne 'USE')) {
         $reason = Get-FujiText 'run.aiReasonLow'
@@ -1392,6 +1408,7 @@ function Invoke-FujiAiChoose {
                 $answer = Invoke-FujiRunAttended -Run $Run -Call { & $Run.Io.AiPick $caption $message $picks $c.Value }
                 if ($answer.Choice -ne 'continue') { throw (New-FujiStopException (Get-FujiText 'run.aiPickStop')) }
                 $value = [string]$answer.Value
+                $picked = $true
             }
             'STOP' { return (Get-FujiRunError (Get-FujiText 'run.aiLowStop' $c.Value $pText)) }
             default {
@@ -1404,6 +1421,8 @@ function Invoke-FujiAiChoose {
     $Run.Vars[$probName] = $pText
     Write-FujiRunLog $Run (Get-FujiText 'run.aiChoose' $name (Format-FujiShort $value 40) $pText $sent.Ms)
     & $Run.Io.Watch
+    # after the pick window the input goes back to the target window (as ASK)
+    if ($picked) { return (Restore-FujiRunTarget -Run $Run -FailKey 'run.askBackFailed') }
     return (Get-FujiRunNext 0)
 }
 

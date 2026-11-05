@@ -145,7 +145,7 @@ function Add-FujiAiReviewRow {
     param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][datetime]$Now, [Parameter(Mandatory)][System.Collections.IDictionary]$Row)
     $dir = Join-Path $Directory $script:FujiLogFolder
     if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir) }
-    $path = Join-Path $dir ('ai_review_' + $Now.ToString('yyyy-MM-dd') + '.csv')
+    $day = $Now.ToString('yyyy-MM-dd')
     $src = [string]$Row['source']
     if ($src.Length -gt $script:FujiAiReviewSourceMax) { $src = $src.Substring(0, $script:FujiAiReviewSourceMax) }
     $cells = foreach ($k in @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason')) {
@@ -154,13 +154,23 @@ function Add-FujiAiReviewRow {
         ConvertTo-FujiSafeCsvValue -Value $v
     }
     $line = ConvertTo-FujiCsvText -Rows @(, @($cells))
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        [System.IO.File]::AppendAllText($path, $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
-    } else {
-        $head = ConvertTo-FujiCsvText -Rows @(, @((Get-FujiText 'run.aiReviewHeader') -split ','))
-        Write-FujiTextFile -Path $path -Text ($head + $line) -Bom
+    # the day's list may be open in Excel (locked): then the next name, ai_review_<date>_2.csv ...
+    for ($n = 1; ; $n++) {
+        $name = 'ai_review_' + $day + '.csv'
+        if ($n -gt 1) { $name = 'ai_review_' + $day + '_' + $n + '.csv' }
+        $path = Join-Path $dir $name
+        try {
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                [System.IO.File]::AppendAllText($path, $line, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
+            } else {
+                $head = ConvertTo-FujiCsvText -Rows @(, @((Get-FujiText 'run.aiReviewHeader') -split ','))
+                Write-FujiTextFile -Path $path -Text ($head + $line) -Bom
+            }
+            return $path
+        } catch {
+            if ($n -ge 9 -or -not (Test-FujiFileBusy -Exception $_.Exception) -and -not ([string]$_.Exception.Message).Contains($path)) { throw }
+        }
     }
-    return $path
 }
 
 # The shared AI folder this PC uses (fujikyun_settings.json "ai": { "folder" }), '' when not chosen
