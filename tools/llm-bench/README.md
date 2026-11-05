@@ -11,6 +11,7 @@
 | `pc-check/` | 職場の PC で llama.cpp が動くかを確かめる道具（llama.cpp の本体の base64 はブランチ `llm-pc-test` だけに置く） |
 | `cases2.json` / `Invoke-LlmBench2.ps1` | 2回目の比較: アシスタントとしての力（マクロ作り・説明・ログの読み取り・エージェントの次の1手・要約・返信の下書き・表の絞り込み・名寄せ・計算） |
 | `pc-check/llm-speed.bat` | 職場の PC でモデルの速さを測る道具（llm-check.bat のあとに使う）。モデル Qwen3-1.7B Q4_K_M の base64 16個はブランチ `llm-model-q4` の `tools/llm-bench/pc-check/model/` だけに置く。公式の Q8_0 を llama-quantize で Q4_K_M に縮めたもの（VM で抜き出し 31/32、Q8_0 と同じ） |
+| （Qwen3.5-2B） | llm-speed.ps1 は Qwen3.5-2B Q4_K_M の base64 19個（ブランチ `llm-model-qwen35`）も戻して測る。部品ごとに SHA-256 を照らし、貼り直すファイルを示す |
 
 ## 結果（2026-11-03、VM）
 
@@ -101,3 +102,10 @@ Qwen2.5-Coder-1.5B-Instruct（公式 GGUF Q4_K_M）、Qwen3.5-2B（公式の saf
 - Gemma 4 E2B はファイルが 3.35GB でも、使うメモリは 1.9GB だった（層ごとの埋め込みを必要な分だけ読むため）。ただし書くのが遅い（VM で 3.7 トークン/秒、Qwen3.5-2B は 5.9）。
 - 「古いファイルを消して整理する」に、Qwen3.5-2B は delete_file を選んだ。Gemma 4 はもう一度ファイルの一覧を見ようとした（消さなかったが、人にも聞かなかった）。
 - 削除の前の CONFIRM は、どのモデルも入れなかった。
+
+## 職場の PC での速さ（llm-speed、llama.cpp b12063 x64、Core i5-1335U）
+
+| モデル | 読む速さ pp256（トークン/秒） | 書く速さ tg64（トークン/秒） | 確認日 |
+|---|---|---|---|
+| Qwen3-1.7B Q4_K_M | 85（2スレッド）〜144（10スレッド） | 約11 | 2026-11-04 |
+| Qwen3.5-2B Q4_K_M | 85（2スレッド）〜126（8スレッド） | 約9 | 2026-11-05 |
