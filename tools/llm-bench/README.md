@@ -12,6 +12,7 @@
 | `cases2.json` / `Invoke-LlmBench2.ps1` | 2回目の比較: アシスタントとしての力（マクロ作り・説明・ログの読み取り・エージェントの次の1手・要約・返信の下書き・表の絞り込み・名寄せ・計算） |
 | `pc-check/llm-speed.bat` | 職場の PC でモデルの速さを測る道具（llm-check.bat のあとに使う）。モデル Qwen3-1.7B Q4_K_M の base64 16個はブランチ `llm-model-q4` の `tools/llm-bench/pc-check/model/` だけに置く。公式の Q8_0 を llama-quantize で Q4_K_M に縮めたもの（VM で抜き出し 31/32、Q8_0 と同じ） |
 | （Qwen3.5-2B） | llm-speed.ps1 は Qwen3.5-2B Q4_K_M の base64 19個（ブランチ `llm-model-qwen35`）も戻して測る。部品ごとに SHA-256 を照らし、貼り直すファイルを示す |
+| `pc-check/llm-bench-pc.bat` | 職場の PC で、Qwen3.5-2B の正答率・メモリ・1問の時間を測る道具（llm-check.bat・llm-speed.bat のあとに使う）。VM と同じ2つのベンチを、`-c 4096`、`-c 4096` のメモリ節約（`--cache-ram 0 -ctxcp 4 -np 1`）、`-c 2048` のメモリ節約の3通りで流す。同じフォルダに `Invoke-LlmBench.ps1`・`Invoke-LlmBench2.ps1`・`cases.json`・`cases2.json` も置く。2つのベンチには `-Ctx` と `-ServerArgs` を足した |
 
 ## 結果（2026-11-03、VM）
 
@@ -109,3 +110,14 @@ Qwen2.5-Coder-1.5B-Instruct（公式 GGUF Q4_K_M）、Qwen3.5-2B（公式の saf
 |---|---|---|---|
 | Qwen3-1.7B Q4_K_M | 85（2スレッド）〜144（10スレッド） | 約11 | 2026-11-04 |
 | Qwen3.5-2B Q4_K_M | 85（2スレッド）〜126（8スレッド） | 約9 | 2026-11-05 |
+
+## メモリを減らす設定（2026-11-05、VM、Qwen3.5-2B Q4_K_M、8スレッド）
+
+llm-bench-pc を VM で流した結果。llama-server の初期設定は、前の質問を RAM に覚えておく（`--cache-ram` 既定 8192MiB）ため、質問が続くとメモリが増える。`--cache-ram 0 -ctxcp 4 -np 1` で止めても、正答はほぼ同じだった。
+
+| 設定 | ベンチ1 メモリ | ベンチ2 メモリ | ベンチ1（抜き出し・分類・判断） | ベンチ2 の合計 |
+|---|---|---|---|---|
+| `-c 4096` | 1704MB | 2879MB | 28/32・8/10・8/10 | 23/37 |
+| `-c 4096` 節約 | 1511MB | 1526MB | 28/32・8/10・8/10 | 24/37（debug が 3→4） |
+| `-c 2048` 節約 | 1487MB | 1502MB | 28/32・8/10・8/10 | 24/37 |
+
