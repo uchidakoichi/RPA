@@ -61,7 +61,7 @@ function Limit-FujiAiSource {
 
 # The request for AI_CHOOSE (Truncated is for the caller and is taken out before sending)
 function New-FujiAiChooseBody {
-    param([AllowEmptyString()][string]$Question, [Parameter(Mandatory)][System.Collections.IList]$Options, [AllowEmptyString()][string]$Source)
+    param([AllowEmptyString()][string]$Question, [Parameter(Mandatory)][System.Collections.IList]$Options, [AllowEmptyString()][string]$Source, [AllowNull()][object[]]$Examples = $null)
     $lines = for ($i = 0; $i -lt $Options.Count; $i++) {
         $line = [string]$script:FujiAiLetters[$i] + ': ' + $Options[$i].Value
         if ($Options[$i].Note) { $line += ([string][char]0xFF08 + $Options[$i].Note + [char]0xFF09) }
@@ -69,11 +69,21 @@ function New-FujiAiChooseBody {
     }
     $q = ([string]$Question).Trim() -replace '[\u3002\uFF0E.\uFF1F?]+$', ''
     $src = Limit-FujiAiSource -Source $Source
+    $system = Get-FujiText 'run.aiChoosePrompt' $q (@($lines) -join "`n")
+    # answers a person checked for similar texts (only those that are still options)
+    $shown = 0
+    $exLines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($e in @($Examples | Where-Object { $null -ne $_ })) {
+        for ($i = 0; $i -lt $Options.Count; $i++) {
+            if ([string]$Options[$i].Value -eq [string]$e['answer']) { $exLines.Add('- ' + (([string]$e['text']) -replace '\s+', ' ') + ' -> ' + $script:FujiAiLetters[$i]); $shown++; break }
+        }
+    }
+    if ($shown -gt 0) { $system += "`n" + (Get-FujiText 'run.aiExamplesHead') + "`n" + ($exLines -join "`n") }
     return [ordered]@{
-        messages = @(@{ role = 'system'; content = (Get-FujiText 'run.aiChoosePrompt' $q (@($lines) -join "`n")) }, @{ role = 'user'; content = $src.Text })
+        messages = @(@{ role = 'system'; content = $system }, @{ role = 'user'; content = $src.Text })
         temperature = 0; max_tokens = 1; logprobs = $true; top_logprobs = 20
         chat_template_kwargs = @{ enable_thinking = $false }
-        Truncated = $src.Cut
+        Truncated = $src.Cut; ExamplesUsed = $shown
     }
 }
 

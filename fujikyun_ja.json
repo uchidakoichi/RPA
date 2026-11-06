@@ -633,6 +633,11 @@
     }
   },
   "run": {
+    "aiRecalled": "記憶から答えたよ（人が確かめた答え）: ${0} = {1}",
+    "aiRecalledExtract": "記憶から答えたよ（人が確かめた答え）: {0}",
+    "aiExamplesUsed": "人が確かめた似た例を {0} 件、AI に見せたよ",
+    "aiExamplesHead": "例（人が確かめた答え）:",
+    "aiReasonSpot": "抜き取り",
     "aiMemoryBroken": "AI の答えの記憶（{0}）が読めなかったので、控え（{1}）を取って空から始めたよ",
     "aiRerunNoCsv": "CSV を読み込んでいないので、再実行の CSV を作れないよ。一覧を作ったときの CSV を読み込んでね",
     "aiRerunNoRows": "確かめた行のうち、CSV の行番号がある件が無いよ（CSV を使わない実行だったかも）",

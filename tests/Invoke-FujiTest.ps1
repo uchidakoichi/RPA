@@ -928,7 +928,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        AiReply = $null; AiThrow = ''; AiFocus = $false; AiReviewFails = $false; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
+        AiReply = $null; AiThrow = ''; AiFocus = $false; AiReviewFails = $false; AiRecallValue = $null; AiRecallAsked = (New-Object -TypeName 'System.Collections.Generic.List[string]'); AiExampleList = @(); AiSpotValue = $false; AiSpotCalls = 0; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true; FileFails = $false
     }
     return @{
@@ -965,6 +965,9 @@ function New-FakeIo {
         EndRun = { $script:Fake.Calls.Add('END') }
         AiChat = { param($Body) $script:Fake.Calls.Add('AICHAT'); $script:Fake.AiBodies.Add($Body); if ($script:Fake.AiThrow -is [System.Exception]) { throw $script:Fake.AiThrow }; if ($script:Fake.AiThrow) { throw $script:Fake.AiThrow }; return $script:Fake.AiReply }
         AiTookFocus = { $f = $script:Fake.AiFocus; $script:Fake.AiFocus = $false; return $f }
+        AiRecall = { param($Key, $Hash) $script:Fake.AiRecallAsked.Add($Key + '/' + $Hash); return $script:Fake.AiRecallValue }
+        AiExamples = { param($Key, $Source) $null = $Key, $Source; return , @($script:Fake.AiExampleList) }
+        AiSpot = { $script:Fake.AiSpotCalls++; return $script:Fake.AiSpotValue }
         AiPick = { param($Caption, $Message, $Options, $Initial) $null = $Caption; $script:Fake.Calls.Add('AIPICK'); $script:Fake.AiPicks.Add(@{ Message = $Message; Options = $Options; Initial = $Initial }); return $script:Fake.Answers.Dequeue() }
         AiReview = { param($Row) if ($script:Fake.AiReviewFails) { throw 'review list is open in Excel' }; $script:Fake.AiReviews.Add($Row) }
         Break = { param($Message) $script:Fake.Breaks.Add($Message); $script:Fake.Calls.Add('BREAK'); return $script:Fake.Answers.Dequeue() }
@@ -1459,6 +1462,44 @@ $run = New-TestRun -Target '' -Steps @((New-AiChooseStep), @('KEY', 'next')) -Ro
 $script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
 $script:Fake.AiReviewFails = $true
 Assert-True ((Invoke-FujiRun -Run $run) -eq 'done' -and (Get-FakeCall 'KEYS') -eq 'KEYS next' -and @($script:Fake.Logs | Where-Object { $_ -like 'warn*' -and $_.Contains('Excel') }).Count -ge 1) 'ai run: review list not writable, the run goes on'
+
+# AI review in a run: remembered answers, similar examples, spot checks
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiRecallValue = 'garbage'
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiBodies.Count -eq 0 -and $run.Vars['desk'] -eq 'garbage' -and $run.Vars[$probVar] -eq '1.00' -and @($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiRecalled' 'desk' 'garbage')) }).Count -eq 1) 'ai run: remembered answer used, AI not asked'
+Assert-True ($script:Fake.AiSpotCalls -eq 0 -and $script:Fake.AiReviews.Count -eq 0) 'ai run: no spot check for remembered answers'
+$recallKey = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'main' -Settings (ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value (New-AiChooseStep)[1])
+Assert-Equal ($recallKey + '/' + (Get-FujiAiTextHash 'text a')) $script:Fake.AiRecallAsked[0] 'ai run: memory looked up by step key and text fingerprint'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiRecallValue = 'old answer'
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.9 }
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiBodies.Count -eq 1 -and $run.Vars['desk'] -eq 'resident') 'ai run: remembered answer not in the options asks the AI'
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sakura 1'))
+$script:Fake.AiRecallValue = [ordered]@{ name = 'Nakamura Sakura'; phone = '1' }
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiBodies.Count -eq 0 -and $run.Vars['name'] -eq 'Nakamura Sakura' -and $run.Vars['phone'] -eq '1') 'ai run: extract remembered'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiExampleList = @(@{ text = 'big garbage'; answer = 'garbage' }, @{ text = 'move house'; answer = 'resident' }, @{ text = 'gone'; answer = 'no such option' })
+$script:Fake.AiReply = New-AiChoiceReply @{ 'B' = 0.9 }
+[void](Invoke-FujiRun -Run $run)
+$sys = $script:Fake.AiBodies[0].messages[0].content
+Assert-True ($sys.Contains('- big garbage -> B') -and $sys.Contains('- move house -> A') -and -not $sys.Contains('gone') -and @($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiExamplesUsed' 2)) }).Count -eq 1) 'ai run: examples put in the prompt'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.9; 'B' = 0.1 }
+$script:Fake.AiSpotValue = $true
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Vars['desk'] -eq 'resident' -and $script:Fake.AiSpotCalls -eq 1 -and $script:Fake.AiReviews.Count -eq 1 -and $script:Fake.AiReviews[0]['kind'] -eq 'spot' -and $script:Fake.AiReviews[0]['answer'] -eq 'resident') 'ai run: spot check writes a review row and keeps the answer'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+[void](Invoke-FujiRun -Run $run)
+$rv = $script:Fake.AiReviews[0]
+Assert-True ($script:Fake.AiSpotCalls -eq 0 -and $rv['kind'] -eq 'low' -and $rv['macroId'] -eq 'main' -and $rv['key'] -eq $recallKey -and $rv['hash'] -eq (Get-FujiAiTextHash 'text a')) 'ai run: review rows carry kind, macroId, key, hash'
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sakura 0466-12-3456'))
+$script:Fake.AiReply = New-AiTextReply '{"name":"Nakamura Hanako","phone":"0466-12-3456"}'
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiReviews[0]['kind'] -eq 'notInSource' -and $script:Fake.AiReviews[0]['key'] -eq (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'main' -Settings (ConvertFrom-FujiStepValue -Cmd 'AI_EXTRACT' -Value $exStep[1]))) 'ai run: extract review row kind and key'
 
 # ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
 # breakpoints and stepping
