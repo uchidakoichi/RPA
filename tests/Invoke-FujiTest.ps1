@@ -476,7 +476,7 @@ try {
     Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) 'ai: review csv has a BOM'
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p1).Text).Records
     Assert-Equal 3 $recs.Count 'ai: review csv header + 2 rows'
-    Assert-Equal 11 $recs[0].Count 'ai: review csv 11 columns'
+    Assert-Equal 16 $recs[0].Count 'ai: review csv 16 columns'
     Assert-Equal ("a,b`n""c""" + ('y' * 93)) $recs[1][6] 'ai: review csv keeps comma, quote, newline; source cut to 100'
     Assert-Equal "'=bad" $recs[2][7] 'ai: review csv answer cannot run as a formula'
     # the day's list is open in Excel (locked): the line goes to the next free name
@@ -501,6 +501,79 @@ try {
     Assert-Equal 'copy' (Test-FujiAiCopyNeeded -Shared $shared -Local @{ AiVersion = 1; Model = 'm.gguf' } -LocalDir $local) 'ai: cut-off copy'
 } finally {
     Remove-Item -LiteralPath $aiWork -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ----------------------------------------------------------------- AI review: hash, step key, memory, examples, list, rerun
+$rvWork = Join-Path ([System.IO.Path]::GetTempPath()) ('fujikyun_aireview_' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $rvWork)
+try {
+    $h1 = Get-FujiAiTextHash -Text ("a b`nc")
+    Assert-True ($h1.Length -eq 16 -and $h1 -eq (Get-FujiAiTextHash -Text ([string][char]0xFF41 + 'bc'))) 'ai review: hash ignores width, spaces, newlines'
+    $k1 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "x`ny" }
+    $k2 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "y`nx" }
+    Assert-True ($k1.Length -eq 16 -and $k1 -ne $k2) 'ai review: step key changes with option order'
+    Assert-True ((Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm1' -Settings @{ items = "name: a`nphone" }) -ne (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm2' -Settings @{ items = "name: a`nphone" })) 'ai review: step key differs per macro'
+    $mem = Read-FujiAiMemory -Directory $rvWork
+    Assert-Equal 0 $mem.Count 'ai review: no memory yet'
+    for ($i = 1; $i -le 35; $i++) { Add-FujiAiRemembered -Memory $mem -Key $k1 -Hash ('h' + $i) -Answer 'x' -ExampleText ('text number ' + $i) }
+    Add-FujiAiRemembered -Memory $mem -Key 'ex' -Hash 'e1' -Answer ([ordered]@{ name = 'N'; phone = '1' }) -ExampleText 'ignored'
+    Save-FujiAiMemory -Directory $rvWork -Memory $mem
+    $mem2 = Read-FujiAiMemory -Directory $rvWork
+    $ex = $mem2[$k1]['examples']
+    Assert-True ($ex.Count -eq 30 -and -not (@($ex | ForEach-Object { $_['text'] }) -contains 'text number 5') -and (@($ex | ForEach-Object { $_['text'] }) -contains 'text number 35')) 'ai review: memory round trip and cap 30'
+    Assert-Equal 'x' (Get-FujiAiRemembered -Memory $mem2 -Key $k1 -Hash 'h1') 'ai review: answer remembered'
+    Assert-Equal $null (Get-FujiAiRemembered -Memory $mem2 -Key $k1 -Hash 'nope') 'ai review: unknown text not remembered'
+    Assert-Equal 'N' (Get-FujiAiRemembered -Memory $mem2 -Key 'ex' -Hash 'e1')['name'] 'ai review: extract answer remembered as pairs'
+    Assert-Equal 0 $mem2['ex']['examples'].Count 'ai review: no examples for extract answers'
+    $long = Add-FujiAiRemembered -Memory $mem2 -Key 'long' -Hash 'l1' -Answer 'x' -ExampleText ('y' * 150)
+    Assert-Equal 100 $mem2['long']['examples'][0]['text'].Length 'ai review: example text cut at 100'
+    Write-FujiTextFile -Path (Join-Path $rvWork 'fujikyun_ai_answers.json') -Text '{ broken'
+    $mem3 = Read-FujiAiMemory -Directory $rvWork
+    Assert-True ($mem3.Count -eq 0 -and @(Get-ChildItem -LiteralPath $rvWork -Filter 'fujikyun_ai_answers_broken_*.json').Count -eq 1) 'ai review: broken memory file is kept aside'
+    $mem4 = [ordered]@{}
+    foreach ($t in @('garbage collection day for my street', 'when is the garbage collected', 'collection of large garbage', 'resident card copy', 'tax payment')) { Add-FujiAiRemembered -Memory $mem4 -Key 'k' -Hash (Get-FujiAiTextHash $t) -Answer 'a' -ExampleText $t }
+    $sel = Select-FujiAiExample -Memory $mem4 -Key 'k' -Source 'garbage collection day' -Max 3
+    Assert-True ($sel.Count -eq 3 -and $sel[0]['text'] -eq 'collection of large garbage' -and $sel[1]['text'] -eq 'garbage collection day for my street' -and -not (@($sel | ForEach-Object { $_['text'] }) -contains 'tax payment')) 'ai review: similar examples top 3, below 0.1 left out'
+    Assert-Equal 0 (Select-FujiAiExample -Memory $mem4 -Key 'none' -Source 'x' -Max 3).Count 'ai review: no examples for an unknown step'
+    # the review list: 16 columns now; an 11-column file (before the review window) is read as old
+    $logs = Join-Path $rvWork 'fujikyun_logs'
+    [void](New-Item -ItemType Directory -Path $logs)
+    $head11 = ((Get-FujiText 'run.aiReviewHeader') -split ',')[0..10] -join ','
+    Write-FujiTextFile -Path (Join-Path $logs 'ai_review_2026-11-09.csv') -Text ($head11 + "`r`n2026-11-09 10:00:00,main,1,1,AI_CHOOSE,desk,old text,a,0.30,,low`r`n") -Bom
+    $src = "a,b`n" + [char]0x6587
+    $p16 = Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:00') -Row ([ordered]@{ time = '2026-11-10 09:00:00'; macro = 'main'; step = 2; row = 3; command = 'AI_CHOOSE'; name = 'desk'; source = $src; answer = 'resident'; p = '0.40'; probs = 'resident=0.40;garbage=0.35'; reason = 'r'; kind = 'low'; macroId = 'main'; key = $k1; hash = (Get-FujiAiTextHash $src) })
+    [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:01') -Row ([ordered]@{ time = '2026-11-10 09:01:00'; macro = 'main'; step = 2; row = 1; command = 'AI_CHOOSE'; name = 'desk'; source = 'y'; answer = 'garbage'; p = '0.90'; probs = ''; reason = 'spot'; kind = 'spot'; macroId = 'main'; key = $k1; hash = 'h9' }))
+    [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:02') -Row ([ordered]@{ time = '2026-11-10 09:02:00'; macro = 'other'; step = 1; row = 1; command = 'AI_CHOOSE'; name = 'v'; source = 'z'; answer = 'a'; p = '0.1'; probs = ''; reason = 'low'; kind = 'low'; macroId = 'other'; key = 'k'; hash = 'h' }))
+    $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16).Text).Records
+    Assert-True ($recs[0].Count -eq 16 -and $recs[1].Count -eq 16 -and $recs[1][6] -eq $src) 'ai review: 16 columns written, comma and newline kept'
+    $items = Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 2 -Now ([datetime]'2026-11-10 12:00')
+    Assert-Equal 3 $items.Count 'ai review: items of this macro over two days'
+    $old = @($items | Where-Object { $_.Old })
+    Assert-True ($old.Count -eq 1 -and $old[0].Source -eq 'old text') 'ai review: 11-column file read as old'
+    Assert-Equal 2 (Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00')).Count 'ai review: one day only'
+    $new = @($items | Where-Object { -not $_.Old -and $_.Kind -eq 'low' })[0]
+    Assert-True ($new.Hash -eq (Get-FujiAiTextHash $src) -and $new.Key -eq $k1 -and $new.Row -eq 3) 'ai review: item fields'
+    $before = [System.IO.File]::ReadAllBytes($p16)
+    Assert-True (Set-FujiAiReviewDone -Item $new -Time '2026-11-10 12:30:00') 'ai review: done written'
+    $recs2 = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16).Text).Records
+    Assert-True ($recs2[1][15] -eq '2026-11-10 12:30:00' -and $recs2[2][15] -eq '' -and $recs2[1][6] -eq $src -and $recs2.Count -eq 4) 'ai review: done written to that line only'
+    $lock = [System.IO.File]::Open($p16, 'Open', 'ReadWrite', 'None')
+    try { Assert-True (-not (Set-FujiAiReviewDone -Item $new -Time 'x')) 'ai review: done on a locked file returns false' } finally { $lock.Dispose() }
+    # rerun CSV from the loaded CSV's rows
+    $rows = @(@{ No = 1; Data = [string[]]@('a1', 'b1') }, @{ No = 2; Data = [string[]]@('a2', 'b2') }, @{ No = 3; Data = [string[]]@('a3', ('b3,' + "`n" + 'x')) })
+    $rr = New-FujiAiRerunCsv -Header ([string[]]@('h1', 'h2')) -Rows $rows -RowNos @(3, 1, 3)
+    $rrRecs = (ConvertFrom-FujiCsv -Text $rr.Text).Records
+    Assert-True ($rr.Error -eq '' -and $rr.Count -eq 2 -and $rrRecs.Count -eq 3 -and $rrRecs[1][0] -eq 'a1' -and $rrRecs[2][1] -eq ('b3,' + "`n" + 'x') -and $rrRecs[1][2] -eq '1' -and $rrRecs[2][2] -eq '3' -and $rrRecs[0][2] -eq (Get-FujiText 'run.colOrigNo')) 'ai review: rerun csv merges rows, keeps original numbers'
+    Assert-Equal (Get-FujiText 'run.aiRerunMissing' 5) (New-FujiAiRerunCsv -Header $null -Rows $rows[0..1] -RowNos @(5)).Error 'ai review: rerun csv refuses missing rows'
+    Assert-Equal (Get-FujiText 'run.aiRerunNoRows') (New-FujiAiRerunCsv -Header $null -Rows $rows -RowNos @()).Error 'ai review: rerun csv with no rows'
+    Assert-Equal (Get-FujiText 'run.aiRerunNoCsv') (New-FujiAiRerunCsv -Header $null -Rows @() -RowNos @(1)).Error 'ai review: rerun csv with no CSV loaded'
+    # the hints under the window
+    $sum = Get-FujiAiReviewSummary -Items @(
+        @{ Kind = 'spot'; P = '0.90'; Answer = 'a'; Final = 'a' }, @{ Kind = 'spot'; P = '0.80'; Answer = 'a'; Final = 'b' },
+        @{ Kind = 'low'; P = '0.20'; Answer = 'a'; Final = 'a' }, @{ Kind = 'low'; P = '0.45'; Answer = 'a'; Final = 'b' }, @{ Kind = 'low'; P = '0.40'; Answer = 'a' })
+    Assert-True ($sum.SpotTotal -eq 2 -and $sum.SpotKept -eq 1 -and $sum.Bands[0].Total -eq 1 -and $sum.Bands[0].Kept -eq 1 -and $sum.Bands[1].Total -eq 1 -and $sum.Bands[1].Kept -eq 0 -and $sum.Bands[3].Total -eq 2) 'ai review: summary bands and spot'
+} finally {
+    Remove-Item -LiteralPath $rvWork -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # AI commands: definitions, checks, labels, defined variables

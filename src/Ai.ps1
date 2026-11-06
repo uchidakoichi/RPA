@@ -148,7 +148,7 @@ function Add-FujiAiReviewRow {
     $day = $Now.ToString('yyyy-MM-dd')
     $src = [string]$Row['source']
     if ($src.Length -gt $script:FujiAiReviewSourceMax) { $src = $src.Substring(0, $script:FujiAiReviewSourceMax) }
-    $cells = foreach ($k in @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason')) {
+    $cells = foreach ($k in $script:FujiAiReviewColumns) {
         $v = [string]$Row[$k]
         if ($k -eq 'source') { $v = $src }
         ConvertTo-FujiSafeCsvValue -Value $v
