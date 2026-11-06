@@ -419,7 +419,7 @@ function Read-FujiAiReviewItem {
     param([Parameter(Mandatory)][string]$Directory, [AllowEmptyString()][string]$MacroId, [AllowEmptyString()][string]$MacroName = '', [int]$Days = 1, [datetime]$Now = (Get-Date))
     $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $dir = Join-Path $Directory $script:FujiLogFolder
-    if (-not (Test-Path -LiteralPath $dir)) { return , $items }
+    if (-not (Test-Path -LiteralPath $dir)) { return @() }
     $oldest = $Now.Date.AddDays(1 - [Math]::Max(1, $Days))
     foreach ($f in @(Get-ChildItem -LiteralPath $dir -File | Sort-Object Name)) {
         $m = [regex]::Match($f.Name, '^ai_review_(\d{4}-\d{2}-\d{2})(?:_\d+)?\.csv$')
@@ -432,7 +432,8 @@ function Read-FujiAiReviewItem {
             if ($r.Count -lt 11) { continue }
             $old = $r.Count -lt $script:FujiAiReviewColumns.Count
             $v = @{}
-            for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { [string]$r[$c] } else { '' }) }
+            # the formula guard of the CSV (a leading apostrophe before = + - @) is taken off again
+            for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { ([string]$r[$c]) -replace "^'(?=[=+\-@\t\r])", '' } else { '' }) }
             if ($old) { if ($v['macro'] -ne $MacroId -and ($MacroName -eq '' -or $v['macro'] -ne $MacroName)) { continue } }
             elseif ($v['macroId'] -ne $MacroId) { continue }
             $rowNo = 0
@@ -441,25 +442,71 @@ function Read-FujiAiReviewItem {
                     Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done'] })
         }
     }
-    return , $items
+    # a plain array (unrolled into a pipeline; callers take it with @())
+    return $items.ToArray()
 }
 
-# Writes the time in the line's "done" column; $false when the file is in use (open in Excel)
+# Writes the time in the "done" column of these items' lines, one write per file (written beside and
+# put in place). A line is changed only when it is still that item (same time and fingerprint).
+# Returns how many lines were marked; a file in use (open in Excel) is left as it is.
+function Set-FujiAiReviewDoneMany {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [AllowEmptyString()][string]$Time)
+    $done = 0
+    $last = $script:FujiAiReviewColumns.Count - 1
+    foreach ($group in @($Items | Where-Object { -not $_.Old } | Group-Object -Property { $_.File })) {
+        $file = [string]$group.Name
+        $tmp = $file + '.saving'
+        try {
+            $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $file -Encoding 'utf-8').Text).Records
+            $marked = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($it in $group.Group) {
+                if ($it.Line -lt 1 -or $it.Line -ge $recs.Count) { continue }
+                $row = [string[]]$recs[$it.Line]
+                if ($row.Count -le $last -or $row[14] -ne [string]$it.Hash -or $row[0] -ne [string]$it.Time) { continue }
+                $row[$last] = $Time
+                $recs[$it.Line] = $row
+                $marked.Add($it)
+            }
+            if ($marked.Count -eq 0) { continue }
+            Write-FujiTextFile -Path $tmp -Text (ConvertTo-FujiCsvText -Rows $recs.ToArray()) -Bom
+            Copy-Item -LiteralPath $tmp -Destination $file -Force -ErrorAction Stop
+            foreach ($it in $marked) { $it.Done = $Time }
+            $done += $marked.Count
+        } catch {
+            $null = $_
+        } finally {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $done
+}
+
 function Set-FujiAiReviewDone {
     param([Parameter(Mandatory)][hashtable]$Item, [AllowEmptyString()][string]$Time)
-    if ($Item.Old) { return $false }
-    try {
-        $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $Item.File -Encoding 'utf-8').Text).Records
-        $row = [string[]]$recs[$Item.Line]
-        while ($row.Count -lt $script:FujiAiReviewColumns.Count) { $row += '' }
-        $row[$script:FujiAiReviewColumns.Count - 1] = $Time
-        $recs[$Item.Line] = $row
-        Write-FujiTextFile -Path $Item.File -Text (ConvertTo-FujiCsvText -Rows $recs.ToArray()) -Bom
-        $Item.Done = $Time
-        return $true
-    } catch {
-        return $false
+    return ((Set-FujiAiReviewDoneMany -Items @($Item) -Time $Time) -eq 1)
+}
+
+# The person's answer of each checked item, from the memory (also for items checked another day)
+function Set-FujiAiReviewFinal {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [Parameter(Mandatory)][System.Collections.IDictionary]$Memory)
+    foreach ($it in $Items) {
+        if (-not $it.Done -or -not $it.Key -or -not $it.Hash) { continue }
+        $r = Get-FujiAiRemembered -Memory $Memory -Key $it.Key -Hash $it.Hash
+        if ($it.Command -eq 'AI_EXTRACT') { if ($r -is [System.Collections.IDictionary] -and $r.Contains($it.Name)) { $it['Final'] = [string]$r[$it.Name] } }
+        elseif ($r -is [string]) { $it['Final'] = $r }
     }
+}
+
+# Rows to run again: checked items with a row number, except spot checks the person left as they were
+# (their answer was used already)
+function Get-FujiAiRerunRowNo {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items)
+    $nos = @(foreach ($it in $Items) {
+            if (-not $it.Done -or $it.Row -le 0 -or -not $it.Contains('Final')) { continue }
+            if ($it.Kind -eq 'spot' -and [string]$it['Final'] -eq [string]$it.Answer) { continue }
+            [int]$it.Row
+        })
+    return , [int[]]@($nos | Sort-Object -Unique)
 }
 
 # The rows checked in the review, from the loaded CSV, as an error-row CSV (original row numbers kept)
@@ -519,7 +566,8 @@ function Get-FujiAiReviewOrder {
     $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' } | Sort-Object -Property @{ Expression = $p })
     $spot = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'spot' } | Sort-Object -Property @{ Expression = $p })
     $done = @($Items | Where-Object { $_.Done })
-    return @($open + $spot + $done)
+    # a list even for one item (a single hashtable would be returned as itself)
+    return , @($open + $spot + $done)
 }
 
 # ===== src/Alert.ps1 =====
@@ -5517,8 +5565,12 @@ function Invoke-FujiAiExtract {
     $key = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId (Get-FujiRunMacroId $Run) -Settings $Settings
     $hash = Get-FujiAiTextHash -Text $src
     $remembered = & $Run.Io.AiRecall $key $hash
-    if ($remembered -is [System.Collections.IDictionary]) {
-        foreach ($it in $items) { $v = ''; if ($remembered.Contains($it.Name)) { $v = [string]$remembered[$it.Name] }; $Run.Vars[$it.Name] = $v }
+    if ($remembered -isnot [System.Collections.IDictionary]) { $remembered = [ordered]@{} }
+    # every item checked by a person: no AI needed; some checked: the AI fills the others
+    $all = $items.Count -gt 0
+    foreach ($it in $items) { if (-not $remembered.Contains($it.Name)) { $all = $false } }
+    if ($all) {
+        foreach ($it in $items) { $Run.Vars[$it.Name] = [string]$remembered[$it.Name] }
         Write-FujiRunLog $Run (Get-FujiText 'run.aiRecalledExtract' ((@($items | ForEach-Object { $_.Name })) -join ', '))
         & $Run.Io.Watch
         return (Get-FujiRunNext 0)
@@ -5531,6 +5583,11 @@ function Invoke-FujiAiExtract {
     if ($answer -isnot [System.Collections.IDictionary]) { return (Get-FujiRunError (Get-FujiText 'run.aiBadAnswer')) }
     $filled = 0
     foreach ($it in $items) {
+        if ($remembered.Contains($it.Name)) {
+            $Run.Vars[$it.Name] = [string]$remembered[$it.Name]
+            if ($Run.Vars[$it.Name] -ne '') { $filled++ }
+            continue
+        }
         $v = ''
         if ($answer.Contains($it.Name) -and $null -ne $answer[$it.Name]) { $v = ([string]$answer[$it.Name]).Trim() }
         if ($v -ne '' -and $Settings['strict'] -ne 'OFF' -and -not (Test-FujiAiInSource -Value $v -Source $src)) {
@@ -7120,8 +7177,8 @@ function Show-FujiAiReviewDialog {
     }
     $load = {
         $n = [int]([object[]]$ctx.Days.Tag)[$ctx.Days.SelectedIndex]
-        # the reader's List as it is: @() around a generic List fails on PowerShell 5.1
-        $ctx.Items = Get-FujiAiReviewOrder -Items (Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        $ctx.Items = Get-FujiAiReviewOrder -Items @(Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        Set-FujiAiReviewFinal -Items $ctx.Items -Memory $ctx.Memory
         $ctx.List.BeginUpdate()
         $ctx.List.Items.Clear()
         foreach ($it in $ctx.Items) { $lvi = New-Object -TypeName System.Windows.Forms.ListViewItem; & $showRow $it $lvi; $lvi.Tag = $it; [void]$ctx.List.Items.Add($lvi) }
@@ -7165,18 +7222,26 @@ function Show-FujiAiReviewDialog {
         param($Item, [string]$Answer)
         if ($Item.Old -or $null -eq (Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item) -or -not $Item.Hash) { return $false }
         if ($Item.Command -eq 'AI_EXTRACT') {
+            # only the items a person checked: the run asks the AI for the others
             $pairs = Get-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash
             if ($pairs -isnot [System.Collections.IDictionary]) { $pairs = [ordered]@{} }
-            # the other items of the same text keep the AI's answers unless a person changed them
-            foreach ($o in $ctx.Items) { if ($o.Hash -eq $Item.Hash -and $o.Key -eq $Item.Key -and -not $pairs.Contains($o.Name)) { $pairs[$o.Name] = [string]$o.Answer } }
             $pairs[$Item.Name] = $Answer
             Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $pairs
         } else {
             Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $Answer -ExampleText $Item.Source
         }
         $Item['Final'] = $Answer
-        if (-not (Set-FujiAiReviewDone -Item $Item -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))) { $Item.Done = 'x'; $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed' }
         return $true
+    }
+    # the memory first, then "done" in the list (a list marked done always has its answers remembered)
+    $commit = {
+        param([object[]]$Checked)
+        Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+        $n = Set-FujiAiReviewDoneMany -Items $Checked -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        if ($n -lt $Checked.Count) {
+            foreach ($c in $Checked) { if (-not $c.Done) { $c.Done = 'x' } }
+            $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed'
+        }
     }
     $next = {
         $i = $ctx.List.SelectedIndices
@@ -7192,25 +7257,26 @@ function Show-FujiAiReviewDialog {
         elseif ($ctx.Choices.SelectedIndex -ge 0) { $answer = (Read-FujiAiOption -Text $ctx.Step.Settings['options'])[$ctx.Choices.SelectedIndex].Value }
         else { return }
         if (& $checkOne $it $answer) {
-            Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
-            & $showRow $it $ctx.List.SelectedItems[0]
+            & $commit @($it)
+            foreach ($lvi in $ctx.List.Items) { if ([object]::ReferenceEquals($lvi.Tag, $it)) { & $showRow $it $lvi } }
             & $hint
             & $next
         }
     }
-    $list.Add_SelectedIndexChanged({ Invoke-FujiUi { if ($ctx.List.SelectedItems.Count -gt 0) { & $select $ctx.List.SelectedItems[0].Tag } } })
+    $list.Add_SelectedIndexChanged({ Invoke-FujiUi { if ($ctx.List.SelectedItems.Count -gt 0) { & $select $ctx.List.SelectedItems[0].Tag } else { & $select $null } } })
     $days.Add_SelectedIndexChanged({ Invoke-FujiUi { & $load } })
     $okBtn.Add_Click({ Invoke-FujiUi { & $confirm } })
     $allBtn.Add_Click({ Invoke-FujiUi {
-                $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old -and $_.Answer -ne '' })
+                # choices only: an extracted value on the list was left out as not in the text, so a person looks at it
+                $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old -and $_.Answer -ne '' -and $_.Command -ne 'AI_EXTRACT' })
                 if ($open.Count -eq 0) { return }
                 if ((Show-FujiChoice -Title (Get-FujiText 'gui.aiReviewAll') -Message (Get-FujiText 'gui.aiReviewAllConfirm' $open.Count) -Buttons @((Get-FujiText 'gui.aiReviewAll'), (Get-FujiText 'gui.cancel'))) -ne 0) { return }
-                foreach ($it in $open) { [void](& $checkOne $it ([string]$it.Answer)) }
-                Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+                $checked = @(foreach ($it in $open) { if (& $checkOne $it ([string]$it.Answer)) { $it } })
+                if ($checked.Count -gt 0) { & $commit $checked }
                 & $load
             } })
     $rerunBtn.Add_Click({ Invoke-FujiUi {
-                $nos = @($ctx.Items | Where-Object { $_.Done -and $_.Row -gt 0 } | ForEach-Object { [int]$_.Row })
+                $nos = Get-FujiAiRerunRowNo -Items $ctx.Items
                 $rows = (Get-FujiRunRow -CsvRows $script:Ed.Csv.Rows -Header $script:Ed.Csv.Header).Rows
                 $r = New-FujiAiRerunCsv -Header $script:Ed.Csv.Header -Rows $rows -RowNos $nos
                 if ($r.Error) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewRerun') -Message $r.Error; return }
@@ -7225,8 +7291,7 @@ function Show-FujiAiReviewDialog {
     $f.Add_KeyDown({
             $e = $_
             Invoke-FujiUi {
-                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and -not $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
-                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
+                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) { $e.SuppressKeyPress = $true; & $confirm; return }
                 if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $e.SuppressKeyPress = $true; & $next; return }
                 if ($ctx.Value.Focused) { return }
                 $d = -1

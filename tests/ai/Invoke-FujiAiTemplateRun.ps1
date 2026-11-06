@@ -66,7 +66,7 @@ try {
         $r1 = & $runOne $macro $header $rows
         ('run 1: {0}, AI asked to choose {1} times' -f $r1.Status, $script:chooseAsked)
         foreach ($r in $r1.Run.ResultRows) { '  row ' + (($r.Values.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value }) -join ', ') }
-        $items = Read-FujiAiReviewItem -Directory $work -MacroId 'review-test' -Days 1
+        $items = @(Read-FujiAiReviewItem -Directory $work -MacroId 'review-test' -Days 1)
         $choose = @(foreach ($it in $items) { if ($it.Command -eq 'AI_CHOOSE') { $it } })
         ('review list: {0} items, {1} for AI_CHOOSE' -f $items.Count, $choose.Count)
         $changed = ''

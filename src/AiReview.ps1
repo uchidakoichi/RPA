@@ -125,7 +125,7 @@ function Read-FujiAiReviewItem {
     param([Parameter(Mandatory)][string]$Directory, [AllowEmptyString()][string]$MacroId, [AllowEmptyString()][string]$MacroName = '', [int]$Days = 1, [datetime]$Now = (Get-Date))
     $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $dir = Join-Path $Directory $script:FujiLogFolder
-    if (-not (Test-Path -LiteralPath $dir)) { return , $items }
+    if (-not (Test-Path -LiteralPath $dir)) { return @() }
     $oldest = $Now.Date.AddDays(1 - [Math]::Max(1, $Days))
     foreach ($f in @(Get-ChildItem -LiteralPath $dir -File | Sort-Object Name)) {
         $m = [regex]::Match($f.Name, '^ai_review_(\d{4}-\d{2}-\d{2})(?:_\d+)?\.csv$')
@@ -138,7 +138,8 @@ function Read-FujiAiReviewItem {
             if ($r.Count -lt 11) { continue }
             $old = $r.Count -lt $script:FujiAiReviewColumns.Count
             $v = @{}
-            for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { [string]$r[$c] } else { '' }) }
+            # the formula guard of the CSV (a leading apostrophe before = + - @) is taken off again
+            for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { ([string]$r[$c]) -replace "^'(?=[=+\-@\t\r])", '' } else { '' }) }
             if ($old) { if ($v['macro'] -ne $MacroId -and ($MacroName -eq '' -or $v['macro'] -ne $MacroName)) { continue } }
             elseif ($v['macroId'] -ne $MacroId) { continue }
             $rowNo = 0
@@ -147,25 +148,71 @@ function Read-FujiAiReviewItem {
                     Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done'] })
         }
     }
-    return , $items
+    # a plain array (unrolled into a pipeline; callers take it with @())
+    return $items.ToArray()
 }
 
-# Writes the time in the line's "done" column; $false when the file is in use (open in Excel)
+# Writes the time in the "done" column of these items' lines, one write per file (written beside and
+# put in place). A line is changed only when it is still that item (same time and fingerprint).
+# Returns how many lines were marked; a file in use (open in Excel) is left as it is.
+function Set-FujiAiReviewDoneMany {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [AllowEmptyString()][string]$Time)
+    $done = 0
+    $last = $script:FujiAiReviewColumns.Count - 1
+    foreach ($group in @($Items | Where-Object { -not $_.Old } | Group-Object -Property { $_.File })) {
+        $file = [string]$group.Name
+        $tmp = $file + '.saving'
+        try {
+            $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $file -Encoding 'utf-8').Text).Records
+            $marked = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($it in $group.Group) {
+                if ($it.Line -lt 1 -or $it.Line -ge $recs.Count) { continue }
+                $row = [string[]]$recs[$it.Line]
+                if ($row.Count -le $last -or $row[14] -ne [string]$it.Hash -or $row[0] -ne [string]$it.Time) { continue }
+                $row[$last] = $Time
+                $recs[$it.Line] = $row
+                $marked.Add($it)
+            }
+            if ($marked.Count -eq 0) { continue }
+            Write-FujiTextFile -Path $tmp -Text (ConvertTo-FujiCsvText -Rows $recs.ToArray()) -Bom
+            Copy-Item -LiteralPath $tmp -Destination $file -Force -ErrorAction Stop
+            foreach ($it in $marked) { $it.Done = $Time }
+            $done += $marked.Count
+        } catch {
+            $null = $_
+        } finally {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $done
+}
+
 function Set-FujiAiReviewDone {
     param([Parameter(Mandatory)][hashtable]$Item, [AllowEmptyString()][string]$Time)
-    if ($Item.Old) { return $false }
-    try {
-        $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $Item.File -Encoding 'utf-8').Text).Records
-        $row = [string[]]$recs[$Item.Line]
-        while ($row.Count -lt $script:FujiAiReviewColumns.Count) { $row += '' }
-        $row[$script:FujiAiReviewColumns.Count - 1] = $Time
-        $recs[$Item.Line] = $row
-        Write-FujiTextFile -Path $Item.File -Text (ConvertTo-FujiCsvText -Rows $recs.ToArray()) -Bom
-        $Item.Done = $Time
-        return $true
-    } catch {
-        return $false
+    return ((Set-FujiAiReviewDoneMany -Items @($Item) -Time $Time) -eq 1)
+}
+
+# The person's answer of each checked item, from the memory (also for items checked another day)
+function Set-FujiAiReviewFinal {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [Parameter(Mandatory)][System.Collections.IDictionary]$Memory)
+    foreach ($it in $Items) {
+        if (-not $it.Done -or -not $it.Key -or -not $it.Hash) { continue }
+        $r = Get-FujiAiRemembered -Memory $Memory -Key $it.Key -Hash $it.Hash
+        if ($it.Command -eq 'AI_EXTRACT') { if ($r -is [System.Collections.IDictionary] -and $r.Contains($it.Name)) { $it['Final'] = [string]$r[$it.Name] } }
+        elseif ($r -is [string]) { $it['Final'] = $r }
     }
+}
+
+# Rows to run again: checked items with a row number, except spot checks the person left as they were
+# (their answer was used already)
+function Get-FujiAiRerunRowNo {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items)
+    $nos = @(foreach ($it in $Items) {
+            if (-not $it.Done -or $it.Row -le 0 -or -not $it.Contains('Final')) { continue }
+            if ($it.Kind -eq 'spot' -and [string]$it['Final'] -eq [string]$it.Answer) { continue }
+            [int]$it.Row
+        })
+    return , [int[]]@($nos | Sort-Object -Unique)
 }
 
 # The rows checked in the review, from the loaded CSV, as an error-row CSV (original row numbers kept)
@@ -225,5 +272,6 @@ function Get-FujiAiReviewOrder {
     $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' } | Sort-Object -Property @{ Expression = $p })
     $spot = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'spot' } | Sort-Object -Property @{ Expression = $p })
     $done = @($Items | Where-Object { $_.Done })
-    return @($open + $spot + $done)
+    # a list even for one item (a single hashtable would be returned as itself)
+    return , @($open + $spot + $done)
 }

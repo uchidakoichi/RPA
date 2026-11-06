@@ -86,8 +86,8 @@ function Show-FujiAiReviewDialog {
     }
     $load = {
         $n = [int]([object[]]$ctx.Days.Tag)[$ctx.Days.SelectedIndex]
-        # the reader's List as it is: @() around a generic List fails on PowerShell 5.1
-        $ctx.Items = Get-FujiAiReviewOrder -Items (Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        $ctx.Items = Get-FujiAiReviewOrder -Items @(Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        Set-FujiAiReviewFinal -Items $ctx.Items -Memory $ctx.Memory
         $ctx.List.BeginUpdate()
         $ctx.List.Items.Clear()
         foreach ($it in $ctx.Items) { $lvi = New-Object -TypeName System.Windows.Forms.ListViewItem; & $showRow $it $lvi; $lvi.Tag = $it; [void]$ctx.List.Items.Add($lvi) }
@@ -131,18 +131,26 @@ function Show-FujiAiReviewDialog {
         param($Item, [string]$Answer)
         if ($Item.Old -or $null -eq (Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item) -or -not $Item.Hash) { return $false }
         if ($Item.Command -eq 'AI_EXTRACT') {
+            # only the items a person checked: the run asks the AI for the others
             $pairs = Get-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash
             if ($pairs -isnot [System.Collections.IDictionary]) { $pairs = [ordered]@{} }
-            # the other items of the same text keep the AI's answers unless a person changed them
-            foreach ($o in $ctx.Items) { if ($o.Hash -eq $Item.Hash -and $o.Key -eq $Item.Key -and -not $pairs.Contains($o.Name)) { $pairs[$o.Name] = [string]$o.Answer } }
             $pairs[$Item.Name] = $Answer
             Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $pairs
         } else {
             Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $Answer -ExampleText $Item.Source
         }
         $Item['Final'] = $Answer
-        if (-not (Set-FujiAiReviewDone -Item $Item -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))) { $Item.Done = 'x'; $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed' }
         return $true
+    }
+    # the memory first, then "done" in the list (a list marked done always has its answers remembered)
+    $commit = {
+        param([object[]]$Checked)
+        Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+        $n = Set-FujiAiReviewDoneMany -Items $Checked -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        if ($n -lt $Checked.Count) {
+            foreach ($c in $Checked) { if (-not $c.Done) { $c.Done = 'x' } }
+            $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed'
+        }
     }
     $next = {
         $i = $ctx.List.SelectedIndices
@@ -158,25 +166,26 @@ function Show-FujiAiReviewDialog {
         elseif ($ctx.Choices.SelectedIndex -ge 0) { $answer = (Read-FujiAiOption -Text $ctx.Step.Settings['options'])[$ctx.Choices.SelectedIndex].Value }
         else { return }
         if (& $checkOne $it $answer) {
-            Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
-            & $showRow $it $ctx.List.SelectedItems[0]
+            & $commit @($it)
+            foreach ($lvi in $ctx.List.Items) { if ([object]::ReferenceEquals($lvi.Tag, $it)) { & $showRow $it $lvi } }
             & $hint
             & $next
         }
     }
-    $list.Add_SelectedIndexChanged({ Invoke-FujiUi { if ($ctx.List.SelectedItems.Count -gt 0) { & $select $ctx.List.SelectedItems[0].Tag } } })
+    $list.Add_SelectedIndexChanged({ Invoke-FujiUi { if ($ctx.List.SelectedItems.Count -gt 0) { & $select $ctx.List.SelectedItems[0].Tag } else { & $select $null } } })
     $days.Add_SelectedIndexChanged({ Invoke-FujiUi { & $load } })
     $okBtn.Add_Click({ Invoke-FujiUi { & $confirm } })
     $allBtn.Add_Click({ Invoke-FujiUi {
-                $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old -and $_.Answer -ne '' })
+                # choices only: an extracted value on the list was left out as not in the text, so a person looks at it
+                $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old -and $_.Answer -ne '' -and $_.Command -ne 'AI_EXTRACT' })
                 if ($open.Count -eq 0) { return }
                 if ((Show-FujiChoice -Title (Get-FujiText 'gui.aiReviewAll') -Message (Get-FujiText 'gui.aiReviewAllConfirm' $open.Count) -Buttons @((Get-FujiText 'gui.aiReviewAll'), (Get-FujiText 'gui.cancel'))) -ne 0) { return }
-                foreach ($it in $open) { [void](& $checkOne $it ([string]$it.Answer)) }
-                Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+                $checked = @(foreach ($it in $open) { if (& $checkOne $it ([string]$it.Answer)) { $it } })
+                if ($checked.Count -gt 0) { & $commit $checked }
                 & $load
             } })
     $rerunBtn.Add_Click({ Invoke-FujiUi {
-                $nos = @($ctx.Items | Where-Object { $_.Done -and $_.Row -gt 0 } | ForEach-Object { [int]$_.Row })
+                $nos = Get-FujiAiRerunRowNo -Items $ctx.Items
                 $rows = (Get-FujiRunRow -CsvRows $script:Ed.Csv.Rows -Header $script:Ed.Csv.Header).Rows
                 $r = New-FujiAiRerunCsv -Header $script:Ed.Csv.Header -Rows $rows -RowNos $nos
                 if ($r.Error) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewRerun') -Message $r.Error; return }
@@ -191,8 +200,7 @@ function Show-FujiAiReviewDialog {
     $f.Add_KeyDown({
             $e = $_
             Invoke-FujiUi {
-                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and -not $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
-                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
+                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) { $e.SuppressKeyPress = $true; & $confirm; return }
                 if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $e.SuppressKeyPress = $true; & $next; return }
                 if ($ctx.Value.Focused) { return }
                 $d = -1

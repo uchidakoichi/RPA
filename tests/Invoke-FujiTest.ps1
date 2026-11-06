@@ -554,11 +554,11 @@ try {
     [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:02') -Row ([ordered]@{ time = '2026-11-10 09:02:00'; macro = 'other'; step = 1; row = 1; command = 'AI_CHOOSE'; name = 'v'; source = 'z'; answer = 'a'; p = '0.1'; probs = ''; reason = 'low'; kind = 'low'; macroId = 'other'; key = 'k'; hash = 'h' }))
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16).Text).Records
     Assert-True ($recs[0].Count -eq 16 -and $recs[1].Count -eq 16 -and $recs[1][6] -eq $src) 'ai review: 16 columns written, comma and newline kept'
-    $items = Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 2 -Now ([datetime]'2026-11-10 12:00')
+    $items = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 2 -Now ([datetime]'2026-11-10 12:00'))
     Assert-Equal 3 $items.Count 'ai review: items of this macro over two days'
     $old = @($items | Where-Object { $_.Old })
     Assert-True ($old.Count -eq 1 -and $old[0].Source -eq 'old text') 'ai review: 11-column file read as old'
-    Assert-Equal 2 (Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00')).Count 'ai review: one day only'
+    Assert-Equal 2 @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00')).Count 'ai review: one day only'
     $new = @($items | Where-Object { -not $_.Old -and $_.Kind -eq 'low' })[0]
     Assert-True ($new.Hash -eq (Get-FujiAiTextHash $src) -and $new.Key -eq $k1 -and $new.Row -eq 3) 'ai review: item fields'
     $before = [System.IO.File]::ReadAllBytes($p16)
@@ -580,6 +580,31 @@ try {
     $ordList = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($x in @(@{ P = '0.5'; Kind = 'low'; Done = '' }, @{ P = '0.2'; Kind = 'low'; Done = '' })) { $ordList.Add($x) }
     Assert-Equal @('0.2', '0.5') @(Get-FujiAiReviewOrder -Items $ordList | ForEach-Object { $_.P }) 'ai review: order of the list the reader returns'
+    # one item only: still a list (a single hashtable would count its keys)
+    $one = Get-FujiAiReviewOrder -Items @(@{ P = '0.5'; Kind = 'low'; Done = '' })
+    Assert-True ($one -is [array] -and $one.Count -eq 1) 'ai review: order of one item is a list of one'
+    # a value written with the formula guard (a leading apostrophe) is read back as it was
+    [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:03') -Row ([ordered]@{ time = 't'; macro = 'main'; step = 1; row = 4; command = 'AI_EXTRACT'; name = 'phone'; source = '+81-466-12-3456'; answer = '+81-466-12-3456'; p = ''; probs = ''; reason = 'r'; kind = 'notInSource'; macroId = 'main'; key = 'kx'; hash = 'hx' }))
+    $guard = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00') | Where-Object { $_.Key -eq 'kx' })[0]
+    Assert-True ($guard.Answer -eq '+81-466-12-3456' -and $guard.Source -eq '+81-466-12-3456') 'ai review: formula guard taken off when read'
+    # several items of one file are marked done with one write; a line that is not that item is left alone
+    $many = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00') | Where-Object { -not $_.Done })
+    $wrong = @{ File = $many[0].File; Line = $many[0].Line; Old = $false; Hash = 'not-this-line'; Time = $many[0].Time }
+    Assert-Equal 1 (Set-FujiAiReviewDoneMany -Items @($many[0], $wrong) -Time 'T1') 'ai review: done for many, a line that does not match is skipped'
+    $guardAgain = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00') | Where-Object { $_.Key -eq 'kx' })[0]
+    Assert-True ($guardAgain.Answer -eq '+81-466-12-3456') 'ai review: rewriting keeps the other lines as they were'
+    # the person's answers come from the memory (so the hints and the re-run see earlier checks too)
+    $fm = [ordered]@{}
+    Add-FujiAiRemembered -Memory $fm -Key 'kc' -Hash 'h1' -Answer 'garbage'
+    Add-FujiAiRemembered -Memory $fm -Key 'ke' -Hash 'h2' -Answer ([ordered]@{ phone = '1' })
+    $fin = @(@{ Command = 'AI_CHOOSE'; Key = 'kc'; Hash = 'h1'; Done = 'x'; Name = 'desk' }, @{ Command = 'AI_EXTRACT'; Key = 'ke'; Hash = 'h2'; Done = 'x'; Name = 'phone' }, @{ Command = 'AI_EXTRACT'; Key = 'ke'; Hash = 'h2'; Done = ''; Name = 'name' })
+    Set-FujiAiReviewFinal -Items $fin -Memory $fm
+    Assert-True ($fin[0]['Final'] -eq 'garbage' -and $fin[1]['Final'] -eq '1' -and -not $fin[2].Contains('Final')) 'ai review: final answers taken from the memory'
+    # the re-run takes the checked rows whose value was not used as it is (a spot check left as it was is not run again)
+    $rn = Get-FujiAiRerunRowNo -Items @(
+        @{ Done = 'x'; Row = 1; Kind = 'spot'; Answer = 'a'; Final = 'a' }, @{ Done = 'x'; Row = 2; Kind = 'spot'; Answer = 'a'; Final = 'b' },
+        @{ Done = 'x'; Row = 3; Kind = 'low'; Answer = 'a'; Final = 'a' }, @{ Done = ''; Row = 4; Kind = 'low'; Answer = 'a' }, @{ Done = 'x'; Row = 0; Kind = 'low'; Answer = 'a'; Final = 'b' })
+    Assert-Equal @(2, 3) @($rn) 'ai review: re-run rows leave out unchanged spot checks and unchecked items'
     # the hints under the window
     $sum = Get-FujiAiReviewSummary -Items @(
         @{ Kind = 'spot'; P = '0.90'; Answer = 'a'; Final = 'a' }, @{ Kind = 'spot'; P = '0.80'; Answer = 'a'; Final = 'b' },
@@ -1493,6 +1518,12 @@ $run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sak
 $script:Fake.AiRecallValue = [ordered]@{ name = 'Nakamura Sakura'; phone = '1' }
 [void](Invoke-FujiRun -Run $run)
 Assert-True ($script:Fake.AiBodies.Count -eq 0 -and $run.Vars['name'] -eq 'Nakamura Sakura' -and $run.Vars['phone'] -eq '1') 'ai run: extract remembered'
+# a person checked only some items of an extract: the AI fills the others, the checked ones are kept as checked
+$run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sakura 0466-12-3456'))
+$script:Fake.AiRecallValue = [ordered]@{ name = 'Checked Name' }
+$script:Fake.AiReply = New-AiTextReply '{"name":"Nakamura Sakura","phone":"0466-12-3456"}'
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiBodies.Count -eq 1 -and $run.Vars['name'] -eq 'Checked Name' -and $run.Vars['phone'] -eq '0466-12-3456' -and $script:Fake.AiReviews.Count -eq 0) 'ai run: extract partly remembered asks the AI and keeps the checked item'
 $run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
 $script:Fake.AiExampleList = @(@{ text = 'big garbage'; answer = 'garbage' }, @{ text = 'move house'; answer = 'resident' }, @{ text = 'gone'; answer = 'no such option' })
 $script:Fake.AiReply = New-AiChoiceReply @{ 'B' = 0.9 }

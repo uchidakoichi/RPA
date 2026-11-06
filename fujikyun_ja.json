@@ -323,7 +323,7 @@
     "aiReviewStateOld": "古い形式",
     "aiReviewCheck": "確かめる（Enter）",
     "aiReviewAll": "残りは全部 AI の答えでよい",
-    "aiReviewAllConfirm": "まだ確かめていない {0} 件を、AI の答えのまま確かめたことにするよ。よい？",
+    "aiReviewAllConfirm": "まだ確かめていない {0} 件（AIに選んでもらう の件）を、AI の答えのまま確かめたことにするよ。抜き出しの件（文に無い値）は1件ずつ見てね。よい？",
     "aiReviewRerun": "確かめた行だけ再実行の CSV を作る",
     "aiReviewRerunDone": "確かめた {0} 行の再実行の CSV を作って読み込んだよ: {1}（▶ 実行で、AI の手順は確かめた答えで進むよ）",
     "aiReviewOldNote": "古い形式の一覧なので、答えを覚えられないよ（この件は見るだけ）",

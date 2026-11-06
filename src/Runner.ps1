@@ -1468,8 +1468,12 @@ function Invoke-FujiAiExtract {
     $key = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId (Get-FujiRunMacroId $Run) -Settings $Settings
     $hash = Get-FujiAiTextHash -Text $src
     $remembered = & $Run.Io.AiRecall $key $hash
-    if ($remembered -is [System.Collections.IDictionary]) {
-        foreach ($it in $items) { $v = ''; if ($remembered.Contains($it.Name)) { $v = [string]$remembered[$it.Name] }; $Run.Vars[$it.Name] = $v }
+    if ($remembered -isnot [System.Collections.IDictionary]) { $remembered = [ordered]@{} }
+    # every item checked by a person: no AI needed; some checked: the AI fills the others
+    $all = $items.Count -gt 0
+    foreach ($it in $items) { if (-not $remembered.Contains($it.Name)) { $all = $false } }
+    if ($all) {
+        foreach ($it in $items) { $Run.Vars[$it.Name] = [string]$remembered[$it.Name] }
         Write-FujiRunLog $Run (Get-FujiText 'run.aiRecalledExtract' ((@($items | ForEach-Object { $_.Name })) -join ', '))
         & $Run.Io.Watch
         return (Get-FujiRunNext 0)
@@ -1482,6 +1486,11 @@ function Invoke-FujiAiExtract {
     if ($answer -isnot [System.Collections.IDictionary]) { return (Get-FujiRunError (Get-FujiText 'run.aiBadAnswer')) }
     $filled = 0
     foreach ($it in $items) {
+        if ($remembered.Contains($it.Name)) {
+            $Run.Vars[$it.Name] = [string]$remembered[$it.Name]
+            if ($Run.Vars[$it.Name] -ne '') { $filled++ }
+            continue
+        }
         $v = ''
         if ($answer.Contains($it.Name) -and $null -ne $answer[$it.Name]) { $v = ([string]$answer[$it.Name]).Trim() }
         if ($v -ne '' -and $Settings['strict'] -ne 'OFF' -and -not (Test-FujiAiInSource -Value $v -Source $src)) {
