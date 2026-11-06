@@ -61,7 +61,7 @@ function Limit-FujiAiSource {
 
 # The request for AI_CHOOSE (Truncated is for the caller and is taken out before sending)
 function New-FujiAiChooseBody {
-    param([AllowEmptyString()][string]$Question, [Parameter(Mandatory)][System.Collections.IList]$Options, [AllowEmptyString()][string]$Source)
+    param([AllowEmptyString()][string]$Question, [Parameter(Mandatory)][System.Collections.IList]$Options, [AllowEmptyString()][string]$Source, [AllowNull()][object[]]$Examples = $null)
     $lines = for ($i = 0; $i -lt $Options.Count; $i++) {
         $line = [string]$script:FujiAiLetters[$i] + ': ' + $Options[$i].Value
         if ($Options[$i].Note) { $line += ([string][char]0xFF08 + $Options[$i].Note + [char]0xFF09) }
@@ -69,11 +69,21 @@ function New-FujiAiChooseBody {
     }
     $q = ([string]$Question).Trim() -replace '[\u3002\uFF0E.\uFF1F?]+$', ''
     $src = Limit-FujiAiSource -Source $Source
+    $system = Get-FujiText 'run.aiChoosePrompt' $q (@($lines) -join "`n")
+    # answers a person checked for similar texts (only those that are still options)
+    $shown = 0
+    $exLines = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    foreach ($e in @($Examples | Where-Object { $null -ne $_ })) {
+        for ($i = 0; $i -lt $Options.Count; $i++) {
+            if ([string]$Options[$i].Value -eq [string]$e['answer']) { $exLines.Add('- ' + (([string]$e['text']) -replace '\s+', ' ') + ' -> ' + $script:FujiAiLetters[$i]); $shown++; break }
+        }
+    }
+    if ($shown -gt 0) { $system += "`n" + (Get-FujiText 'run.aiExamplesHead') + "`n" + ($exLines -join "`n") }
     return [ordered]@{
-        messages = @(@{ role = 'system'; content = (Get-FujiText 'run.aiChoosePrompt' $q (@($lines) -join "`n")) }, @{ role = 'user'; content = $src.Text })
+        messages = @(@{ role = 'system'; content = $system }, @{ role = 'user'; content = $src.Text })
         temperature = 0; max_tokens = 1; logprobs = $true; top_logprobs = 20
         chat_template_kwargs = @{ enable_thinking = $false }
-        Truncated = $src.Cut
+        Truncated = $src.Cut; ExamplesUsed = $shown
     }
 }
 
@@ -148,7 +158,7 @@ function Add-FujiAiReviewRow {
     $day = $Now.ToString('yyyy-MM-dd')
     $src = [string]$Row['source']
     if ($src.Length -gt $script:FujiAiReviewSourceMax) { $src = $src.Substring(0, $script:FujiAiReviewSourceMax) }
-    $cells = foreach ($k in @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason')) {
+    $cells = foreach ($k in $script:FujiAiReviewColumns) {
         $v = [string]$Row[$k]
         if ($k -eq 'source') { $v = $src }
         ConvertTo-FujiSafeCsvValue -Value $v
@@ -184,6 +194,23 @@ function Set-FujiAiFolderSetting {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [AllowEmptyString()][string]$Folder)
     if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
     $Settings['ai']['folder'] = ([string]$Folder).Trim()
+}
+
+# How many of the sure answers also go to the review list, in percent (0..20, 5 when not set)
+function Get-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    $n = 5
+    if ($Settings.Contains('ai') -and $Settings['ai'] -is [System.Collections.IDictionary] -and $Settings['ai'].Contains('spot')) {
+        $v = 0
+        if ([int]::TryParse([string]$Settings['ai']['spot'], [ref]$v)) { $n = $v }
+    }
+    return [Math]::Min(20, [Math]::Max(0, $n))
+}
+
+function Set-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [int]$Percent)
+    if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
+    $Settings['ai']['spot'] = [Math]::Min(20, [Math]::Max(0, $Percent))
 }
 
 # ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used

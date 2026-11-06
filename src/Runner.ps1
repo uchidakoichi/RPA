@@ -26,6 +26,8 @@
 #    AiPick {Caption, Message, Options (@{ Value; P }), Initial} -> @{ Choice = 'continue'|'stop'; Value }
 #    AiReview {Row} -> writes one line of the AI review list
 #    AiTookFocus {} -> $true once after the AI showed a window of its own (choose the folder, copy)
+#    AiRecall {Key, Hash} -> what a person checked for this step and text, or $null
+#    AiExamples {Key, Source} -> checked examples like Source (@{ text; answer })   AiSpot {} -> bool (spot check this answer)
 #    GetSecret {Target} -> @{ User; Password; Program; Window } or $null   TypeSecret {Text} (never logged)
 #    ForegroundWindow {} -> @{ Title; Program (full .exe path) } of the window in front
 #    FocusIsPassword {} -> $true when the focused field is a password field (UI Automation IsPassword)
@@ -1325,13 +1327,14 @@ function Invoke-FujiAsk {
 # ----------------------------------------------------------------- AI commands
 # One line for the review list (Io.AiReview): where in the run, what was read, what the AI said
 function Add-FujiRunAiReview {
-    param([hashtable]$Run, [string]$Cmd, [string]$Name, [string]$Source, [string]$Answer, [string]$P, [string]$Probs, [string]$Reason)
+    param([hashtable]$Run, [string]$Cmd, [string]$Name, [string]$Source, [string]$Answer, [string]$P, [string]$Probs, [string]$Reason, [string]$Kind = '', [string]$Key = '', [string]$Hash = '')
     $row = Get-FujiRunCurrentRow $Run
     $rowNo = ''
     if ($row.No -gt 0) { $rowNo = [string]$row.No }
     try {
         & $Run.Io.AiReview ([ordered]@{ time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss'); macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
-                command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason })
+                command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason
+                kind = $Kind; macroId = (Get-FujiRunMacroId $Run); key = $Key; hash = $Hash; done = '' })
     } catch [System.OperationCanceledException] {
         throw
     } catch {
@@ -1342,11 +1345,19 @@ function Add-FujiRunAiReview {
     Write-FujiRunLog $Run (Get-FujiText 'run.aiReview' $Name $Reason) 'warn'
 }
 
+# The macro the run is in now (a called macro while inside CALL_MACRO)
+function Get-FujiRunMacroId {
+    param([hashtable]$Run)
+    if ($Run.CallStack.Count -gt 0) { return [string]$Run.CallStack[$Run.CallStack.Count - 1].Id }
+    return [string]$Run.Macro.id
+}
+
 # Sends a request; returns @{ Response; Ms } or @{ Error = step result }
 function Invoke-FujiRunAiChat {
     param([hashtable]$Run, [System.Collections.IDictionary]$Body)
     if ($Body['Truncated']) { Write-FujiRunLog $Run (Get-FujiText 'run.aiCut') 'warn' }
     $Body.Remove('Truncated')
+    $Body.Remove('ExamplesUsed')
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $r = & $Run.Io.AiChat $Body
@@ -1378,14 +1389,27 @@ function Invoke-FujiAiChoose {
     $threshold = 0.5
     [void][double]::TryParse(([string]$Settings['threshold']).Trim(), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$threshold)
     $probName = $name + (Get-FujiText 'run.aiProbSuffix')
+    $key = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId (Get-FujiRunMacroId $Run) -Settings $Settings
+    $hash = Get-FujiAiTextHash -Text $src
     if ($src.Trim() -eq '') {
         $Run.Vars[$name] = $unknown
         $Run.Vars[$probName] = (Format-FujiAiProbability 0)
-        Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer '' -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonEmpty')
+        Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer '' -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonEmpty') -Kind 'empty' -Key $key -Hash $hash
         & $Run.Io.Watch
         return (Get-FujiRunNext 0)
     }
-    $body = New-FujiAiChooseBody -Question (Expand-FujiRunText -Run $Run -Text $Settings['question']) -Options $options -Source $src
+    # a person checked this text before: that answer, without asking the AI (if it is still an option)
+    $remembered = & $Run.Io.AiRecall $key $hash
+    if ($remembered -is [string] -and @($options | ForEach-Object { $_.Value }) -contains $remembered) {
+        $Run.Vars[$name] = $remembered
+        $Run.Vars[$probName] = (Format-FujiAiProbability 1)
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiRecalled' $name (Format-FujiShort $remembered 40))
+        & $Run.Io.Watch
+        return (Get-FujiRunNext 0)
+    }
+    $examples = & $Run.Io.AiExamples $key $src
+    $body = New-FujiAiChooseBody -Question (Expand-FujiRunText -Run $Run -Text $Settings['question']) -Options $options -Source $src -Examples $examples
+    if ($body['ExamplesUsed'] -gt 0) { Write-FujiRunLog $Run (Get-FujiText 'run.aiExamplesUsed' $body['ExamplesUsed']) }
     $sent = Invoke-FujiRunAiChat -Run $Run -Body $body
     if ($sent.Contains('Error')) { return $sent.Error }
     $c = Read-FujiAiChoice -Response $sent.Response -Options $options
@@ -1412,10 +1436,15 @@ function Invoke-FujiAiChoose {
             }
             'STOP' { return (Get-FujiRunError (Get-FujiText 'run.aiLowStop' $c.Value $pText)) }
             default {
-                Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer $c.Value -P $pText -Probs $probs -Reason $reason
+                $kind = 'low'
+                if (-not $answered) { $kind = 'noLetter' }
+                Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer $c.Value -P $pText -Probs $probs -Reason $reason -Kind $kind -Key $key -Hash $hash
                 $value = $unknown
             }
         }
+    } elseif ($c.P -ge $threshold -and (& $Run.Io.AiSpot)) {
+        # a sure answer is used; a few are also put on the list so a person sees how often the AI is right
+        Add-FujiRunAiReview -Run $Run -Cmd 'AI_CHOOSE' -Name $name -Source $src -Answer $c.Value -P $pText -Probs $probs -Reason (Get-FujiText 'run.aiReasonSpot') -Kind 'spot' -Key $key -Hash $hash
     }
     $Run.Vars[$name] = $value
     $Run.Vars[$probName] = $pText
@@ -1436,6 +1465,19 @@ function Invoke-FujiAiExtract {
         & $Run.Io.Watch
         return (Get-FujiRunNext 0)
     }
+    $key = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId (Get-FujiRunMacroId $Run) -Settings $Settings
+    $hash = Get-FujiAiTextHash -Text $src
+    $remembered = & $Run.Io.AiRecall $key $hash
+    if ($remembered -isnot [System.Collections.IDictionary]) { $remembered = [ordered]@{} }
+    # every item checked by a person: no AI needed; some checked: the AI fills the others
+    $all = $items.Count -gt 0
+    foreach ($it in $items) { if (-not $remembered.Contains($it.Name)) { $all = $false } }
+    if ($all) {
+        foreach ($it in $items) { $Run.Vars[$it.Name] = [string]$remembered[$it.Name] }
+        Write-FujiRunLog $Run (Get-FujiText 'run.aiRecalledExtract' ((@($items | ForEach-Object { $_.Name })) -join ', '))
+        & $Run.Io.Watch
+        return (Get-FujiRunNext 0)
+    }
     $body = New-FujiAiExtractBody -Items $items -Note (Expand-FujiRunText -Run $Run -Text $Settings['note']) -Source $src
     $sent = Invoke-FujiRunAiChat -Run $Run -Body $body
     if ($sent.Contains('Error')) { return $sent.Error }
@@ -1444,10 +1486,15 @@ function Invoke-FujiAiExtract {
     if ($answer -isnot [System.Collections.IDictionary]) { return (Get-FujiRunError (Get-FujiText 'run.aiBadAnswer')) }
     $filled = 0
     foreach ($it in $items) {
+        if ($remembered.Contains($it.Name)) {
+            $Run.Vars[$it.Name] = [string]$remembered[$it.Name]
+            if ($Run.Vars[$it.Name] -ne '') { $filled++ }
+            continue
+        }
         $v = ''
         if ($answer.Contains($it.Name) -and $null -ne $answer[$it.Name]) { $v = ([string]$answer[$it.Name]).Trim() }
         if ($v -ne '' -and $Settings['strict'] -ne 'OFF' -and -not (Test-FujiAiInSource -Value $v -Source $src)) {
-            Add-FujiRunAiReview -Run $Run -Cmd 'AI_EXTRACT' -Name $it.Name -Source $src -Answer $v -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonNotInSource')
+            Add-FujiRunAiReview -Run $Run -Cmd 'AI_EXTRACT' -Name $it.Name -Source $src -Answer $v -P '' -Probs '' -Reason (Get-FujiText 'run.aiReasonNotInSource') -Kind 'notInSource' -Key $key -Hash $hash
             $v = ''
         }
         if ($v -ne '') { $filled++ }
