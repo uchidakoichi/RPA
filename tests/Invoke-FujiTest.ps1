@@ -148,6 +148,14 @@ try {
     Set-FujiAiFolderSetting -Settings $alSet -Folder ' \\server\share\AI '
     Save-FujiSetting -Directory $work -Settings $alSet
     Assert-Equal '\\server\share\AI' (Get-FujiAiFolderSetting -Settings (Read-FujiSetting -Directory $work)) 'ai: AI folder kept in the settings file'
+    Assert-Equal 5 (Get-FujiAiSpotSetting -Settings $alSet) 'ai review: spot setting default 5'
+    Set-FujiAiSpotSetting -Settings $alSet -Percent 35
+    Assert-Equal 20 (Get-FujiAiSpotSetting -Settings $alSet) 'ai review: spot setting at most 20'
+    Set-FujiAiSpotSetting -Settings $alSet -Percent -3
+    Assert-Equal 0 (Get-FujiAiSpotSetting -Settings $alSet) 'ai review: spot setting at least 0'
+    Set-FujiAiSpotSetting -Settings $alSet -Percent 7
+    Save-FujiSetting -Directory $work -Settings $alSet
+    Assert-True ((Get-FujiAiSpotSetting -Settings (Read-FujiSetting -Directory $work)) -eq 7 -and (Get-FujiAiFolderSetting -Settings (Read-FujiSetting -Directory $work)) -ne '') 'ai review: spot setting kept beside the folder'
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force
 }
@@ -567,6 +575,11 @@ try {
     Assert-Equal (Get-FujiText 'run.aiRerunMissing' 5) (New-FujiAiRerunCsv -Header $null -Rows $rows[0..1] -RowNos @(5)).Error 'ai review: rerun csv refuses missing rows'
     Assert-Equal (Get-FujiText 'run.aiRerunNoRows') (New-FujiAiRerunCsv -Header $null -Rows $rows -RowNos @()).Error 'ai review: rerun csv with no rows'
     Assert-Equal (Get-FujiText 'run.aiRerunNoCsv') (New-FujiAiRerunCsv -Header $null -Rows @() -RowNos @(1)).Error 'ai review: rerun csv with no CSV loaded'
+    $ord = Get-FujiAiReviewOrder -Items @(@{ P = '0.35'; Kind = 'low'; Done = '' }, @{ P = '0.92'; Kind = 'spot'; Done = '' }, @{ P = '0.28'; Kind = 'low'; Done = '' }, @{ P = ''; Kind = 'notInSource'; Done = '' }, @{ P = '0.10'; Kind = 'low'; Done = 'x' })
+    Assert-Equal @('', '0.28', '0.35', '0.92', '0.10') @($ord | ForEach-Object { $_.P }) 'ai review: order unchecked by probability, then spot checks, then checked'
+    $ordList = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    foreach ($x in @(@{ P = '0.5'; Kind = 'low'; Done = '' }, @{ P = '0.2'; Kind = 'low'; Done = '' })) { $ordList.Add($x) }
+    Assert-Equal @('0.2', '0.5') @(Get-FujiAiReviewOrder -Items $ordList | ForEach-Object { $_.P }) 'ai review: order of the list the reader returns'
     # the hints under the window
     $sum = Get-FujiAiReviewSummary -Items @(
         @{ Kind = 'spot'; P = '0.90'; Answer = 'a'; Final = 'a' }, @{ Kind = 'spot'; P = '0.80'; Answer = 'a'; Final = 'b' },

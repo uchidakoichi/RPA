@@ -171,6 +171,12 @@ function Show-FujiAiSettingDialog {
     [void]$row.Controls.Add($box)
     [void]$row.Controls.Add($pick)
     [void]$layout.Controls.Add($row)
+    $spotRow = New-FujiFlow
+    $spotBox = New-FujiTextBox -Text ([string](Get-FujiAiSpotSetting -Settings $script:Settings)) -Width (Get-FujiScaled 50)
+    [void]$spotRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.aiSpotLabel')))
+    [void]$spotRow.Controls.Add($spotBox)
+    [void]$spotRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.aiSpotNote')))
+    [void]$layout.Controls.Add($spotRow)
     $status = New-FujiTextBox -Text '' -Width ($width - (Get-FujiScaled 30)) -Multiline
     $status.ReadOnly = $true
     $status.Height = Get-FujiScaled 150
@@ -210,8 +216,11 @@ function Show-FujiAiSettingDialog {
     [void]$f.Controls.Add($bar)
     $f.Add_Shown({ Invoke-FujiUi { & $refresh } })
     [void](Show-FujiDialog -Form $f)
-    if ($box.Text.Trim() -ne (Get-FujiAiFolderSetting -Settings $script:Settings)) {
+    $spot = 0
+    if (-not [int]::TryParse((ConvertTo-FujiHalfWidthDigit -Text $spotBox.Text.Trim()), [ref]$spot)) { $spot = Get-FujiAiSpotSetting -Settings $script:Settings }
+    if ($box.Text.Trim() -ne (Get-FujiAiFolderSetting -Settings $script:Settings) -or $spot -ne (Get-FujiAiSpotSetting -Settings $script:Settings)) {
         Set-FujiAiFolderSetting -Settings $script:Settings -Folder $box.Text
+        Set-FujiAiSpotSetting -Settings $script:Settings -Percent $spot
         Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
     }
     $f.Dispose()

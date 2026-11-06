@@ -250,6 +250,23 @@ function Set-FujiAiFolderSetting {
     $Settings['ai']['folder'] = ([string]$Folder).Trim()
 }
 
+# How many of the sure answers also go to the review list, in percent (0..20, 5 when not set)
+function Get-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    $n = 5
+    if ($Settings.Contains('ai') -and $Settings['ai'] -is [System.Collections.IDictionary] -and $Settings['ai'].Contains('spot')) {
+        $v = 0
+        if ([int]::TryParse([string]$Settings['ai']['spot'], [ref]$v)) { $n = $v }
+    }
+    return [Math]::Min(20, [Math]::Max(0, $n))
+}
+
+function Set-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [int]$Percent)
+    if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
+    $Settings['ai']['spot'] = [Math]::Min(20, [Math]::Max(0, $Percent))
+}
+
 # ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used
 function Read-FujiAiManifest {
     param([Parameter(Mandatory)][string]$Path)
@@ -493,6 +510,16 @@ function Get-FujiAiReviewSummary {
         }
     }
     return @{ SpotTotal = $spotTotal; SpotKept = $spotKept; Bands = $bands }
+}
+
+# Unchecked by probability (lowest first), then spot checks, then checked ones
+function Get-FujiAiReviewOrder {
+    param([object[]]$Items)
+    $p = { $v = 0.0; [void][double]::TryParse([string]$_.P, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$v); $v }
+    $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' } | Sort-Object -Property @{ Expression = $p })
+    $spot = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'spot' } | Sort-Object -Property @{ Expression = $p })
+    $done = @($Items | Where-Object { $_.Done })
+    return @($open + $spot + $done)
 }
 
 # ===== src/Alert.ps1 =====
@@ -6206,7 +6233,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 13
+$script:FujiTextVersion = 14
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -6949,6 +6976,12 @@ function Show-FujiAiSettingDialog {
     [void]$row.Controls.Add($box)
     [void]$row.Controls.Add($pick)
     [void]$layout.Controls.Add($row)
+    $spotRow = New-FujiFlow
+    $spotBox = New-FujiTextBox -Text ([string](Get-FujiAiSpotSetting -Settings $script:Settings)) -Width (Get-FujiScaled 50)
+    [void]$spotRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.aiSpotLabel')))
+    [void]$spotRow.Controls.Add($spotBox)
+    [void]$spotRow.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.aiSpotNote')))
+    [void]$layout.Controls.Add($spotRow)
     $status = New-FujiTextBox -Text '' -Width ($width - (Get-FujiScaled 30)) -Multiline
     $status.ReadOnly = $true
     $status.Height = Get-FujiScaled 150
@@ -6988,11 +7021,238 @@ function Show-FujiAiSettingDialog {
     [void]$f.Controls.Add($bar)
     $f.Add_Shown({ Invoke-FujiUi { & $refresh } })
     [void](Show-FujiDialog -Form $f)
-    if ($box.Text.Trim() -ne (Get-FujiAiFolderSetting -Settings $script:Settings)) {
+    $spot = 0
+    if (-not [int]::TryParse((ConvertTo-FujiHalfWidthDigit -Text $spotBox.Text.Trim()), [ref]$spot)) { $spot = Get-FujiAiSpotSetting -Settings $script:Settings }
+    if ($box.Text.Trim() -ne (Get-FujiAiFolderSetting -Settings $script:Settings) -or $spot -ne (Get-FujiAiSpotSetting -Settings $script:Settings)) {
         Set-FujiAiFolderSetting -Settings $script:Settings -Folder $box.Text
+        Set-FujiAiSpotSetting -Settings $script:Settings -Percent $spot
         Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
     }
     $f.Dispose()
+}
+
+# ===== gui/AiReview.ps1 =====
+# ---------------------------------------------------------------------------------------------
+#  AI review window: the review list of the current macro, unsure answers first (lowest probability),
+#  then spot checks, then the ones already checked. Number keys pick an option, Enter checks the
+#  item and goes to the next. A checked answer is remembered (fujikyun_ai_answers.json), so the same
+#  text is not asked again, and is shown to the AI as an example for similar texts. The checked rows
+#  can be run again from a CSV of those rows only.
+# ---------------------------------------------------------------------------------------------
+
+# The macro's AI step an item belongs to (found again by its step key), or $null
+function Find-FujiAiReviewStep {
+    param([System.Collections.IDictionary]$Macro, [hashtable]$Item)
+    foreach ($s in $Macro.steps) {
+        if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
+        $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
+        if ((Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set) -eq $Item.Key) { return @{ Cmd = $s.cmd; Settings = $set } }
+    }
+    return $null
+}
+
+function Show-FujiAiReviewDialog {
+    $macro = Get-FujiCurrentMacro $script:Ed
+    if ($null -eq $macro) { return }
+    $width = Get-FujiScaled 820
+    $f = New-FujiDialogForm -Title (Get-FujiText 'gui.aiReviewTitle' $macro.name) -Width $width -Height (Get-FujiScaled 600)
+    $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
+    $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $layout.ColumnCount = 1
+    Add-FujiFullColumn -Table $layout
+    $layout.Padding = New-Object -TypeName System.Windows.Forms.Padding -ArgumentList (Get-FujiScaled 8)
+    $top = New-FujiFlow
+    $days = New-FujiComboBox -Items @((Get-FujiText 'gui.aiReviewDays' 1), (Get-FujiText 'gui.aiReviewDays' 7), (Get-FujiText 'gui.aiReviewDays' 30)) -Values @(1, 7, 30) -Width (Get-FujiScaled 110)
+    $days.SelectedIndex = 0
+    $count = New-FujiLabel -Text ''
+    [void]$top.Controls.Add((New-FujiLabel -Text (Get-FujiText 'gui.aiReviewDaysLabel')))
+    [void]$top.Controls.Add($days)
+    [void]$top.Controls.Add($count)
+    [void]$layout.Controls.Add($top)
+    $list = New-Object -TypeName System.Windows.Forms.ListView
+    $list.View = [System.Windows.Forms.View]::Details
+    $list.FullRowSelect = $true
+    $list.HideSelection = $false
+    $list.MultiSelect = $false
+    $list.Width = $width - (Get-FujiScaled 30)
+    $list.Height = Get-FujiScaled 220
+    foreach ($c in @(@('gui.aiReviewColState', 60), @('gui.aiReviewColKind', 90), @('gui.aiReviewColP', 50), @('gui.aiReviewColName', 90), @('gui.aiReviewColAnswer', 120), @('gui.aiReviewColSource', 360))) { [void]$list.Columns.Add((Get-FujiText $c[0]), (Get-FujiScaled $c[1])) }
+    [void]$layout.Controls.Add($list)
+    $source = New-FujiTextBox -Text '' -Width ($width - (Get-FujiScaled 30)) -Multiline
+    $source.ReadOnly = $true
+    $source.Height = Get-FujiScaled 60
+    [void]$layout.Controls.Add($source)
+    $choices = New-Object -TypeName System.Windows.Forms.ListBox
+    $choices.Width = $width - (Get-FujiScaled 30)
+    $choices.Height = Get-FujiScaled 110
+    $choices.IntegralHeight = $false
+    [void]$layout.Controls.Add($choices)
+    $value = New-FujiTextBox -Text '' -Width ($width - (Get-FujiScaled 30))
+    $value.Visible = $false
+    [void]$layout.Controls.Add($value)
+    $note = New-FujiLabel -Text '' -MaxWidth ($width - (Get-FujiScaled 30))
+    [void]$layout.Controls.Add($note)
+    $summary = New-FujiLabel -Text '' -MaxWidth ($width - (Get-FujiScaled 30))
+    [void]$layout.Controls.Add($summary)
+    $bar = New-FujiButtonBar
+    $closeBtn = New-FujiButton -Text (Get-FujiText 'gui.close')
+    $rerunBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewRerun')
+    $allBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewAll')
+    $okBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewCheck')
+    foreach ($b in @($closeBtn, $rerunBtn, $allBtn, $okBtn)) { [void]$bar.Controls.Add($b) }
+    [void]$f.Controls.Add($layout)
+    [void]$f.Controls.Add($bar)
+    $script:FujiAiMemoryNotice = ''
+    $ctx = @{ Macro = $macro; Items = @(); Current = $null; Step = $null; Memory = (Read-FujiAiMemory -Directory $script:Ed.Directory)
+        List = $list; Source = $source; Choices = $choices; Value = $value; Note = $note; Summary = $summary; Count = $count; Days = $days }
+    if ($script:FujiAiMemoryNotice) { Write-FujiUiLog -Message $script:FujiAiMemoryNotice -Level 'warn' }
+
+    $showRow = {
+        param($Item, $Lvi)
+        $state = Get-FujiText 'gui.aiReviewStateOpen'
+        if ($Item.Old) { $state = Get-FujiText 'gui.aiReviewStateOld' } elseif ($Item.Done) { $state = Get-FujiText 'gui.aiReviewStateDone' }
+        $kind = Get-FujiText ('gui.aiReviewKind.' + $(if ($Item.Kind) { $Item.Kind } else { 'low' }))
+        $Lvi.SubItems.Clear()
+        $Lvi.Text = $state
+        foreach ($t in @($kind, $Item.P, $Item.Name, $Item.Answer, ($Item.Source -replace "`r?`n", ' '))) { [void]$Lvi.SubItems.Add([string]$t) }
+        if ($Item.Done -or $Item.Old) { $Lvi.ForeColor = [System.Drawing.Color]::Gray }
+    }
+    $load = {
+        $n = [int]([object[]]$ctx.Days.Tag)[$ctx.Days.SelectedIndex]
+        # the reader's List as it is: @() around a generic List fails on PowerShell 5.1
+        $ctx.Items = Get-FujiAiReviewOrder -Items (Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        $ctx.List.BeginUpdate()
+        $ctx.List.Items.Clear()
+        foreach ($it in $ctx.Items) { $lvi = New-Object -TypeName System.Windows.Forms.ListViewItem; & $showRow $it $lvi; $lvi.Tag = $it; [void]$ctx.List.Items.Add($lvi) }
+        $ctx.List.EndUpdate()
+        $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old }).Count
+        $ctx.Count.Text = Get-FujiText 'gui.aiReviewCount' $ctx.Items.Count $open
+        & $hint
+        if ($ctx.List.Items.Count -gt 0) { $ctx.List.Items[0].Selected = $true; $ctx.List.Items[0].Focused = $true } else { & $select $null }
+    }
+    $hint = {
+        $s = Get-FujiAiReviewSummary -Items @($ctx.Items | Where-Object { $_.Contains('Final') })
+        $parts = @(foreach ($b in $s.Bands) { if ($b.Total -gt 0) { Get-FujiText 'gui.aiReviewBand' ('{0:0.0}' -f $b.From) ('{0:0.0}' -f $b.To) $b.Kept $b.Total } })
+        $text = Get-FujiText 'gui.aiReviewSpot' $s.SpotKept $s.SpotTotal
+        if ($parts.Count -gt 0) { $text += '  ' + ($parts -join '  ') }
+        $ctx.Summary.Text = $text
+    }
+    $select = {
+        param($Item)
+        $ctx.Current = $Item
+        $ctx.Choices.Items.Clear()
+        $ctx.Note.Text = ''
+        if ($null -eq $Item) { $ctx.Source.Text = ''; return }
+        $ctx.Source.Text = $Item.Source -replace "`r?`n", "`r`n"
+        $ctx.Step = Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item
+        $isExtract = $Item.Command -eq 'AI_EXTRACT'
+        $ctx.Choices.Visible = -not $isExtract
+        $ctx.Value.Visible = $isExtract
+        if ($Item.Old) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewOldNote' } elseif ($null -eq $ctx.Step) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewNoStep' }
+        if ($isExtract) { $ctx.Value.Text = $(if ($Item.Contains('Final')) { [string]$Item['Final'] } else { [string]$Item.Answer }); return }
+        if ($null -eq $ctx.Step) { return }
+        $opts = Read-FujiAiOption -Text $ctx.Step.Settings['options']
+        $initial = [string]$Item.Answer
+        if ($Item.Contains('Final')) { $initial = [string]$Item['Final'] }
+        for ($i = 0; $i -lt $opts.Count; $i++) {
+            [void]$ctx.Choices.Items.Add(('{0}: {1}' -f (($i + 1) % 10), $opts[$i].Value))
+            if ($opts[$i].Value -eq $initial) { $ctx.Choices.SelectedIndex = $i }
+        }
+    }
+    # check one item with this answer; returns $true when it could be remembered
+    $checkOne = {
+        param($Item, [string]$Answer)
+        if ($Item.Old -or $null -eq (Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item) -or -not $Item.Hash) { return $false }
+        if ($Item.Command -eq 'AI_EXTRACT') {
+            $pairs = Get-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash
+            if ($pairs -isnot [System.Collections.IDictionary]) { $pairs = [ordered]@{} }
+            # the other items of the same text keep the AI's answers unless a person changed them
+            foreach ($o in $ctx.Items) { if ($o.Hash -eq $Item.Hash -and $o.Key -eq $Item.Key -and -not $pairs.Contains($o.Name)) { $pairs[$o.Name] = [string]$o.Answer } }
+            $pairs[$Item.Name] = $Answer
+            Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $pairs
+        } else {
+            Add-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash -Answer $Answer -ExampleText $Item.Source
+        }
+        $Item['Final'] = $Answer
+        if (-not (Set-FujiAiReviewDone -Item $Item -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))) { $Item.Done = 'x'; $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed' }
+        return $true
+    }
+    $next = {
+        $i = $ctx.List.SelectedIndices
+        $at = 0
+        if ($i.Count -gt 0) { $at = $i[0] }
+        for ($k = $at + 1; $k -lt $ctx.List.Items.Count; $k++) { $t = $ctx.List.Items[$k].Tag; if (-not $t.Done -and -not $t.Old) { $ctx.List.Items[$k].Selected = $true; $ctx.List.Items[$k].Focused = $true; $ctx.List.EnsureVisible($k); return } }
+    }
+    $confirm = {
+        $it = $ctx.Current
+        if ($null -eq $it) { return }
+        $answer = ''
+        if ($it.Command -eq 'AI_EXTRACT') { $answer = $ctx.Value.Text.Trim() }
+        elseif ($ctx.Choices.SelectedIndex -ge 0) { $answer = (Read-FujiAiOption -Text $ctx.Step.Settings['options'])[$ctx.Choices.SelectedIndex].Value }
+        else { return }
+        if (& $checkOne $it $answer) {
+            Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+            & $showRow $it $ctx.List.SelectedItems[0]
+            & $hint
+            & $next
+        }
+    }
+    $list.Add_SelectedIndexChanged({ Invoke-FujiUi { if ($ctx.List.SelectedItems.Count -gt 0) { & $select $ctx.List.SelectedItems[0].Tag } } })
+    $days.Add_SelectedIndexChanged({ Invoke-FujiUi { & $load } })
+    $okBtn.Add_Click({ Invoke-FujiUi { & $confirm } })
+    $allBtn.Add_Click({ Invoke-FujiUi {
+                $open = @($ctx.Items | Where-Object { -not $_.Done -and -not $_.Old -and $_.Answer -ne '' })
+                if ($open.Count -eq 0) { return }
+                if ((Show-FujiChoice -Title (Get-FujiText 'gui.aiReviewAll') -Message (Get-FujiText 'gui.aiReviewAllConfirm' $open.Count) -Buttons @((Get-FujiText 'gui.aiReviewAll'), (Get-FujiText 'gui.cancel'))) -ne 0) { return }
+                foreach ($it in $open) { [void](& $checkOne $it ([string]$it.Answer)) }
+                Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+                & $load
+            } })
+    $rerunBtn.Add_Click({ Invoke-FujiUi {
+                $nos = @($ctx.Items | Where-Object { $_.Done -and $_.Row -gt 0 } | ForEach-Object { [int]$_.Row })
+                $rows = (Get-FujiRunRow -CsvRows $script:Ed.Csv.Rows -Header $script:Ed.Csv.Header).Rows
+                $r = New-FujiAiRerunCsv -Header $script:Ed.Csv.Header -Rows $rows -RowNos $nos
+                if ($r.Error) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewRerun') -Message $r.Error; return }
+                $path = Get-FujiEditorPath $script:Ed 'fujikyun_ai_rerun.csv'
+                try { Write-FujiTextFile -Path $path -Text $r.Text -Bom } catch { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewRerun') -Message $_.Exception.Message; return }
+                $script:Ui.CsvPath.Text = $path
+                Import-FujiCsvUi
+                Write-FujiUiLog -Message (Get-FujiText 'gui.aiReviewRerunDone' $r.Count $path) -Level 'ok'
+                $this.FindForm().Close()
+            } })
+    $closeBtn.Add_Click({ $this.FindForm().Close() })
+    $f.Add_KeyDown({
+            $e = $_
+            Invoke-FujiUi {
+                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and -not $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
+                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter -and $ctx.Value.Focused) { $e.SuppressKeyPress = $true; & $confirm; return }
+                if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $e.SuppressKeyPress = $true; & $next; return }
+                if ($ctx.Value.Focused) { return }
+                $d = -1
+                if ($e.KeyCode -ge [System.Windows.Forms.Keys]::D0 -and $e.KeyCode -le [System.Windows.Forms.Keys]::D9) { $d = [int]$e.KeyCode - [int][System.Windows.Forms.Keys]::D0 }
+                if ($e.KeyCode -ge [System.Windows.Forms.Keys]::NumPad0 -and $e.KeyCode -le [System.Windows.Forms.Keys]::NumPad9) { $d = [int]$e.KeyCode - [int][System.Windows.Forms.Keys]::NumPad0 }
+                if ($d -ge 0) {
+                    $idx = $d - 1
+                    if ($d -eq 0) { $idx = 9 }
+                    if ($idx -lt $ctx.Choices.Items.Count) { $ctx.Choices.SelectedIndex = $idx; $e.SuppressKeyPress = $true }
+                }
+            }
+        })
+    $f.Add_Shown({ Invoke-FujiUi { & $load; $ctx.List.Focus() } })
+    [void](Show-FujiDialog -Form $f)
+    $f.Dispose()
+}
+
+# The answers a person checked, read once per run (the first AI step of the run reads the file)
+$script:FujiAiMemoryRun = $null
+function Get-FujiAiRunMemory {
+    if ($null -eq $script:FujiAiMemoryRun) {
+        $script:FujiAiMemoryNotice = ''
+        $script:FujiAiMemoryRun = Read-FujiAiMemory -Directory $script:Ed.Directory
+        if ($script:FujiAiMemoryNotice) { Write-FujiUiLog -Message $script:FujiAiMemoryNotice -Level 'warn' }
+    }
+    return $script:FujiAiMemoryRun
 }
 
 # ===== gui/AiServer.ps1 =====
@@ -10393,6 +10653,9 @@ function New-FujiRunBar {
     $ai = New-FujiButton -Text (Get-FujiText 'gui.aiButton') -Tip (Get-FujiText 'gui.aiButtonTip')
     $ai.Add_Click({ Invoke-FujiUi { Show-FujiAiSettingDialog } })
     [void]$row.Controls.Add($ai)
+    $aiReview = New-FujiButton -Text (Get-FujiText 'gui.aiReviewButton') -Tip (Get-FujiText 'gui.aiReviewButtonTip')
+    $aiReview.Add_Click({ Invoke-FujiUi { if (-not (Test-FujiEditLocked)) { Show-FujiAiReviewDialog } } })
+    [void]$row.Controls.Add($aiReview)
     $touch = $false
     if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
     $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')
@@ -10762,7 +11025,7 @@ function New-FujiWinIo {
         Watch = { Update-FujiWatchPanel }
         Alarm = { param($Message) Show-FujiRunAlert -Message $Message }
         Notify = { Invoke-FujiNotify }
-        EndRun = { Close-FujiRunExcel; Clear-FujiBackground; Stop-FujiAiServer }
+        EndRun = { Close-FujiRunExcel; Clear-FujiBackground; Stop-FujiAiServer; $script:FujiAiMemoryRun = $null }
         Break = { param($Message) Invoke-FujiUiBreak -Message $Message }
         SetField = { param($Request) Invoke-FujiRobot { Set-FujiUiaField -Request $Request } }
         GetField = { param($Request) Get-FujiUiaField -Request $Request }
@@ -10774,6 +11037,9 @@ function New-FujiWinIo {
         FocusIsPassword = { [bool](Invoke-FujiUia -Mode 'ISPASSWORD') }
         AiChat = { param($Body) Invoke-FujiAiRunChat -Body $Body }
         AiPick = { param($Caption, $Message, $Options, $Initial) Invoke-FujiRobot { Show-FujiRunAiPick -Caption $Caption -Message $Message -Options $Options -Initial $Initial } }
+        AiRecall = { param($Key, $Hash) Get-FujiAiRemembered -Memory (Get-FujiAiRunMemory) -Key $Key -Hash $Hash }
+        AiExamples = { param($Key, $Source) Select-FujiAiExample -Memory (Get-FujiAiRunMemory) -Key $Key -Source $Source -Max 3 }
+        AiSpot = { (Get-Random -Maximum 100) -lt (Get-FujiAiSpotSetting -Settings $script:Settings) }
         AiTookFocus = { $f = $script:FujiAiShowedWindow; $script:FujiAiShowedWindow = $false; return $f }
         AiReview = { param($Row) [void](Add-FujiAiReviewRow -Directory $script:Ed.Directory -Now (Get-Date) -Row $Row) }
         FileOp = { param($Request) Invoke-FujiFileOperation -Op $Request.Op -Source $Request.Source -Dest $Request.Dest -Overwrite $Request.Overwrite -AppDirectory $Request.AppDirectory }

@@ -1,6 +1,6 @@
 {
   "sentinel": "ふじキュン",
-  "textVersion": 13,
+  "textVersion": 14,
   "date": {
     "eras": [
       "令和",
@@ -297,6 +297,40 @@
     "partialMarker": "「{0}」からは始められないよ。ブロックの始まりか、ふつうのステップを選んでね"
   },
   "gui": {
+    "aiReviewKind": {
+      "low": "自信が低い",
+      "noLetter": "記号で答えず",
+      "notInSource": "文に無い値",
+      "empty": "文が空",
+      "spot": "抜き取り"
+    },
+    "aiSpotLabel": "抜き取りの割合（%）",
+    "aiSpotNote": "0〜20。自信が高い答えのうち、この割合だけ「あとで確認」の一覧にも書くよ（AI の当たり具合が分かる）",
+    "aiReviewButton": "🔍 AI の見直し",
+    "aiReviewButtonTip": "あとで確認の一覧を見て、AI の答えを確かめる・直す（確かめた答えは覚えて次から使う）",
+    "aiReviewTitle": "AI の見直し: {0}",
+    "aiReviewDaysLabel": "読む範囲",
+    "aiReviewDays": "{0} 日",
+    "aiReviewCount": "{0} 件（まだ確かめていない: {1} 件）",
+    "aiReviewColState": "状態",
+    "aiReviewColKind": "種類",
+    "aiReviewColP": "確率",
+    "aiReviewColName": "変数",
+    "aiReviewColAnswer": "AI の答え",
+    "aiReviewColSource": "読ませた文",
+    "aiReviewStateOpen": "未",
+    "aiReviewStateDone": "済",
+    "aiReviewStateOld": "古い形式",
+    "aiReviewCheck": "確かめる（Enter）",
+    "aiReviewAll": "残りは全部 AI の答えでよい",
+    "aiReviewAllConfirm": "まだ確かめていない {0} 件を、AI の答えのまま確かめたことにするよ。よい？",
+    "aiReviewRerun": "確かめた行だけ再実行の CSV を作る",
+    "aiReviewRerunDone": "確かめた {0} 行の再実行の CSV を作って読み込んだよ: {1}（▶ 実行で、AI の手順は確かめた答えで進むよ）",
+    "aiReviewOldNote": "古い形式の一覧なので、答えを覚えられないよ（この件は見るだけ）",
+    "aiReviewNoStep": "マクロにこの AI の手順が見つからないよ（選択肢や項目を変えた？）。この件は覚えられないよ",
+    "aiReviewDoneFailed": "覚えたけれど、一覧に「済」を書けなかったよ（Excel で開いていない？）",
+    "aiReviewSpot": "抜き取り: {1} 件中 {0} 件が AI の答えのまま",
+    "aiReviewBand": "確率 {0}〜{1}: {3} 件中 {2} 件が AI のまま",
     "aiButton": "🤖 AI",
     "aiButtonTip": "AI の置き場所・この PC の写し・試しに聞く",
     "aiTitle": "AI の設定",

@@ -196,6 +196,23 @@ function Set-FujiAiFolderSetting {
     $Settings['ai']['folder'] = ([string]$Folder).Trim()
 }
 
+# How many of the sure answers also go to the review list, in percent (0..20, 5 when not set)
+function Get-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    $n = 5
+    if ($Settings.Contains('ai') -and $Settings['ai'] -is [System.Collections.IDictionary] -and $Settings['ai'].Contains('spot')) {
+        $v = 0
+        if ([int]::TryParse([string]$Settings['ai']['spot'], [ref]$v)) { $n = $v }
+    }
+    return [Math]::Min(20, [Math]::Max(0, $n))
+}
+
+function Set-FujiAiSpotSetting {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [int]$Percent)
+    if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
+    $Settings['ai']['spot'] = [Math]::Min(20, [Math]::Max(0, $Percent))
+}
+
 # ai.json of a shared or copied AI folder -> @{ AiVersion; Model; Files; ServerArgs }; throws when it cannot be used
 function Read-FujiAiManifest {
     param([Parameter(Mandatory)][string]$Path)

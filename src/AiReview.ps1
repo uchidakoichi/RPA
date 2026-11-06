@@ -217,3 +217,13 @@ function Get-FujiAiReviewSummary {
     }
     return @{ SpotTotal = $spotTotal; SpotKept = $spotKept; Bands = $bands }
 }
+
+# Unchecked by probability (lowest first), then spot checks, then checked ones
+function Get-FujiAiReviewOrder {
+    param([object[]]$Items)
+    $p = { $v = 0.0; [void][double]::TryParse([string]$_.P, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$v); $v }
+    $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' } | Sort-Object -Property @{ Expression = $p })
+    $spot = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'spot' } | Sort-Object -Property @{ Expression = $p })
+    $done = @($Items | Where-Object { $_.Done })
+    return @($open + $spot + $done)
+}
