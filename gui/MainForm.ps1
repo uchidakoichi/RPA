@@ -86,6 +86,7 @@ function Show-FujiMainForm {
             }
         })
     Update-FujiAll
+    Update-FujiAiAvailableUi
     Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
@@ -302,6 +303,7 @@ function New-FujiTopPanel {
     $addLabel = New-FujiRowLabel (Get-FujiText 'gui.add')
     $indent = $addLabel.PreferredWidth + $addLabel.Margin.Horizontal
     $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $script:Ui.AiPalette = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $labelWidth = 0
     foreach ($group in $script:FujiCommands['palette']) {
         $gl = New-FujiLabel -Text ([string]$group['label'])
@@ -325,7 +327,9 @@ function New-FujiTopPanel {
             $btn.BackColor = Get-FujiTint -Color $color -Amount 0.88
             $btn.Add_Click({ $cmdName = [string]$this.Tag; Invoke-FujiUi { Add-FujiStepUi -Cmd $cmdName } })
             [void]$flow.Controls.Add($btn)
+            if ([string]$group['category'] -eq 'ai') { $script:Ui.AiPalette.Add($btn) }
         }
+        if ([string]$group['category'] -eq 'ai') { $script:Ui.AiPalette.Add($labels[$i]); $script:Ui.AiPalette.Add($flow) }
         $flow.Add_Resize({ $wrapFlow = $this; Invoke-FujiUi { Update-FujiWrapHeight -Flow $wrapFlow } })
         $gl = $labels[$i]
         $gl.AutoSize = $false

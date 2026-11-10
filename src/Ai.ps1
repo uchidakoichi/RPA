@@ -190,6 +190,12 @@ function Get-FujiAiFolderSetting {
     return ''
 }
 
+# whether this person has chosen an AI folder (the AI commands are gray without one)
+function Test-FujiAiAvailable {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    return [bool](Get-FujiAiFolderSetting -Settings $Settings)
+}
+
 function Set-FujiAiFolderSetting {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [AllowEmptyString()][string]$Folder)
     if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }

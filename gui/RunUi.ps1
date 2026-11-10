@@ -61,6 +61,7 @@ function New-FujiRunBar {
     $aiReview = New-FujiButton -Text (Get-FujiText 'gui.aiReviewButton') -Tip (Get-FujiText 'gui.aiReviewButtonTip')
     $aiReview.Add_Click({ Invoke-FujiUi { if (-not (Test-FujiEditLocked)) { Show-FujiAiReviewDialog } } })
     [void]$row.Controls.Add($aiReview)
+    $script:Ui.AiReviewButton = $aiReview
     $touch = $false
     if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
     $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')

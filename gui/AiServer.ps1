@@ -190,20 +190,15 @@ function Clear-FujiAiLeftover {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }
 
-# Io.AiChat of a run: the first AI step chooses the shared folder if none is set, copies when
-# needed (copy window), and starts llama-server; later steps ask the same server
+# Io.AiChat of a run: the first AI step copies when needed (copy window) and starts
+# llama-server; later steps ask the same server. Without a chosen AI folder the run stops (the
+# folder is chosen in the AI settings, not in the middle of a run)
 function Invoke-FujiAiRunChat {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Body)
     $srv = $script:FujiAiServer
     if ($null -eq $srv -or $srv.Process.HasExited) {
         $folder = Get-FujiAiFolderSetting -Settings $script:Settings
-        if (-not $folder) {
-            $script:FujiAiShowedWindow = $true
-            $folder = Select-FujiAiFolderUi
-            if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
-            Set-FujiAiFolderSetting -Settings $script:Settings -Folder $folder
-            Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
-        }
+        if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
         $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
         $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
         [System.Windows.Forms.Application]::DoEvents()

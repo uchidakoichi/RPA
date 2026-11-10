@@ -244,6 +244,12 @@ function Get-FujiAiFolderSetting {
     return ''
 }
 
+# whether this person has chosen an AI folder (the AI commands are gray without one)
+function Test-FujiAiAvailable {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    return [bool](Get-FujiAiFolderSetting -Settings $Settings)
+}
+
 function Set-FujiAiFolderSetting {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [AllowEmptyString()][string]$Folder)
     if (-not $Settings.Contains('ai') -or $Settings['ai'] -isnot [System.Collections.IDictionary]) { $Settings['ai'] = [ordered]@{} }
@@ -6290,7 +6296,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 14
+$script:FujiTextVersion = 15
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -6659,7 +6665,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.10'
+$script:FujiAppVersion = '2026.11.10.2'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -7086,6 +7092,27 @@ function Show-FujiAiSettingDialog {
         Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
     }
     $f.Dispose()
+    Update-FujiAiAvailableUi
+}
+
+# The AI commands and the review are usable only when this person has chosen an AI folder:
+# without one they are gray (the rest of the app does not need the AI). The name and the row of
+# the AI commands say how to turn them on (a gray button shows no tip of its own)
+function Update-FujiAiAvailableUi {
+    $on = Test-FujiAiAvailable -Settings $script:Settings
+    $tip = if ($on) { '' } else { Get-FujiText 'gui.aiOffTip' }
+    if ($null -ne $script:Ui['AiPalette']) {
+        foreach ($c in $script:Ui.AiPalette) {
+            if ($c -is [System.Windows.Forms.Button]) {
+                # a flat button keeps its colours when off, so it is made gray to look off
+                $c.Enabled = $on
+                $edge = if ($on) { Get-FujiColor $script:CategoryColors['ai'] } else { Get-FujiColor '#bdbdbd' }
+                $c.FlatAppearance.BorderColor = $edge
+                $c.BackColor = if ($on) { Get-FujiTint -Color $edge -Amount 0.88 } else { Get-FujiColor '#eeeeee' }
+            } else { $script:Ui.ToolTip.SetToolTip($c, $tip) }
+        }
+    }
+    if ($null -ne $script:Ui['AiReviewButton']) { $script:Ui.AiReviewButton.Enabled = $on }
 }
 
 # ===== gui/AiReview.ps1 =====
@@ -7513,20 +7540,15 @@ function Clear-FujiAiLeftover {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }
 
-# Io.AiChat of a run: the first AI step chooses the shared folder if none is set, copies when
-# needed (copy window), and starts llama-server; later steps ask the same server
+# Io.AiChat of a run: the first AI step copies when needed (copy window) and starts
+# llama-server; later steps ask the same server. Without a chosen AI folder the run stops (the
+# folder is chosen in the AI settings, not in the middle of a run)
 function Invoke-FujiAiRunChat {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Body)
     $srv = $script:FujiAiServer
     if ($null -eq $srv -or $srv.Process.HasExited) {
         $folder = Get-FujiAiFolderSetting -Settings $script:Settings
-        if (-not $folder) {
-            $script:FujiAiShowedWindow = $true
-            $folder = Select-FujiAiFolderUi
-            if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
-            Set-FujiAiFolderSetting -Settings $script:Settings -Folder $folder
-            Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
-        }
+        if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
         $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
         $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
         [System.Windows.Forms.Application]::DoEvents()
@@ -9120,6 +9142,7 @@ function Show-FujiMainForm {
             }
         })
     Update-FujiAll
+    Update-FujiAiAvailableUi
     Initialize-FujiSchedule
     $script:StartMarks.Add($script:StartWatch.Elapsed.TotalSeconds)
     [System.Windows.Forms.Application]::Run($form)
@@ -9336,6 +9359,7 @@ function New-FujiTopPanel {
     $addLabel = New-FujiRowLabel (Get-FujiText 'gui.add')
     $indent = $addLabel.PreferredWidth + $addLabel.Margin.Horizontal
     $labels = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $script:Ui.AiPalette = New-Object -TypeName 'System.Collections.Generic.List[object]'
     $labelWidth = 0
     foreach ($group in $script:FujiCommands['palette']) {
         $gl = New-FujiLabel -Text ([string]$group['label'])
@@ -9359,7 +9383,9 @@ function New-FujiTopPanel {
             $btn.BackColor = Get-FujiTint -Color $color -Amount 0.88
             $btn.Add_Click({ $cmdName = [string]$this.Tag; Invoke-FujiUi { Add-FujiStepUi -Cmd $cmdName } })
             [void]$flow.Controls.Add($btn)
+            if ([string]$group['category'] -eq 'ai') { $script:Ui.AiPalette.Add($btn) }
         }
+        if ([string]$group['category'] -eq 'ai') { $script:Ui.AiPalette.Add($labels[$i]); $script:Ui.AiPalette.Add($flow) }
         $flow.Add_Resize({ $wrapFlow = $this; Invoke-FujiUi { Update-FujiWrapHeight -Flow $wrapFlow } })
         $gl = $labels[$i]
         $gl.AutoSize = $false
@@ -10721,6 +10747,7 @@ function New-FujiRunBar {
     $aiReview = New-FujiButton -Text (Get-FujiText 'gui.aiReviewButton') -Tip (Get-FujiText 'gui.aiReviewButtonTip')
     $aiReview.Add_Click({ Invoke-FujiUi { if (-not (Test-FujiEditLocked)) { Show-FujiAiReviewDialog } } })
     [void]$row.Controls.Add($aiReview)
+    $script:Ui.AiReviewButton = $aiReview
     $touch = $false
     if ($null -ne $script:Settings -and $script:Settings.Contains('ui') -and $script:Settings['ui'].Contains('touchPause')) { $touch = [string]$script:Settings['ui']['touchPause'] -eq 'true' }
     $script:Ui.TouchCheck = New-FujiCheck -Text (Get-FujiText 'gui.touchPause') -Checked $touch -Tip (Get-FujiText 'gui.touchPauseTip')
