@@ -6659,7 +6659,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.06'
+$script:FujiAppVersion = '2026.11.10'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -8023,7 +8023,7 @@ $script:LogLinks = New-Object -TypeName 'System.Collections.Generic.List[object]
 $script:LogDropped = 0
 $script:CategoryColors = @{
     input = '#1e88e5'; wait = '#c0a000'; flow = '#fb8c00'; var = '#3949ab'
-    mouse = '#00897b'; window = '#8e24aa'; group = '#795548'; note = '#43a047'
+    mouse = '#00897b'; window = '#8e24aa'; group = '#795548'; note = '#43a047'; ai = '#d81b60'
 }
 $script:CategoryBack = @{ group = '#f6f1ee'; note = '#f5fbf5' }
 $script:LogColors = @{ info = '#ece6f0'; ok = '#a5e3a8'; warn = '#ffe082'; error = '#ff8a9a'; run = '#8fd3ff' }

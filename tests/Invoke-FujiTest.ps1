@@ -2096,6 +2096,14 @@ foreach ($f in $keyFiles) {
 Assert-True ($seen -gt 300) ('text keys found in the sources ({0})' -f $seen)
 Assert-True ($missing.Count -eq 0) ('every text key exists in fujikyun_ja.json: ' + ($missing -join ', '))
 
+# every command category has a colour in the window (a category without one stops the window from opening)
+$commonText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'Common.ps1'))
+$colorBlock = [regex]::Match($commonText, '\$script:CategoryColors = @\{([^}]*)\}').Groups[1].Value
+$colorKeys = @([regex]::Matches($colorBlock, '(\w+)\s*=') | ForEach-Object { $_.Groups[1].Value })
+$cats = @($script:FujiCommands['palette'] | ForEach-Object { [string]$_['category'] }) + @(foreach ($c in Get-FujiCommandName) { [string](Get-FujiCommandDef $c)['category'] })
+$noColor = @($cats | Sort-Object -Unique | Where-Object { $colorKeys -notcontains $_ })
+Assert-True ($noColor.Count -eq 0) ('every command category has a colour (gui/Common.ps1 CategoryColors): ' + ($noColor -join ', '))
+
 # ----------------------------------------------------------------- source rules
 # a second start (a scheduled task while the app is open) must not stop the open app's AI server:
 # leftovers are cleared only once this app holds the folder's lock

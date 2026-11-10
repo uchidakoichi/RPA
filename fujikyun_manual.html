@@ -6146,6 +6146,10 @@ footer { color: var(--muted); font-size: 13px; margin-top: 48px; padding-top: 12
 <p>使っている版は、タイトルバーの「（バージョン …）」か、<strong>［🩺 環境チェック］</strong> の「ふじキュンのバージョン」で確かめられます。数字はその版を出した日付（年.月.日）です。</p>
 <p>新しい版にするときは、<code>fujikyun.ps1</code> と <code>fujikyun_ja.json</code> などの JSON を、いっしょに置き換えてください。マクロ（<code>fujikyun_macros.json</code>）と予定・設定（<code>fujikyun_settings.json</code>）はそのまま使えます。</p>
 <hr>
+<h2 id="20261110">2026.11.10</h2>
+<p><strong>直したこと</strong></p>
+<ul><li>2026.11.05 から、起動の途中で「引数が空の文字列であるため、パラメータ 'Hex' にバインドできません」と出て、画面が開かなかったのを直しました（AI のコマンドの分類に色が決まっていなかったため）。</li></ul>
+<hr>
 <h2 id="20261106">2026.11.06</h2>
 <p><strong>新しくなったこと</strong></p>
 <ul><li><strong>🔍 AI の見直し</strong> を足しました。「あとで確認」の一覧を、自信の低い順に、数字キーと Enter だけで確かめられます。<ul><li>確かめた答えは覚えて（<code>fujikyun_ai_answers.json</code>）、同じ文には次から AI を使わずにその答えを入れます。似た文には、例として AI に見せます。</li><li>確かめた行だけの CSV を作って、その行だけ再実行できます。</li><li>［🤖 AI］の設定に「抜き取りの割合」を足しました。自信が高い答えの一部も一覧に書き、AI の当たり具合が分かるようにします。</li></ul></li></ul>
