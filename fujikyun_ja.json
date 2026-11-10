@@ -1,6 +1,6 @@
 {
   "sentinel": "ふじキュン",
-  "textVersion": 14,
+  "textVersion": 15,
   "date": {
     "eras": [
       "令和",
@@ -333,6 +333,7 @@
     "aiReviewBand": "確率 {0}〜{1}: {3} 件中 {2} 件が AI のまま",
     "aiButton": "🤖 AI",
     "aiButtonTip": "AI の置き場所・この PC の写し・試しに聞く",
+    "aiOffTip": "AI の置き場所が選ばれていないので使えません。実行の段の［🤖 AI］で、共有ドライブの AI フォルダを選ぶと使えます",
     "aiTitle": "AI の設定",
     "aiFolderLabel": "共有ドライブの AI フォルダ（ai.json があるフォルダ）。各自が一度選ぶよ。",
     "aiFolderPick": "選ぶ…",

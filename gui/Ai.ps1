@@ -224,4 +224,25 @@ function Show-FujiAiSettingDialog {
         Save-FujiSetting -Directory $script:Ed.Directory -Settings $script:Settings
     }
     $f.Dispose()
+    Update-FujiAiAvailableUi
+}
+
+# The AI commands and the review are usable only when this person has chosen an AI folder:
+# without one they are gray (the rest of the app does not need the AI). The name and the row of
+# the AI commands say how to turn them on (a gray button shows no tip of its own)
+function Update-FujiAiAvailableUi {
+    $on = Test-FujiAiAvailable -Settings $script:Settings
+    $tip = if ($on) { '' } else { Get-FujiText 'gui.aiOffTip' }
+    if ($null -ne $script:Ui['AiPalette']) {
+        foreach ($c in $script:Ui.AiPalette) {
+            if ($c -is [System.Windows.Forms.Button]) {
+                # a flat button keeps its colours when off, so it is made gray to look off
+                $c.Enabled = $on
+                $edge = if ($on) { Get-FujiColor $script:CategoryColors['ai'] } else { Get-FujiColor '#bdbdbd' }
+                $c.FlatAppearance.BorderColor = $edge
+                $c.BackColor = if ($on) { Get-FujiTint -Color $edge -Amount 0.88 } else { Get-FujiColor '#eeeeee' }
+            } else { $script:Ui.ToolTip.SetToolTip($c, $tip) }
+        }
+    }
+    if ($null -ne $script:Ui['AiReviewButton']) { $script:Ui.AiReviewButton.Enabled = $on }
 }

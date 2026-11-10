@@ -145,7 +145,11 @@ try {
     Save-FujiSetting -Directory $work -Settings $alSet
     Assert-Equal 'full' (Get-FujiAlertSetting -Settings (Read-FujiSetting -Directory $work) -Kind 'confirm').style 'alert: kept in the settings file'
     Assert-Equal '' (Get-FujiAiFolderSetting -Settings $alSet) 'ai: no AI folder set yet'
+    Assert-True (-not (Test-FujiAiAvailable -Settings $alSet)) 'ai: without an AI folder the AI commands are off (gray)'
+    Set-FujiAiFolderSetting -Settings $alSet -Folder '  '
+    Assert-True (-not (Test-FujiAiAvailable -Settings $alSet)) 'ai: a blank AI folder is still off'
     Set-FujiAiFolderSetting -Settings $alSet -Folder ' \\server\share\AI '
+    Assert-True (Test-FujiAiAvailable -Settings $alSet) 'ai: with an AI folder the AI commands are on'
     Save-FujiSetting -Directory $work -Settings $alSet
     Assert-Equal '\\server\share\AI' (Get-FujiAiFolderSetting -Settings (Read-FujiSetting -Directory $work)) 'ai: AI folder kept in the settings file'
     Assert-Equal 5 (Get-FujiAiSpotSetting -Settings $alSet) 'ai review: spot setting default 5'
@@ -2103,6 +2107,15 @@ $colorKeys = @([regex]::Matches($colorBlock, '(\w+)\s*=') | ForEach-Object { $_.
 $cats = @($script:FujiCommands['palette'] | ForEach-Object { [string]$_['category'] }) + @(foreach ($c in Get-FujiCommandName) { [string](Get-FujiCommandDef $c)['category'] })
 $noColor = @($cats | Sort-Object -Unique | Where-Object { $colorKeys -notcontains $_ })
 Assert-True ($noColor.Count -eq 0) ('every command category has a colour (gui/Common.ps1 CategoryColors): ' + ($noColor -join ', '))
+
+# without an AI folder the AI commands are gray, and a run with an AI step stops instead of asking
+# for the folder in the middle of the run (gui/MainForm.ps1 grays the palette category 'ai')
+$aiPal = @($script:FujiCommands['palette'] | Where-Object { [string]$_['category'] -eq 'ai' })
+$aiPalCmds = @(foreach ($c in $aiPal[0]['cmds']) { [string]$c })
+Assert-True ($aiPal.Count -eq 1 -and $aiPalCmds -contains 'AI_CHOOSE' -and $aiPalCmds -contains 'AI_EXTRACT') 'ai: the AI commands are one palette category ai (grayed together)'
+$aiSrvText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'AiServer.ps1'))
+$aiRunChat = [regex]::Match($aiSrvText, '(?s)function Invoke-FujiAiRunChat \{.*?\r?\n\}').Value
+Assert-True ($aiRunChat -ne '' -and $aiRunChat -notmatch 'Select-FujiAiFolderUi' -and $aiRunChat -match 'run\.aiNoFolder') 'ai: a run without an AI folder stops without a folder window'
 
 # ----------------------------------------------------------------- source rules
 # a second start (a scheduled task while the app is open) must not stop the open app's AI server:
