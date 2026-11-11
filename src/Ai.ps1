@@ -9,6 +9,8 @@
 #  it is copied to %LOCALAPPDATA%\fujikyun\ai once and again when the version changes.
 # ---------------------------------------------------------------------------------------------
 $script:FujiAiLetters = 'ABCDEFGHIJ'
+# tokens one AI_EXTRACT item may take: its name and quotes, and a value of 100 characters
+$script:FujiAiExtractItemTokens = 130
 $script:FujiAiSourceMax = 3000
 $script:FujiAiReviewSourceMax = 100
 
@@ -97,7 +99,7 @@ function Read-FujiAiChoice {
     foreach ($lp in $top) {
         $tok = ([string]$lp.token).Trim().ToUpperInvariant()
         if ($tok.Length -ne 1) { continue }
-        $i = $script:FujiAiLetters.IndexOf($tok)
+        $i = $script:FujiAiLetters.IndexOf($tok, [System.StringComparison]::Ordinal)
         if ($i -ge 0 -and $i -lt $Options.Count) { $mass[$i] += [Math]::Exp([double]$lp.logprob) }
     }
     $sum = 0.0
@@ -130,7 +132,9 @@ function New-FujiAiExtractBody {
     $src = Limit-FujiAiSource -Source $Source
     return [ordered]@{
         messages = @(@{ role = 'system'; content = (Get-FujiText 'run.aiExtractPrompt' (@($lines) -join "`n") $extra) }, @{ role = 'user'; content = $src.Text })
-        temperature = 0; max_tokens = [Math]::Min(600, 60 * $Items.Count)
+        # room for every value at its longest (100 characters, about one token each in Japanese) and
+        # the JSON around it: a value cut off would leave JSON that cannot be read
+        temperature = 0; max_tokens = 20 + $script:FujiAiExtractItemTokens * $Items.Count
         response_format = @{ type = 'json_schema'; json_schema = @{ name = 'answer'; schema = [ordered]@{ type = 'object'; required = $names; additionalProperties = $false; properties = $props } } }
         chat_template_kwargs = @{ enable_thinking = $false }
         Truncated = $src.Cut
@@ -189,7 +193,8 @@ function Add-FujiAiReviewRow {
             }
             return $path
         } catch {
-            if ($n -ge 9 -or -not (Test-FujiFileBusy -Exception $_.Exception) -and -not ([string]$_.Exception.Message).Contains($path)) { throw }
+            # the next name only for a file in use; anything else (the folder cannot be written) at once
+            if ($n -ge 9 -or (-not (Test-FujiFileBusy -Exception $_.Exception) -and -not ([string]$_.Exception.Message).Contains($path))) { throw }
         }
     }
 }

@@ -1339,14 +1339,15 @@ function Add-FujiRunAiReview {
     param([hashtable]$Run, [string]$Cmd, [string]$Name, [string]$Source, [string]$Answer, [string]$P, [string]$Probs, [string]$Reason, [string]$Kind = '', [string]$Key = '', [string]$Hash = '', [switch]$Checked)
     $row = Get-FujiRunCurrentRow $Run
     $rowNo = ''
-    if ($row.No -gt 0) { $rowNo = [string]$row.No }
+    $print = ''
+    if ($row.No -gt 0) { $rowNo = [string]$row.No; $print = Get-FujiAiRowPrint -Data ([string[]]$row.Data) -Header $Run.Header }
     $time = (& $Run.Io.Now).ToString('yyyy-MM-dd HH:mm:ss')
     $mark = ''
     if ($Checked) { $mark = $time }
     try {
         & $Run.Io.AiReview ([ordered]@{ time = $time; macro = [string]$Run.Macro.name; step = [string]($Run.StepIndex + 1); row = $rowNo
                 command = $Cmd; name = $Name; source = $Source; answer = $Answer; p = $P; probs = $Probs; reason = $Reason
-                kind = $Kind; macroId = (Get-FujiRunMacroId $Run); key = $Key; hash = $Hash; done = $mark; rerun = $mark })
+                kind = $Kind; macroId = (Get-FujiRunMacroId $Run); key = $Key; hash = $Hash; done = $mark; rerun = $mark; runMacro = [string]$Run.Macro.id; rowPrint = $print })
     } catch [System.OperationCanceledException] {
         throw
     } catch {
