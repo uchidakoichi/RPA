@@ -40,6 +40,7 @@ try {
     $io.AiRecall = { param($Key, $Hash) Get-FujiAiRemembered -Memory $script:memory -Key $Key -Hash $Hash }
     $io.AiExamples = { param($Key, $Source) Select-FujiAiExample -Memory $script:memory -Key $Key -Source $Source -Max 3 }
     $io.AiSpot = { $false }
+    $io.AiRemember = { param($Key, $Hash, $Answer, $Source) Add-FujiAiRemembered -Memory $script:memory -Key $Key -Hash $Hash -Answer $Answer -ExampleText $Source }
     $io.AiPick = { param($Caption, $Message, $Options, $Initial) $logs.Add('PICK ' + $Initial); @{ Choice = 'continue'; Value = $Initial } }
     $io.AiReview = { param($Row) $reviews.Add($Row); [void](Add-FujiAiReviewRow -Directory $work -Now (Get-Date) -Row $Row) }
     $runOne = {

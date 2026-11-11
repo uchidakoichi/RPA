@@ -488,7 +488,7 @@ try {
     Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) 'ai: review csv has a BOM'
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p1).Text).Records
     Assert-Equal 3 $recs.Count 'ai: review csv header + 2 rows'
-    Assert-Equal 16 $recs[0].Count 'ai: review csv 16 columns'
+    Assert-Equal 17 $recs[0].Count 'ai: review csv 17 columns'
     Assert-Equal ("a,b`n""c""" + ('y' * 93)) $recs[1][6] 'ai: review csv keeps comma, quote, newline; source cut to 100'
     Assert-Equal "'=bad" $recs[2][7] 'ai: review csv answer cannot run as a formula'
     # the day's list is open in Excel (locked): the line goes to the next free name
@@ -523,7 +523,11 @@ try {
     Assert-True ($h1.Length -eq 16 -and $h1 -eq (Get-FujiAiTextHash -Text ([string][char]0xFF41 + 'bc'))) 'ai review: hash ignores width, spaces, newlines'
     $k1 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "x`ny" }
     $k2 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "y`nx" }
-    Assert-True ($k1.Length -eq 16 -and $k1 -ne $k2) 'ai review: step key changes with option order'
+    Assert-True ($k1.Length -eq 16 -and $k1 -eq $k2) 'ai review: step key stays when the options change'
+    Assert-True ($k1 -ne (Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'other'; options = "x`ny" })) 'ai review: step key differs per variable'
+    $k1Old = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "x`ny" } -Legacy
+    Assert-True ($k1Old -ne $k1 -and $k1Old -ne (Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings @{ name = 'desk'; options = "y`nx" } -Legacy)) 'ai review: the key of before changed with the options'
+    Assert-Equal (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm1' -Settings @{ items = "name: a`nphone" }) (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm1' -Settings @{ items = "name: a`nphone`naddress" }) 'ai review: extract step key stays when the items change'
     Assert-True ((Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm1' -Settings @{ items = "name: a`nphone" }) -ne (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm2' -Settings @{ items = "name: a`nphone" })) 'ai review: step key differs per macro'
     $mem = Read-FujiAiMemory -Directory $rvWork
     Assert-Equal 0 $mem.Count 'ai review: no memory yet'
@@ -557,7 +561,7 @@ try {
     [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:01') -Row ([ordered]@{ time = '2026-11-10 09:01:00'; macro = 'main'; step = 2; row = 1; command = 'AI_CHOOSE'; name = 'desk'; source = 'y'; answer = 'garbage'; p = '0.90'; probs = ''; reason = 'spot'; kind = 'spot'; macroId = 'main'; key = $k1; hash = 'h9' }))
     [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:02') -Row ([ordered]@{ time = '2026-11-10 09:02:00'; macro = 'other'; step = 1; row = 1; command = 'AI_CHOOSE'; name = 'v'; source = 'z'; answer = 'a'; p = '0.1'; probs = ''; reason = 'low'; kind = 'low'; macroId = 'other'; key = 'k'; hash = 'h' }))
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16).Text).Records
-    Assert-True ($recs[0].Count -eq 16 -and $recs[1].Count -eq 16 -and $recs[1][6] -eq $src) 'ai review: 16 columns written, comma and newline kept'
+    Assert-True ($recs[0].Count -eq 17 -and $recs[1].Count -eq 17 -and $recs[1][6] -eq $src -and $recs[1][16] -eq '') 'ai review: 17 columns written, comma and newline kept'
     $items = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 2 -Now ([datetime]'2026-11-10 12:00'))
     Assert-Equal 3 $items.Count 'ai review: items of this macro over two days'
     $old = @($items | Where-Object { $_.Old })
@@ -609,6 +613,75 @@ try {
         @{ Done = 'x'; Row = 1; Kind = 'spot'; Answer = 'a'; Final = 'a' }, @{ Done = 'x'; Row = 2; Kind = 'spot'; Answer = 'a'; Final = 'b' },
         @{ Done = 'x'; Row = 3; Kind = 'low'; Answer = 'a'; Final = 'a' }, @{ Done = ''; Row = 4; Kind = 'low'; Answer = 'a' }, @{ Done = 'x'; Row = 0; Kind = 'low'; Answer = 'a'; Final = 'b' })
     Assert-Equal @(2, 3) @($rn) 'ai review: re-run rows leave out unchanged spot checks and unchecked items'
+    # rows given to a re-run before are left out (unless asked for); an answer picked in the run was used there
+    $ri = @(
+        @{ Done = 'x'; Row = 1; Kind = 'low'; Answer = 'a'; Final = 'b'; Rerun = ''; Time = 't1' }, @{ Done = 'x'; Row = 2; Kind = 'low'; Answer = 'a'; Final = 'b'; Rerun = 'r'; Time = 't2' },
+        @{ Done = 'x'; Row = 3; Kind = 'asked'; Answer = 'a'; Final = 'b'; Rerun = 't3'; Time = 't3' }, @{ Done = 'x'; Row = 4; Kind = 'asked'; Answer = 'a'; Final = 'c'; Rerun = ''; Time = 't4' },
+        @{ Done = 'x'; Row = 5; Kind = 'asked'; Answer = 'a'; Final = 'c'; Rerun = 'later'; Time = 't5' })
+    $rn1 = Get-FujiAiRerunRowNo -Items $ri
+    $rn2 = Get-FujiAiRerunRowNo -Items $ri -IncludeSent
+    Assert-Equal @(1, 4) @($rn1) 'ai review: re-run leaves out rows given before and answers picked in the run'
+    Assert-Equal @(1, 2, 4, 5) @($rn2) 'ai review: re-run with the rows given before'
+    Assert-Equal 2 (Get-FujiAiRerunItem -Items $ri).Count 'ai review: re-run items'
+    # a list from before the "rerun" column (16 columns) can still be checked; a marked line is made wide
+    $head16 = ((Get-FujiText 'run.aiReviewHeader') -split ',')[0..15] -join ','
+    $p16old = Join-Path $logs 'ai_review_2026-11-08.csv'
+    Write-FujiTextFile -Path $p16old -Text ($head16 + "`r`n2026-11-08 10:00:00,main,1,5,AI_CHOOSE,desk,some text,resident,0.30,,low,low,main,kk,hh,`r`n2026-11-08 10:01:00,main,1,6,AI_CHOOSE,desk,more text,garbage,0.30,,low,low,main,kk,hh2,`r`n") -Bom
+    $it16 = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-08 12:00'))
+    Assert-True ($it16.Count -eq 2 -and -not $it16[0].Old -and $it16[0].Rerun -eq '' -and $it16[0].Row -eq 5) 'ai review: a 16-column list is not old'
+    Assert-Equal 1 (Set-FujiAiReviewDoneMany -Items @($it16[0]) -Time 'D1') 'ai review: done on a 16-column line'
+    $r16 = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16old).Text).Records
+    Assert-True ($r16[0].Count -eq 17 -and $r16[1].Count -eq 17 -and $r16[1][15] -eq 'D1' -and $r16[1][16] -eq '' -and $r16[2].Count -eq 16) 'ai review: the marked line and the header made wide, the other line left'
+    Assert-Equal 1 (Set-FujiAiReviewDoneMany -Items @($it16[0]) -Time 'R1' -Column 'rerun') 'ai review: rerun time written'
+    $it16b = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-08 12:00'))
+    Assert-True ($it16b[0].Done -eq 'D1' -and $it16b[0].Rerun -eq 'R1' -and $it16[0].Rerun -eq 'R1' -and $it16b[1].Done -eq '') 'ai review: rerun time read back, done kept'
+    # the checked answer is changed after its row was given to a re-run: the row can be run again
+    $it16b[0]['Reopen'] = $true
+    [void](Set-FujiAiReviewDoneMany -Items @($it16b[0]) -Time 'D2')
+    $it16c = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-08 12:00'))
+    Assert-True ($it16c[0].Done -eq 'D2' -and $it16c[0].Rerun -eq '' -and $it16b[0].Rerun -eq '' -and -not $it16b[0].Contains('Reopen')) 'ai review: a changed answer loses its rerun time'
+    # the AI steps of a macro by key (today's and the one before); two AI_CHOOSE with one variable share a key
+    $mkVal = { param($o) ConvertTo-FujiJson -InputObject $o -Indent 0 }
+    $val1 = & $mkVal ([ordered]@{ name = 'desk'; src = '{{1}}'; question = 'q'; options = "resident`ngarbage"; threshold = '0.5'; low = 'REVIEW'; unknown = 'u' })
+    $val2 = & $mkVal ([ordered]@{ name = 'desk'; src = '{{1}}'; question = 'q'; options = "tax`npension"; threshold = '0.5'; low = 'REVIEW'; unknown = 'u' })
+    $valE = & $mkVal ([ordered]@{ src = '{{1}}'; items = "name`nphone"; note = ''; strict = 'ON' })
+    $mm = [ordered]@{ id = 'mm'; name = 'mm'; steps = @([ordered]@{ cmd = 'KEY'; val = 'a' }, [ordered]@{ cmd = 'AI_CHOOSE'; val = $val1 }, [ordered]@{ cmd = 'AI_CHOOSE'; val = $val2 }, [ordered]@{ cmd = 'AI_EXTRACT'; val = $valE }) }
+    $set1 = ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value $val1
+    $set2 = ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value $val2
+    $setE = ConvertFrom-FujiStepValue -Cmd 'AI_EXTRACT' -Value $valE
+    $nk = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'mm' -Settings $set1
+    $lk1 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'mm' -Settings $set1 -Legacy
+    $lk2 = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'mm' -Settings $set2 -Legacy
+    $ek = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'mm' -Settings $setE
+    $lek = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'mm' -Settings $setE -Legacy
+    $map = Get-FujiAiStepMap -Macro $mm
+    Assert-True ($map[$nk].Count -eq 2 -and $map[$lk1].Count -eq 1 -and $map[$lk2].Count -eq 1 -and $map[$ek].Count -eq 1 -and $map[$lek].Count -eq 1) 'ai review: step map by the keys of today and of before'
+    Assert-Equal "tax`npension" (Find-FujiAiReviewStep -Map $map -Item @{ Key = $lk2; Command = 'AI_CHOOSE'; Answer = '' }).Settings['options'] 'ai review: a key of before finds its own step'
+    Assert-Equal "tax`npension" (Find-FujiAiReviewStep -Map $map -Item @{ Key = $nk; Command = 'AI_CHOOSE'; Answer = 'pension' }).Settings['options'] 'ai review: a shared key finds the step whose options hold the answer'
+    Assert-Equal "resident`ngarbage" (Find-FujiAiReviewStep -Map $map -Item @{ Key = $nk; Command = 'AI_CHOOSE'; Answer = '' }).Settings['options'] 'ai review: a shared key without an answer finds the first step'
+    Assert-True ($null -eq (Find-FujiAiReviewStep -Map $map -Item @{ Key = 'nope'; Command = 'AI_CHOOSE'; Answer = 'x' }) -and $null -eq (Find-FujiAiReviewStep -Map $map -Item @{ Key = ''; Command = 'AI_CHOOSE'; Answer = 'x' })) 'ai review: an unknown key finds no step'
+    $legacyItem = @{ Key = $lk2; Command = 'AI_CHOOSE'; Answer = 'tax' }
+    $lostItem = @{ Key = 'nope'; Command = 'AI_CHOOSE'; Answer = 'tax' }
+    Update-FujiAiReviewKey -Items @($legacyItem, $lostItem) -Map $map
+    Assert-True ($legacyItem.Key -eq $nk -and $lostItem.Key -eq 'nope') 'ai review: items of before get the key of today'
+    # what was remembered under the keys of before moves to the keys of today
+    $mv = [ordered]@{}
+    Add-FujiAiRemembered -Memory $mv -Key $lk1 -Hash 'h1' -Answer 'resident' -ExampleText 'old one'
+    Add-FujiAiRemembered -Memory $mv -Key $lk1 -Hash 'h2' -Answer 'garbage' -ExampleText 'old two'
+    Add-FujiAiRemembered -Memory $mv -Key $nk -Hash 'h2' -Answer 'resident' -ExampleText 'new two'
+    Add-FujiAiRemembered -Memory $mv -Key $lek -Hash 'e1' -Answer ([ordered]@{ name = 'N'; phone = 'old' })
+    Add-FujiAiRemembered -Memory $mv -Key $ek -Hash 'e1' -Answer ([ordered]@{ phone = '1' })
+    Add-FujiAiRemembered -Memory $mv -Key 'unrelated' -Hash 'u' -Answer 'x'
+    Assert-Equal 2 (Move-FujiAiMemoryKey -Memory $mv -Macros @($mm)) 'ai review: two steps moved to the keys of today'
+    $mvEx = @($mv[$nk]['examples'] | ForEach-Object { $_['text'] })
+    Assert-True (-not $mv.Contains($lk1) -and -not $mv.Contains($lek) -and $mv.Contains('unrelated') -and (Get-FujiAiRemembered -Memory $mv -Key $nk -Hash 'h1') -eq 'resident' -and (Get-FujiAiRemembered -Memory $mv -Key $nk -Hash 'h2') -eq 'resident') 'ai review: moved answers, the newer one wins'
+    Assert-Equal @('old one', 'new two') $mvEx 'ai review: moved examples, older first, one per text'
+    $mvE = Get-FujiAiRemembered -Memory $mv -Key $ek -Hash 'e1'
+    Assert-True ($mvE['name'] -eq 'N' -and $mvE['phone'] -eq '1') 'ai review: moved extract answers are merged per item'
+    Assert-Equal 0 (Move-FujiAiMemoryKey -Memory $mv -Macros @($mm)) 'ai review: nothing to move the second time'
+    Assert-Equal 0 (Move-FujiAiMemoryKey -Memory $mv -Macros $null) 'ai review: no macros, nothing moved'
+    $gone = Remove-FujiAiRemembered -Memory $mv -Key $nk
+    Assert-True ($gone.Answers -eq 2 -and $gone.Examples -eq 2 -and -not $mv.Contains($nk) -and $mv.Contains($ek) -and (Remove-FujiAiRemembered -Memory $mv -Key 'nope').Answers -eq 0) 'ai review: one step forgotten'
     # the hints under the window
     $sum = Get-FujiAiReviewSummary -Items @(
         @{ Kind = 'spot'; P = '0.90'; Answer = 'a'; Final = 'a' }, @{ Kind = 'spot'; P = '0.80'; Answer = 'a'; Final = 'b' },
@@ -970,7 +1043,7 @@ function New-FakeIo {
         Windows = @('App'); Files = @(); Self = $false; Clipboard = ''; CopySource = ''; Answers = (New-Object -TypeName 'System.Collections.Generic.Queue[object]')
         Waits = 0; StopAtWait = -1; ExcelValue = 'cell'; WaitAt = (New-Object -TypeName 'System.Collections.Generic.List[string]'); PauseAfterClip = $false; ClipSeq = 0; CopyLate = 0; PauseAfterCopy = $false; Elevated = @()
         FieldMode = 'SET'; FieldFails = 0; FieldValue = 'v1'; Table = @{ Header = @('h1', 'h2'); Rows = @(@('a', '=1+1'), @('b', 'c')) }
-        AiReply = $null; AiThrow = ''; AiFocus = $false; AiReviewFails = $false; AiRecallValue = $null; AiRecallAsked = (New-Object -TypeName 'System.Collections.Generic.List[string]'); AiExampleList = @(); AiSpotValue = $false; AiSpotCalls = 0; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
+        AiReply = $null; AiThrow = ''; AiFocus = $false; AiReviewFails = $false; AiRecallValue = $null; AiRecallAsked = (New-Object -TypeName 'System.Collections.Generic.List[string]'); AiExampleList = @(); AiSpotValue = $false; AiSpotCalls = 0; AiRemembered = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiRememberFails = $false; AiBodies = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiReviews = (New-Object -TypeName 'System.Collections.Generic.List[object]'); AiPicks = (New-Object -TypeName 'System.Collections.Generic.List[object]')
         Saved = @{}; Secrets = @{}; Breaks = (New-Object -TypeName 'System.Collections.Generic.List[string]'); Front = @{ Title = 'Login - App'; Program = 'C:\App\app.exe' }; PasswordFocus = $true; FileFails = $false
     }
     return @{
@@ -1010,6 +1083,7 @@ function New-FakeIo {
         AiRecall = { param($Key, $Hash) $script:Fake.AiRecallAsked.Add($Key + '/' + $Hash); return $script:Fake.AiRecallValue }
         AiExamples = { param($Key, $Source) $null = $Key, $Source; return , @($script:Fake.AiExampleList) }
         AiSpot = { $script:Fake.AiSpotCalls++; return $script:Fake.AiSpotValue }
+        AiRemember = { param($Key, $Hash, $Answer, $Source) if ($script:Fake.AiRememberFails) { throw 'memory file is in use' }; $script:Fake.AiRemembered.Add(@{ Key = $Key; Hash = $Hash; Answer = $Answer; Source = $Source }) }
         AiPick = { param($Caption, $Message, $Options, $Initial) $null = $Caption; $script:Fake.Calls.Add('AIPICK'); $script:Fake.AiPicks.Add(@{ Message = $Message; Options = $Options; Initial = $Initial }); return $script:Fake.Answers.Dequeue() }
         AiReview = { param($Row) if ($script:Fake.AiReviewFails) { throw 'review list is open in Excel' }; $script:Fake.AiReviews.Add($Row) }
         Break = { param($Message) $script:Fake.Breaks.Add($Message); $script:Fake.Calls.Add('BREAK'); return $script:Fake.Answers.Dequeue() }
@@ -1548,6 +1622,53 @@ $run = New-TestRun -Target '' -Steps $exStep -Rows @(, [string[]]@('Nakamura Sak
 $script:Fake.AiReply = New-AiTextReply '{"name":"Nakamura Hanako","phone":"0466-12-3456"}'
 [void](Invoke-FujiRun -Run $run)
 Assert-True ($script:Fake.AiReviews[0]['kind'] -eq 'notInSource' -and $script:Fake.AiReviews[0]['key'] -eq (Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'main' -Settings (ConvertFrom-FujiStepValue -Cmd 'AI_EXTRACT' -Value $exStep[1]))) 'ai run: extract review row kind and key'
+# an answer a person picks in the run is remembered at once and written to the list as checked and used
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'ASK') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'continue'; Value = 'garbage' })
+[void](Invoke-FujiRun -Run $run)
+$rm = $script:Fake.AiRemembered
+Assert-True ($rm.Count -eq 1 -and $rm[0].Key -eq $recallKey -and $rm[0].Hash -eq (Get-FujiAiTextHash 'text a') -and $rm[0].Answer -eq 'garbage' -and $rm[0].Source -eq 'text a') 'ai run: the picked answer is remembered'
+$rv = $script:Fake.AiReviews[0]
+Assert-True ($script:Fake.AiReviews.Count -eq 1 -and $rv['kind'] -eq 'asked' -and $rv['answer'] -eq 'resident' -and $rv['p'] -eq '0.40' -and $rv['done'] -ne '' -and $rv['done'] -eq $rv['time'] -and $rv['rerun'] -eq $rv['time'] -and $rv['key'] -eq $recallKey) 'ai run: the picked answer is on the list as checked and used'
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiPicked' 'desk' 'garbage')) }).Count -eq 1 -and @($script:Fake.Logs | Where-Object { $_.Contains((Get-FujiText 'run.aiReview' 'desk' (Get-FujiText 'run.aiReasonAsked'))) }).Count -eq 0) 'ai run: the picked answer is logged, not as one to check later'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep -Low 'ASK') -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'stop'; Value = '' })
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiRemembered.Count -eq 0 -and $script:Fake.AiReviews.Count -eq 0) 'ai run: nothing remembered when the pick is called off'
+$run = New-TestRun -Target '' -Steps @((New-AiChooseStep -Low 'ASK'), @('KEY', 'next')) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+$script:Fake.Answers.Enqueue(@{ Choice = 'continue'; Value = 'garbage' })
+$script:Fake.AiRememberFails = $true
+Assert-True ((Invoke-FujiRun -Run $run) -eq 'done' -and $run.Vars['desk'] -eq 'garbage' -and (Get-FakeCall 'KEYS') -eq 'KEYS next' -and @($script:Fake.Logs | Where-Object { $_ -like 'warn*' -and $_.Contains('memory file is in use') }).Count -eq 1) 'ai run: the pick cannot be remembered, the run goes on'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($script:Fake.AiReviews[0]['done'] -eq '' -and $script:Fake.AiReviews[0]['rerun'] -eq '' -and $script:Fake.AiRemembered.Count -eq 0) 'ai run: an answer left for later is not checked yet'
+
+# tokens: what llama-server counted is in the log of each AI step and in one line at the end of the run
+Assert-Equal 0 (Get-FujiAiTokenCount -Response (New-AiTextReply 'x')) 'ai tokens: 0 when the server did not say'
+Assert-Equal 0 (Get-FujiAiTokenCount -Response $null) 'ai tokens: 0 for no answer'
+$withUsage = '{"choices":[{"message":{"content":"{\"name\":\"Nakamura Sakura\",\"phone\":\"1\"}"}}],"usage":{"prompt_tokens":1300,"completion_tokens":12,"total_tokens":1312}}' | ConvertFrom-Json
+Assert-Equal 1312 (Get-FujiAiTokenCount -Response $withUsage) 'ai tokens: read plus written'
+$run = New-TestRun -Target '' -Steps $exStep -Rows @([string[]]@('Nakamura Sakura 1'), [string[]]@('Nakamura Sakura 1 again'))
+$script:Fake.AiReply = $withUsage
+[void](Invoke-FujiRun -Run $run)
+$tokTail = ((Get-FujiText 'run.aiExtract' 2 2 '@' 1312) -split '@')[1]
+$sumHead = ((Get-FujiText 'run.aiSummary' 2 0 '2,624' '1,312' '@') -split '@')[0]
+Assert-True ($run.Ai.Asked -eq 2 -and $run.Ai.Recalled -eq 0 -and $run.Ai.Tokens -eq 2624 -and $run.Ai.Max -eq 1312) 'ai tokens: counted over the run'
+Assert-True (@($script:Fake.Logs | Where-Object { $_.Contains($tokTail) }).Count -eq 2 -and @($script:Fake.Logs | Where-Object { $_.Contains($sumHead) }).Count -eq 1) 'ai tokens: in the log of each step and in one line at the end'
+$run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a'))
+$script:Fake.AiRecallValue = 'garbage'
+[void](Invoke-FujiRun -Run $run)
+Assert-True ($run.Ai.Asked -eq 0 -and $run.Ai.Recalled -eq 1 -and @($script:Fake.Logs | Where-Object { $_.Contains(((Get-FujiText 'run.aiSummary' 0 1 '0' '0' '@') -split '@')[0]) }).Count -eq 1) 'ai tokens: remembered answers counted, no tokens'
+$run = New-TestRun -Target '' -Steps @(, @('KEY', 'a')) -Rows @(, [string[]]@('a'))
+[void](Invoke-FujiRun -Run $run)
+Assert-True (-not $run.Contains('Ai')) 'ai tokens: no line for a run without AI steps'
+$aiRvText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'AiReview.ps1'))
+Assert-True ($aiRvText -match "-Column 'rerun'" -and $aiRvText -match 'Get-FujiAiRerunItem' -and $aiRvText -match 'Remove-FujiAiRemembered' -and $aiRvText -match 'Move-FujiAiMemoryKey' -and $aiRvText -notmatch 'function Find-FujiAiReviewStep') 'ai review window: marks re-run rows, forgets a step, moves old keys'
+Assert-True ([System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'RunUi.ps1')) -match 'AiRemember = ') 'ai run: the screen side remembers picked answers'
 
 # ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
 # breakpoints and stepping

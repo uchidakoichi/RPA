@@ -6,22 +6,11 @@
 #  can be run again from a CSV of those rows only.
 # ---------------------------------------------------------------------------------------------
 
-# The macro's AI step an item belongs to (found again by its step key), or $null
-function Find-FujiAiReviewStep {
-    param([System.Collections.IDictionary]$Macro, [hashtable]$Item)
-    foreach ($s in $Macro.steps) {
-        if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
-        $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
-        if ((Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set) -eq $Item.Key) { return @{ Cmd = $s.cmd; Settings = $set } }
-    }
-    return $null
-}
-
 function Show-FujiAiReviewDialog {
     $macro = Get-FujiCurrentMacro $script:Ed
     if ($null -eq $macro) { return }
     $width = Get-FujiScaled 820
-    $f = New-FujiDialogForm -Title (Get-FujiText 'gui.aiReviewTitle' $macro.name) -Width $width -Height (Get-FujiScaled 600)
+    $f = New-FujiDialogForm -Title (Get-FujiText 'gui.aiReviewTitle' $macro.name) -Width $width -Height (Get-FujiScaled 640)
     $f.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
     $layout = New-Object -TypeName System.Windows.Forms.TableLayoutPanel
     $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -61,18 +50,24 @@ function Show-FujiAiReviewDialog {
     [void]$layout.Controls.Add($note)
     $summary = New-FujiLabel -Text '' -MaxWidth ($width - (Get-FujiScaled 30))
     [void]$layout.Controls.Add($summary)
+    # the re-run: a row given to a re-run CSV before is left out, unless the box is ticked
+    $rerunRow = New-FujiFlow
+    $rerunBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewRerun')
+    $sentBox = New-Object -TypeName System.Windows.Forms.CheckBox
+    $sentBox.Text = Get-FujiText 'gui.aiReviewRerunAll'
+    $sentBox.AutoSize = $true
+    $forgetBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewForget')
+    foreach ($b in @($rerunBtn, $sentBox, $forgetBtn)) { [void]$rerunRow.Controls.Add($b) }
+    [void]$layout.Controls.Add($rerunRow)
     $bar = New-FujiButtonBar
     $closeBtn = New-FujiButton -Text (Get-FujiText 'gui.close')
-    $rerunBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewRerun')
     $allBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewAll')
     $okBtn = New-FujiButton -Text (Get-FujiText 'gui.aiReviewCheck')
-    foreach ($b in @($closeBtn, $rerunBtn, $allBtn, $okBtn)) { [void]$bar.Controls.Add($b) }
+    foreach ($b in @($closeBtn, $allBtn, $okBtn)) { [void]$bar.Controls.Add($b) }
     [void]$f.Controls.Add($layout)
     [void]$f.Controls.Add($bar)
-    $script:FujiAiMemoryNotice = ''
-    $ctx = @{ Macro = $macro; Items = @(); Current = $null; Step = $null; Memory = (Read-FujiAiMemory -Directory $script:Ed.Directory)
-        List = $list; Source = $source; Choices = $choices; Value = $value; Note = $note; Summary = $summary; Count = $count; Days = $days }
-    if ($script:FujiAiMemoryNotice) { Write-FujiUiLog -Message $script:FujiAiMemoryNotice -Level 'warn' }
+    $ctx = @{ Macro = $macro; Items = @(); Current = $null; Step = $null; Memory = (Read-FujiAiReviewMemory); Map = (Get-FujiAiStepMap -Macro $macro)
+        List = $list; Source = $source; Choices = $choices; Value = $value; Note = $note; Summary = $summary; Count = $count; Days = $days; Sent = $sentBox }
 
     $showRow = {
         param($Item, $Lvi)
@@ -87,6 +82,7 @@ function Show-FujiAiReviewDialog {
     $load = {
         $n = [int]([object[]]$ctx.Days.Tag)[$ctx.Days.SelectedIndex]
         $ctx.Items = Get-FujiAiReviewOrder -Items @(Read-FujiAiReviewItem -Directory $script:Ed.Directory -MacroId ([string]$ctx.Macro.id) -MacroName ([string]$ctx.Macro.name) -Days $n)
+        Update-FujiAiReviewKey -Items $ctx.Items -Map $ctx.Map
         Set-FujiAiReviewFinal -Items $ctx.Items -Memory $ctx.Memory
         $ctx.List.BeginUpdate()
         $ctx.List.Items.Clear()
@@ -111,7 +107,7 @@ function Show-FujiAiReviewDialog {
         $ctx.Note.Text = ''
         if ($null -eq $Item) { $ctx.Source.Text = ''; return }
         $ctx.Source.Text = $Item.Source -replace "`r?`n", "`r`n"
-        $ctx.Step = Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item
+        $ctx.Step = Find-FujiAiReviewStep -Map $ctx.Map -Item $Item
         $isExtract = $Item.Command -eq 'AI_EXTRACT'
         $ctx.Choices.Visible = -not $isExtract
         $ctx.Value.Visible = $isExtract
@@ -129,7 +125,9 @@ function Show-FujiAiReviewDialog {
     # check one item with this answer; returns $true when it could be remembered
     $checkOne = {
         param($Item, [string]$Answer)
-        if ($Item.Old -or $null -eq (Find-FujiAiReviewStep -Macro $ctx.Macro -Item $Item) -or -not $Item.Hash) { return $false }
+        if ($Item.Old -or $null -eq (Find-FujiAiReviewStep -Map $ctx.Map -Item $Item) -or -not $Item.Hash) { return $false }
+        # an answer that was put to use already and is changed now: its row can be run again
+        if ($Item['Rerun'] -and $Item.Contains('Final') -and [string]$Item['Final'] -ne $Answer) { $Item['Reopen'] = $true }
         if ($Item.Command -eq 'AI_EXTRACT') {
             # only the items a person checked: the run asks the AI for the others
             $pairs = Get-FujiAiRemembered -Memory $ctx.Memory -Key $Item.Key -Hash $Item.Hash
@@ -184,8 +182,31 @@ function Show-FujiAiReviewDialog {
                 if ($checked.Count -gt 0) { & $commit $checked }
                 & $load
             } })
+    $forgetBtn.Add_Click({ Invoke-FujiUi {
+                $it = $ctx.Current
+                if ($null -eq $it -or $it.Old -or $null -eq $ctx.Step) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewForget') -Message (Get-FujiText 'gui.aiReviewForgetPick'); return }
+                $key = [string]$ctx.Step.Key
+                $label = '$' + [string]$it.Name
+                if ($ctx.Step.Cmd -eq 'AI_EXTRACT') { $label = Get-FujiText 'gui.aiReviewForgetExtract' }
+                $have = @{ Answers = 0; Examples = 0 }
+                if ($ctx.Memory.Contains($key)) { $have = @{ Answers = $ctx.Memory[$key]['answers'].Count; Examples = $ctx.Memory[$key]['examples'].Count } }
+                if ($have.Answers -eq 0) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewForget') -Message (Get-FujiText 'gui.aiReviewForgetNone' $label); return }
+                if ((Show-FujiChoice -Title (Get-FujiText 'gui.aiReviewForget') -Message (Get-FujiText 'gui.aiReviewForgetConfirm' $label $have.Answers $have.Examples) -Buttons @((Get-FujiText 'gui.aiReviewForgetYes'), (Get-FujiText 'gui.cancel'))) -ne 0) { return }
+                [void](Remove-FujiAiRemembered -Memory $ctx.Memory -Key $key)
+                Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $ctx.Memory
+                # the lines of this step are not checked any more (a line marked done always has its answer remembered).
+                # Their "given to a re-run" time stays: a row that was run again is not run a third time by itself
+                $again = @($ctx.Items | Where-Object { $_.Done -and -not $_.Old -and $_.Key -eq $key })
+                $n = 0
+                if ($again.Count -gt 0) { $n = Set-FujiAiReviewDoneMany -Items $again -Time '' }
+                Write-FujiUiLog -Message (Get-FujiText 'gui.aiReviewForgetDone' $label $have.Answers) -Level 'ok'
+                & $load
+                if ($n -lt $again.Count) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewDoneFailed' }
+            } })
     $rerunBtn.Add_Click({ Invoke-FujiUi {
-                $nos = Get-FujiAiRerunRowNo -Items $ctx.Items
+                $all = [bool]$ctx.Sent.Checked
+                $sent = Get-FujiAiRerunItem -Items $ctx.Items -IncludeSent:$all
+                $nos = Get-FujiAiRerunRowNo -Items $ctx.Items -IncludeSent:$all
                 $rows = (Get-FujiRunRow -CsvRows $script:Ed.Csv.Rows -Header $script:Ed.Csv.Header).Rows
                 $r = New-FujiAiRerunCsv -Header $script:Ed.Csv.Header -Rows $rows -RowNos $nos
                 if ($r.Error) { Show-FujiMessage -Title (Get-FujiText 'gui.aiReviewRerun') -Message $r.Error; return }
@@ -194,6 +215,8 @@ function Show-FujiAiReviewDialog {
                 $script:Ui.CsvPath.Text = $path
                 Import-FujiCsvUi
                 Write-FujiUiLog -Message (Get-FujiText 'gui.aiReviewRerunDone' $r.Count $path) -Level 'ok'
+                # these rows are not put in the next re-run CSV again
+                if ((Set-FujiAiReviewDoneMany -Items $sent -Time (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') -Column 'rerun') -lt $sent.Count) { Write-FujiUiLog -Message (Get-FujiText 'gui.aiReviewRerunMarkFailed') -Level 'warn' }
                 $this.FindForm().Close()
             } })
     $closeBtn.Add_Click({ $this.FindForm().Close() })
@@ -218,13 +241,30 @@ function Show-FujiAiReviewDialog {
     $f.Dispose()
 }
 
+# The answers a person checked, from the file. What was kept under the step keys of before
+# (2026.11.10 and older) is moved to today's keys and written back.
+function Read-FujiAiReviewMemory {
+    $script:FujiAiMemoryNotice = ''
+    $memory = Read-FujiAiMemory -Directory $script:Ed.Directory
+    if ($script:FujiAiMemoryNotice) { Write-FujiUiLog -Message $script:FujiAiMemoryNotice -Level 'warn' }
+    if ((Move-FujiAiMemoryKey -Memory $memory -Macros $script:Ed.Data.macros) -gt 0) {
+        # not written (the file is in use): moved again the next time
+        try { Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $memory } catch { $null = $_ }
+    }
+    return $memory
+}
+
 # The answers a person checked, read once per run (the first AI step of the run reads the file)
 $script:FujiAiMemoryRun = $null
 function Get-FujiAiRunMemory {
-    if ($null -eq $script:FujiAiMemoryRun) {
-        $script:FujiAiMemoryNotice = ''
-        $script:FujiAiMemoryRun = Read-FujiAiMemory -Directory $script:Ed.Directory
-        if ($script:FujiAiMemoryNotice) { Write-FujiUiLog -Message $script:FujiAiMemoryNotice -Level 'warn' }
-    }
+    if ($null -eq $script:FujiAiMemoryRun) { $script:FujiAiMemoryRun = Read-FujiAiReviewMemory }
     return $script:FujiAiMemoryRun
+}
+
+# An answer a person picked in the run: remembered at once (the review window is closed while a run goes)
+function Add-FujiAiRunRemembered {
+    param([string]$Key, [string]$Hash, [string]$Answer, [AllowEmptyString()][string]$Source)
+    $memory = Get-FujiAiRunMemory
+    Add-FujiAiRemembered -Memory $memory -Key $Key -Hash $Hash -Answer $Answer -ExampleText $Source
+    Save-FujiAiMemory -Directory $script:Ed.Directory -Memory $memory
 }

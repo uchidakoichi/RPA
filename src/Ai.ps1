@@ -150,6 +150,17 @@ function Test-FujiAiInSource {
     return (ConvertTo-FujiAiPlain -Text $Source).Contains($v)
 }
 
+# Tokens of one request (read + written) as llama-server counted them; 0 when it did not say
+function Get-FujiAiTokenCount {
+    param($Response)
+    $n = 0
+    try {
+        $u = $Response.usage
+        if ($null -ne $u) { $n = [int]$u.prompt_tokens + [int]$u.completion_tokens }
+    } catch { $n = 0 }
+    return $n
+}
+
 # One line in fujikyun_logs\ai_review_<date>.csv (UTF-8 with BOM, header on the first line); returns the path
 function Add-FujiAiReviewRow {
     param([Parameter(Mandatory)][string]$Directory, [Parameter(Mandatory)][datetime]$Now, [Parameter(Mandatory)][System.Collections.IDictionary]$Row)
