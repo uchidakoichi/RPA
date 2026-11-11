@@ -2,10 +2,11 @@
 <#
     VM check of the AI review window (run on the signed-in desktop with vmrun.sh; no AI needed).
     A timer presses the buttons of the real window; the files are looked at after each window.
-    Checked: answers kept under the step key of before are moved to today's key, a row given to a
-    re-run CSV is left out the next time (and comes back with the box ticked), an answer picked in
-    the run is not run again until it is changed, "forget this step" erases the memory and
-    un-checks the lines. -OutDir gets two pictures of the window.
+    Checked: answers kept under the step key of before are moved to today's key, a step of a called
+    macro is listed and checked, an empty text cannot be checked, a row given to a re-run CSV is left
+    out the next time (and comes back with the box ticked), a re-run CSV from another CSV is refused,
+    an answer picked in the run is not run again until it is changed, "forget this step" erases the
+    memory and un-checks the lines. -OutDir gets two pictures of the window.
 #>
 param([string]$OutDir = $env:TEMP)
 $ErrorActionPreference = 'Stop'
@@ -18,24 +19,30 @@ $work = Join-Path $env:TEMP ('fuji-ai-review-ui-' + [guid]::NewGuid().ToString('
 [void](New-Item -ItemType Directory -Path $work)
 $script:Settings = Read-FujiSetting -Directory $work
 $set = [ordered]@{ name = 'desk'; src = '{{1}}'; question = 'which desk'; options = "resident`ngarbage`nother"; threshold = '0.5'; low = 'REVIEW'; unknown = 'unknown' }
-$macro = [ordered]@{ id = 'm1'; name = 'inquiries'; targetWindow = ''; steps = @(, [ordered]@{ cmd = 'AI_CHOOSE'; val = (ConvertTo-FujiStepValue -Cmd 'AI_CHOOSE' -Settings $set); label = '' }) }
-$texts = @('I moved last month; what do I bring to change my address?', 'The allowance was not paid this month.', 'When is the large garbage collected in my area?', 'Tax certificate, please.')
+$subSet = [ordered]@{ name = 'urgent'; src = '{{1}}'; question = 'is it urgent'; options = "yes`nno"; threshold = '0.5'; low = 'REVIEW'; unknown = 'unknown' }
+$macro = [ordered]@{ id = 'm1'; name = 'inquiries'; targetWindow = ''; steps = @([ordered]@{ cmd = 'AI_CHOOSE'; val = (ConvertTo-FujiStepValue -Cmd 'AI_CHOOSE' -Settings $set); label = '' }, [ordered]@{ cmd = 'CALL_MACRO'; val = '{"id":"sub","name":"urgency"}'; label = '' }) }
+$sub = [ordered]@{ id = 'sub'; name = 'urgency'; targetWindow = ''; steps = @(, [ordered]@{ cmd = 'AI_CHOOSE'; val = (ConvertTo-FujiStepValue -Cmd 'AI_CHOOSE' -Settings $subSet); label = '' }) }
+$texts = @('I moved last month; what do I bring to change my address?', 'The allowance was not paid this month.', 'When is the large garbage collected in my area?', 'Tax certificate, please.', '', 'My water pipe burst, please come now.')
 $csv = New-Object -TypeName 'System.Collections.Generic.List[object]'
-foreach ($t in $texts) { $csv.Add([string[]]@($t)) }
-$script:Ed = @{ Directory = $work; Data = @{ macros = @(, $macro) }; MacroIndex = 0; Csv = @{ Rows = $csv.ToArray(); Header = $null } }
+foreach ($t in $texts) { $csv.Add([string[]]@($t, 'x')) }
+$script:Ed = @{ Directory = $work; Data = @{ macros = @($macro, $sub) }; MacroIndex = 0; Csv = @{ Rows = $csv.ToArray(); Header = $null } }
 $oldKey = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings $set -Legacy
 $newKey = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings $set
+$subKey = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'sub' -Settings $subSet
 # row 4 was picked by a person in the run (2026.11.10 kept it under the key of before)
 $memory = [ordered]@{}
 Add-FujiAiRemembered -Memory $memory -Key $oldKey -Hash (Get-FujiAiTextHash $texts[3]) -Answer 'garbage' -ExampleText $texts[3]
 Save-FujiAiMemory -Directory $work -Memory $memory
 $now = Get-Date
 $stamp = $now.ToString('yyyy-MM-dd HH:mm:ss')
-$rows = @(@(1, 'resident', '0.35', 'low', ''), @(2, 'other', '0.28', 'low', ''), @(3, 'garbage', '0.92', 'spot', ''), @(4, 'resident', '0.40', 'asked', $stamp))
+# rows 1-4 as 2026.11.10 wrote them (key of before, no macro run, no row print); row 5 an empty
+# text; row 6 a step of the called macro in a run of m1
+$rows = @(@(1, 'resident', '0.35', 'low', ''), @(2, 'other', '0.28', 'low', ''), @(3, 'garbage', '0.92', 'spot', ''), @(4, 'resident', '0.40', 'asked', $stamp), @(5, '', '', 'empty', ''))
 foreach ($r in $rows) {
     $text = $texts[$r[0] - 1]
     [void](Add-FujiAiReviewRow -Directory $work -Now $now -Row ([ordered]@{ time = $stamp; macro = 'inquiries'; step = 1; row = $r[0]; command = 'AI_CHOOSE'; name = 'desk'; source = $text; answer = $r[1]; p = $r[2]; probs = ''; reason = $r[3]; kind = $r[3]; macroId = 'm1'; key = $oldKey; hash = (Get-FujiAiTextHash $text); done = $r[4]; rerun = $r[4] }))
 }
+[void](Add-FujiAiReviewRow -Directory $work -Now $now -Row ([ordered]@{ time = $stamp; macro = 'inquiries'; step = 1; row = 6; command = 'AI_CHOOSE'; name = 'urgent'; source = $texts[5]; answer = 'yes'; p = '0.30'; probs = ''; reason = 'low'; kind = 'low'; macroId = 'sub'; key = $subKey; hash = (Get-FujiAiTextHash $texts[5]); runMacro = 'm1'; rowPrint = (Get-FujiAiRowPrint -Data ([string[]]@($texts[5], 'x'))) }))
 
 Initialize-FujiUi -Zoom 1.0
 $owner = New-Object -TypeName System.Windows.Forms.Form
@@ -84,7 +91,7 @@ function Invoke-UiStep {
         'tick' { (Find-UiText -Root $Window -Text (Get-FujiText $Step.Text)).Checked = $true }
         'pick' {
             $list = Find-UiType -Root $Window -Type ([System.Windows.Forms.ListView])
-            foreach ($lvi in $list.Items) { if ($lvi.Tag.Kind -eq $Step.Kind) { $lvi.Selected = $true } }
+            foreach ($lvi in $list.Items) { if (($Step.Contains('Kind') -and $lvi.Tag.Kind -eq $Step.Kind) -or ($Step.Contains('Row') -and $lvi.Tag.Row -eq $Step.Row)) { $lvi.Selected = $true } }
         }
         'choose' { (Find-UiType -Root $Window -Type ([System.Windows.Forms.ListBox])).SelectedIndex = $Step.Index }
         'shot' {
@@ -136,17 +143,28 @@ function Get-UiRerunRow {
 }
 $timer.Start()
 try {
-    # 1: check the two unchecked low answers as the AI said, then make the re-run CSV
-    Show-UiReview -Steps @(@{ Do = 'shot'; Name = 'ai_review_ui_1' }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
+    # 1: the empty text cannot be checked; then the three unchecked low answers (one of the called
+    # macro) as the AI said, then the re-run CSV
+    Show-UiReview -Steps @(@{ Do = 'shot'; Name = 'ai_review_ui_1' }, @{ Do = 'pick'; Row = 5 }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'pick'; Row = 2 },
+        @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
     $m = Read-FujiAiMemory -Directory $work
     Assert-Ui ($m.Contains($newKey) -and -not $m.Contains($oldKey) -and $m[$newKey]['answers'].Count -eq 3) '1 memory moved to the key of today, two answers added'
+    Assert-Ui ((Get-FujiAiRemembered -Memory $m -Key $subKey -Hash (Get-FujiAiTextHash $texts[5])) -eq 'yes') '1 the called macro step is checked and remembered under its own key'
     $it = Get-UiItem
-    Assert-Ui ($it[1].Done -and $it[2].Done -and -not $it[3].Done -and $it[1].Rerun -and $it[2].Rerun -and $it[3].Rerun -eq '' -and $it[4].Rerun -eq $stamp) '1 the two rows are checked and marked as given to the re-run'
-    Assert-Ui ($script:imported -eq 1 -and (Get-UiRerunRow) -eq '1,2') '1 re-run CSV has rows 1 and 2 (not the spot check, not the answer picked in the run)'
+    Assert-Ui (-not $it[5].Done -and @($m.Values | ForEach-Object { $_['answers'].Keys } | Where-Object { $_ -eq (Get-FujiAiTextHash '') }).Count -eq 0) '1 the empty text is not checked nor remembered'
+    Assert-Ui ($it[1].Done -and $it[2].Done -and $it[6].Done -and -not $it[3].Done -and $it[1].Rerun -and $it[2].Rerun -and $it[6].Rerun -and $it[3].Rerun -eq '' -and $it[4].Rerun -eq $stamp) '1 the three rows are checked and marked as given to the re-run'
+    Assert-Ui ($script:imported -eq 1 -and (Get-UiRerunRow) -eq '1,2,6') '1 re-run CSV has rows 1, 2, 6 (not the spot check, the answer picked in the run, the empty text)'
     Remove-Item -LiteralPath (Join-Path $work 'fujikyun_ai_rerun.csv') -Force
+    # 1b: another CSV is loaded (row 6 is another row now): the re-run CSV is refused
+    $other = $csv.ToArray()
+    $other[5] = [string[]]@('Someone else entirely', 'x')
+    $script:Ed.Csv = @{ Rows = $other; Header = $null }
+    Show-UiReview -Steps @(@{ Do = 'tick'; Text = 'gui.aiReviewRerunAll' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' }, @{ Do = 'click'; Text = 'gui.ok' }, @{ Do = 'click'; Text = 'gui.close' })
+    Assert-Ui ($script:imported -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $work 'fujikyun_ai_rerun.csv'))) '1b a re-run CSV from another CSV is refused'
+    $script:Ed.Csv = @{ Rows = $csv.ToArray(); Header = $null }
     # 2: nothing to run again (a message); with the box ticked, rows 1 and 2 again
     Show-UiReview -Steps @(@{ Do = 'click'; Text = 'gui.aiReviewRerun' }, @{ Do = 'click'; Text = 'gui.ok' }, @{ Do = 'tick'; Text = 'gui.aiReviewRerunAll' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
-    Assert-Ui ($script:imported -eq 2 -and (Get-UiRerunRow) -eq '1,2') '2 no rows without the box (message), rows 1 and 2 with the box'
+    Assert-Ui ($script:imported -eq 2 -and (Get-UiRerunRow) -eq '1,2,6') '2 no rows without the box (message), rows 1, 2, 6 with the box'
     # 3: the answer picked in the run is changed: only that row is run again
     Show-UiReview -Steps @(@{ Do = 'pick'; Kind = 'asked' }, @{ Do = 'choose'; Index = 2 }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
     $it = Get-UiItem
@@ -154,11 +172,11 @@ try {
     Assert-Ui ($script:imported -eq 3 -and (Get-UiRerunRow) -eq '4' -and (Get-FujiAiRemembered -Memory $m -Key $newKey -Hash (Get-FujiAiTextHash $texts[3])) -eq 'other') '3 the changed answer is remembered and its row alone is in the re-run CSV'
     Assert-Ui ($it[4].Rerun -ne '' -and $it[4].Done -ne $stamp) '3 the row is marked as given to the re-run'
     # 4: forget the step
-    Show-UiReview -Steps @(@{ Do = 'click'; Text = 'gui.aiReviewForget' }, @{ Do = 'click'; Text = 'gui.aiReviewForgetYes' }, @{ Do = 'shot'; Name = 'ai_review_ui_2' }, @{ Do = 'click'; Text = 'gui.close' })
+    Show-UiReview -Steps @(@{ Do = 'pick'; Row = 1 }, @{ Do = 'click'; Text = 'gui.aiReviewForget' }, @{ Do = 'click'; Text = 'gui.aiReviewForgetYes' }, @{ Do = 'shot'; Name = 'ai_review_ui_2' }, @{ Do = 'click'; Text = 'gui.close' })
     $m = Read-FujiAiMemory -Directory $work
     $it = Get-UiItem
-    Assert-Ui (-not $m.Contains($newKey)) '4 the memory of the step is erased'
-    Assert-Ui (-not $it[1].Done -and -not $it[2].Done -and -not $it[4].Done -and $it[1].Rerun -and $it[4].Rerun) '4 the lines are not checked any more, their re-run times stay'
+    Assert-Ui (-not $m.Contains($newKey) -and $m.Contains($subKey)) '4 the memory of the step is erased (the other step kept)'
+    Assert-Ui (-not $it[1].Done -and -not $it[2].Done -and -not $it[4].Done -and $it[6].Done -and $it[1].Rerun -and $it[4].Rerun) '4 the lines are not checked any more, their re-run times stay'
     Assert-Ui (@($script:uiLog | Where-Object { $_.StartsWith('ok ') }).Count -eq 4 -and @($script:uiLog | Where-Object { $_.StartsWith('warn') }).Count -eq 0) '4 three re-run lines and one forget line in the log, no warning'
     Assert-Ui ($script:trouble.Count -eq 0) 'every step found its button'
     foreach ($t in $script:trouble) { Write-Output ('  ' + $t) }

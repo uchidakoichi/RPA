@@ -49,7 +49,9 @@ function Copy-FujiAiLocal {
     $total = [long]0
     foreach ($k in $manifest.Files.Keys) { $total += [long]$manifest.Files[$k]['size'] }
     $localJson = Join-Path $LocalDir 'ai.json'
-    if (Test-Path -LiteralPath $localJson) { Remove-Item -LiteralPath $localJson -Force }
+    # the files of the copy there is now (taken away after the new ones are in place, when the new
+    # version does not have them: a model of another name)
+    $before = Get-FujiAiLocalManifest -LocalDir $LocalDir
     $parts = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $done = [long]0
     $buffer = New-Object -TypeName 'byte[]' -ArgumentList $script:FujiAiChunk
@@ -79,6 +81,9 @@ function Copy-FujiAiLocal {
             $got = -join ($sha.Hash | ForEach-Object { $_.ToString('x2') })
             if ($want -and $got -ne $want) { throw (Get-FujiText 'run.aiCopyBad' $rel) }
         }
+        # every new file is here and right: only now is the copy there was taken as incomplete (until
+        # then, a copy that was stopped or failed leaves the old copy as it was, still usable)
+        if (Test-Path -LiteralPath $localJson) { Remove-Item -LiteralPath $localJson -Force }
         foreach ($part in $parts) {
             $dest = $part.Substring(0, $part.Length - 5)
             try {
@@ -90,6 +95,13 @@ function Copy-FujiAiLocal {
         }
         $parts.Clear()
         Copy-Item -LiteralPath (Join-Path $SharedDir 'ai.json') -Destination $localJson
+        if ($null -ne $before) {
+            foreach ($rel in @($before.Files.Keys)) {
+                if ($manifest.Files.Contains($rel)) { continue }
+                # a file left behind takes room only: the copy works without it taken away
+                try { Invoke-FujiAiFileRetry { Remove-Item -LiteralPath (Join-Path $LocalDir ($rel.Replace('/', '\'))) -Force -ErrorAction Stop } } catch { $null = $_ }
+            }
+        }
         return 'copied'
     } finally {
         foreach ($part in $parts) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
@@ -199,10 +211,18 @@ function Invoke-FujiAiRunChat {
     if ($null -eq $srv -or $srv.Process.HasExited) {
         $folder = Get-FujiAiFolderSetting -Settings $script:Settings
         if (-not $folder) { throw (New-FujiStopException (Get-FujiText 'run.aiNoFolder')) }
-        $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
-        $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
-        [System.Windows.Forms.Application]::DoEvents()
-        $script:FujiAiServer = Start-FujiAiServer -LocalDir $dir -LogDir (Join-Path $script:Ed.Directory $script:FujiLogFolder)
+        # the AI that cannot be made ready or started stops the run: the next row would try again
+        # (wait for a minute or copy 1.3 GB) and fail the same way on every row
+        try {
+            $dir = Resolve-FujiAiReady -SharedDir $folder -Copy { $script:FujiAiShowedWindow = $true; Show-FujiAiCopyDialog -SharedDir $folder } -Log { param($Message) Write-FujiUiLog -Message $Message -Level 'warn' }
+            $script:Ui.Progress.Text = Get-FujiText 'run.aiStarting'
+            [System.Windows.Forms.Application]::DoEvents()
+            $script:FujiAiServer = Start-FujiAiServer -LocalDir $dir -LogDir (Join-Path $script:Ed.Directory $script:FujiLogFolder)
+        } catch [System.OperationCanceledException] {
+            throw
+        } catch {
+            throw (New-FujiStopException (Get-FujiText 'run.aiStartFailed' $_.Exception.Message))
+        }
         $srv = $script:FujiAiServer
     }
     return (Invoke-FujiAiChat -Server $srv -Body $Body)

@@ -47,6 +47,10 @@ function Show-FujiAiCopyDialog {
     [void]$f.Controls.Add($layout)
     [void]$f.Controls.Add($buttons)
     $owner = Get-FujiOwner
+    # the other windows wait while the copy goes (the window is not modal: the progress is drawn by
+    # DoEvents, which would also take clicks on them: copy again, delete the copy, close)
+    $waiting = @(foreach ($w in @([System.Windows.Forms.Application]::OpenForms)) { if ($w -ne $f -and $w.Enabled) { $w } })
+    foreach ($w in $waiting) { $w.Enabled = $false }
     if ($null -ne $owner) { $f.Show($owner) } else { $f.Show() }
     try {
         return (Copy-FujiAiLocal -SharedDir $SharedDir -Progress {
@@ -59,6 +63,7 @@ function Show-FujiAiCopyDialog {
                 [System.Windows.Forms.Application]::DoEvents()
             } -Cancel { $state.Cancel })
     } finally {
+        foreach ($w in $waiting) { $w.Enabled = $true }
         $f.Close()
         $f.Dispose()
     }
@@ -148,6 +153,7 @@ function Invoke-FujiAiTest {
         $opts = Read-FujiAiOption -Text (Get-FujiText 'gui.aiTestOptions')
         $body = New-FujiAiChooseBody -Question (Get-FujiText 'gui.aiTestQuestion') -Options $opts -Source (Get-FujiText 'gui.aiTestSource')
         $body.Remove('Truncated')
+        $body.Remove('ExamplesUsed')
         $sw.Restart()
         $c = Read-FujiAiChoice -Response (Invoke-FujiAiChat -Server $srv -Body $body) -Options $opts
         $out.Add((Get-FujiText 'gui.aiTestResult' ('{0:N1}' -f $start) $c.Value ([double]$c.P).ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture) ('{0:N1}' -f $sw.Elapsed.TotalSeconds)))
@@ -187,7 +193,7 @@ function Show-FujiAiSettingDialog {
     $testBtn = New-FujiButton -Text (Get-FujiText 'gui.aiTest')
     foreach ($b in @($copyBtn, $deleteBtn, $testBtn)) { [void]$actions.Controls.Add($b) }
     [void]$layout.Controls.Add($actions)
-    $ctx = @{ Box = $box; Status = $status }
+    $ctx = @{ Box = $box; Status = $status; Form = $f }
     $refresh = { $ctx.Status.Text = Get-FujiAiStatusText -Folder $ctx.Box.Text.Trim() }
     $pick.Add_Click({ Invoke-FujiUi { $p = Select-FujiAiFolderUi -Start $ctx.Box.Text.Trim(); if ($p) { $ctx.Box.Text = $p }; & $refresh } })
     $box.Add_Leave({ Invoke-FujiUi { & $refresh } })
@@ -205,8 +211,12 @@ function Show-FujiAiSettingDialog {
             } })
     $testBtn.Add_Click({ Invoke-FujiUi {
                 $ctx.Status.Text = Get-FujiText 'gui.aiTesting'
-                [System.Windows.Forms.Application]::DoEvents()
-                try { $ctx.Status.Text = Invoke-FujiAiTest -Folder $ctx.Box.Text.Trim() } catch { $ctx.Status.Text = $_.Exception.Message }
+                # nothing else in this window while the test runs (it starts and stops the AI)
+                $ctx.Form.Enabled = $false
+                try {
+                    [System.Windows.Forms.Application]::DoEvents()
+                    try { $ctx.Status.Text = Invoke-FujiAiTest -Folder $ctx.Box.Text.Trim() } catch { $ctx.Status.Text = $_.Exception.Message }
+                } finally { $ctx.Form.Enabled = $true }
             } })
     $bar = New-FujiButtonBar
     $close = New-FujiButton -Text (Get-FujiText 'gui.aiSaveClose')

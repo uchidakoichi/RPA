@@ -78,6 +78,21 @@ try {
     $er = Invoke-FujiAiChat -Server $srv -Body $ex
     $ans = ConvertFrom-FujiJson -Json ([string]$er.choices[0].message.content)
     Check ($ans -is [System.Collections.IDictionary] -and $ans.Contains('phone')) ('ask: extract JSON ' + [string]$er.choices[0].message.content)
+    # a long Japanese value (the room was 60 tokens per item before 2026.11.12.2: cut, JSON unreadable)
+    $addr = -join [char[]]@(0x795E,0x5948,0x5DDD,0x770C,0x85E4,0x6CA2,0x5E02,0x7247,0x702C,0x6D77,0x5CB8,0x4E09,0x4E01,0x76EE,0x4E8C,0x5341,0x56DB,0x756A,0x5341,0x53F7,0x30B5,0x30F3,0x30D7,0x30EB,0x30DE,0x30F3,0x30B7,0x30E7,0x30F3,0x7247,0x702C,0x6D77,0x5CB8,0x30A6,0x30A8,0x30B9,0x30C8,0x30BF,0x30EF,0x30FC,0x5343,0x4E8C,0x767E,0x4E09,0x5341,0x56DB,0x53F7,0x5BA4,0x5185,0x7530,0x65B9,0x69D8,0x5B9B,0x3066,0x5348,0x524D,0x4E2D,0x5728,0x5B85,0x5E73,0x65E5,0x306F,0x4E0D,0x5728,0x306E,0x305F,0x3081,0x5B85,0x914D,0x30DC,0x30C3,0x30AF,0x30B9,0x3078,0x304A,0x9858,0x3044,0x3057,0x307E,0x3059)
+    $ex2 = New-FujiAiExtractBody -Items (Read-FujiAiItem -Text "name`naddress") -Note '' -Source ('Name: Nakamura Sakura' + [char]10 + 'Address: ' + $addr)
+    $ex2.Remove('Truncated')
+    $er2 = Invoke-FujiAiChat -Server $srv -Body $ex2
+    $ans2 = $null; try { $ans2 = ConvertFrom-FujiJson -Json ([string]$er2.choices[0].message.content) } catch { $ans2 = $null }
+    Check ($ans2 -is [System.Collections.IDictionary] -and ([string]$ans2['address']).Length -ge 80) ('ask: a long value is read whole ({0} of {1} characters, {2} tokens)' -f $(if ($ans2 -is [System.Collections.IDictionary]) { ([string]$ans2['address']).Length } else { -1 }), $addr.Length, (Get-FujiAiTokenCount -Response $er2))
+    # ten items (the most a step takes): every value comes back in readable JSON (the VM reads about
+    # 10 tokens a second, a tenth of the office PC: hence the long wait)
+    $ten = (1..10 | ForEach-Object { 'item' + $_ }) -join "`n"
+    $ex3 = New-FujiAiExtractBody -Items (Read-FujiAiItem -Text $ten) -Note '' -Source (('Name: Nakamura Sakura, phone 0466-12-3456. ' + $addr + ' ') * 10)
+    $ex3.Remove('Truncated')
+    $er3 = $null; $err3 = ''; try { $er3 = Invoke-FujiAiChat -Server $srv -Body $ex3 -TimeoutSec 300 } catch { $err3 = $_.Exception.Message }
+    $ans3 = $null; if ($null -ne $er3) { try { $ans3 = ConvertFrom-FujiJson -Json ([string]$er3.choices[0].message.content) } catch { $ans3 = $null } }
+    Check ($ans3 -is [System.Collections.IDictionary] -and $ans3.Count -eq 10) ('ask: ten items (max_tokens {0}) {1}' -f $ex3['max_tokens'], $err3)
     $procId = $srv.Process.Id
     Stop-FujiAiServer -Server $srv
     Start-Sleep -Milliseconds 500
@@ -95,6 +110,23 @@ try {
         $ok4 = $true; try { Remove-FujiAiCopy -LocalDir $local; [void](Copy-FujiAiLocal -SharedDir $shared -LocalDir $local) } catch { $ok4 = $false; Write-Output $_.Exception.Message }
         Check ($ok4 -and (Test-Path -LiteralPath (Join-Path $local 'ai.json'))) ('delete the copy and copy again, round ' + $round)
     }
+    # an update stopped halfway: the copy there was is still used (it was taken as gone before 2026.11.12.2)
+    $m4 = $manifest; $m4.aiVersion = 20
+    Write-FujiTextFile -Path (Join-Path $shared 'ai.json') -Text (ConvertTo-FujiJson -InputObject $m4 -Indent 2)
+    $r = Copy-FujiAiLocal -SharedDir $shared -LocalDir $local -Progress { param($Done, $Total) } -Cancel { $true }
+    $kept = Get-FujiAiLocalManifest -LocalDir $local
+    Check ($r -eq 'canceled' -and $null -ne $kept -and $kept.AiVersion -eq 13 -and (Test-Path -LiteralPath (Join-Path $local 'qwen35-q4.gguf'))) 'copy: an update called off leaves the old copy usable'
+    $ks = Start-FujiAiServer -LocalDir $local -LogDir $logs
+    Check (-not $ks.Process.HasExited) 'copy: the old copy still starts'
+    Stop-FujiAiServer -Server $ks
+    # a model of another name: the old model is taken away from the copy
+    Rename-Item -LiteralPath (Join-Path $shared 'qwen35-q4.gguf') -NewName 'qwen35-new.gguf'
+    $files5 = [ordered]@{}
+    foreach ($k in $files.Keys) { if ($k -eq 'qwen35-q4.gguf') { $files5['qwen35-new.gguf'] = $files[$k] } else { $files5[$k] = $files[$k] } }
+    $m5 = [ordered]@{ aiVersion = 21; model = 'qwen35-new.gguf'; files = $files5; serverArgs = $manifest.serverArgs }
+    Write-FujiTextFile -Path (Join-Path $shared 'ai.json') -Text (ConvertTo-FujiJson -InputObject $m5 -Indent 2)
+    $r = Copy-FujiAiLocal -SharedDir $shared -LocalDir $local
+    Check ($r -eq 'copied' -and (Test-Path -LiteralPath (Join-Path $local 'qwen35-new.gguf')) -and -not (Test-Path -LiteralPath (Join-Path $local 'qwen35-q4.gguf')) -and (Get-FujiAiLocalManifest -LocalDir $local).Model -eq 'qwen35-new.gguf') 'copy: the model of the old name is taken away'
     # a leftover from a crash is cleared at the next start
     $left = Start-Process -FilePath (Join-Path $local 'llama-x64\llama-server.exe') -ArgumentList '--version' -PassThru -WindowStyle Hidden
     $left2 = Start-FujiAiServer -LocalDir $local -LogDir $logs

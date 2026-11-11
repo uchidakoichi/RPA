@@ -56,7 +56,8 @@ function New-FujiRunBar {
     $alerts.Add_Click({ Invoke-FujiUi { Show-FujiAlertSettingDialog } })
     [void]$row.Controls.Add($alerts)
     $ai = New-FujiButton -Text (Get-FujiText 'gui.aiButton') -Tip (Get-FujiText 'gui.aiButtonTip')
-    $ai.Add_Click({ Invoke-FujiUi { Show-FujiAiSettingDialog } })
+    # not while a run goes: the settings stop the AI (copy, delete the copy, test) the run is using
+    $ai.Add_Click({ Invoke-FujiUi { if (-not (Test-FujiEditLocked)) { Show-FujiAiSettingDialog } } })
     [void]$row.Controls.Add($ai)
     $aiReview = New-FujiButton -Text (Get-FujiText 'gui.aiReviewButton') -Tip (Get-FujiText 'gui.aiReviewButtonTip')
     $aiReview.Add_Click({ Invoke-FujiUi { if (-not (Test-FujiEditLocked)) { Show-FujiAiReviewDialog } } })

@@ -9,8 +9,10 @@ $script:FujiAiExampleMax = 30
 $script:FujiAiExampleText = 100
 $script:FujiAiMemoryNotice = ''
 # columns of the review list (the first 11 were there before the review window; "rerun" is when the
-# checked answer was put to use: given to a re-run CSV, or picked by a person in the run itself)
-$script:FujiAiReviewColumns = @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason', 'kind', 'macroId', 'key', 'hash', 'done', 'rerun')
+# checked answer was put to use: given to a re-run CSV, or picked by a person in the run itself;
+# "runMacro" is the macro that was run (macroId is the one the step is in: a called macro);
+# "rowPrint" is the fingerprint of the CSV row, so a re-run CSV is made from the same CSV only)
+$script:FujiAiReviewColumns = @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason', 'kind', 'macroId', 'key', 'hash', 'done', 'rerun', 'runMacro', 'rowPrint')
 # a line with at least this many columns can be checked (it has the step key and the fingerprint)
 $script:FujiAiReviewKeyed = 16
 
@@ -45,20 +47,41 @@ function New-FujiAiMemoryStep {
     return [ordered]@{ answers = [ordered]@{}; examples = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
 }
 
-# The AI steps of a macro by step key (today's key and the one before): key -> list of @{ Key; Cmd; Settings }
+# The AI steps of a macro (or of all the macros: a step in a called macro is listed in the review of
+# the macro that was run) by step key (today's key and the one before): key -> list of @{ Key; Cmd; Settings }
 function Get-FujiAiStepMap {
-    param([Parameter(Mandatory)][System.Collections.IDictionary]$Macro)
+    param([System.Collections.IDictionary]$Macro = $null, [AllowNull()]$Macros = $null)
     $map = @{}
-    foreach ($s in $Macro.steps) {
-        if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
-        $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
-        $step = @{ Key = (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set); Cmd = [string]$s.cmd; Settings = $set }
-        foreach ($k in @($step.Key, (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set -Legacy))) {
-            if (-not $map.ContainsKey($k)) { $map[$k] = New-Object -TypeName 'System.Collections.Generic.List[object]' }
-            $map[$k].Add($step)
+    $all = @()
+    if ($null -ne $Macros) { $all = @(foreach ($m in $Macros) { $m }) } elseif ($null -ne $Macro) { $all = @(, $Macro) }
+    foreach ($m in $all) {
+        foreach ($s in $m.steps) {
+            if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
+            $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
+            $step = @{ Key = (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$m.id) -Settings $set); Cmd = [string]$s.cmd; Settings = $set }
+            foreach ($k in @($step.Key, (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$m.id) -Settings $set -Legacy))) {
+                if (-not $map.ContainsKey($k)) { $map[$k] = New-Object -TypeName 'System.Collections.Generic.List[object]' }
+                $map[$k].Add($step)
+            }
         }
     }
     return $map
+}
+
+# The fingerprint of a CSV row as the run read it: the data columns only (a re-run CSV adds the
+# original row number, the error and the time after them; trailing empty cells aside), so a row of
+# a re-run CSV has the same fingerprint as the row it came from. '' for no row.
+function Get-FujiAiRowPrint {
+    param([AllowNull()][string[]]$Data, [AllowNull()][string[]]$Header = $null)
+    if ($null -eq $Data -or $Data.Length -eq 0) { return '' }
+    $end = $Data.Length
+    if ($null -ne $Header) {
+        $marker = Get-FujiText 'editor.csv.resultHeaderName'
+        for ($i = 0; $i -lt $Header.Length; $i++) { if ([string]$Header[$i].Trim() -ceq $marker) { $end = [Math]::Min($end, $i); break } }
+    }
+    while ($end -gt 0 -and [string]$Data[$end - 1] -eq '') { $end-- }
+    if ($end -eq 0) { return '' }
+    return (Get-FujiSha16 -Text ($Data[0..($end - 1)] -join [string][char]0x1f))
 }
 
 # The macro's AI step an item of the review list belongs to, or $null. When steps share a key (two
@@ -196,7 +219,10 @@ function Select-FujiAiExample {
     param([Parameter(Mandatory)][System.Collections.IDictionary]$Memory, [AllowEmptyString()][string]$Key, [AllowEmptyString()][string]$Source, [int]$Max = 3)
     $out = New-Object -TypeName 'System.Collections.Generic.List[object]'
     if (-not $Memory.Contains($Key)) { return , $out }
-    $a = Get-FujiAiBigram -Text $Source
+    # the examples keep the first 100 characters: the text is compared over as many
+    $text = [string]$Source
+    if ($text.Length -gt $script:FujiAiExampleText) { $text = $text.Substring(0, $script:FujiAiExampleText) }
+    $a = Get-FujiAiBigram -Text $text
     $scored = New-Object -TypeName 'System.Collections.Generic.List[object]'
     foreach ($e in $Memory[$Key]['examples']) {
         $b = Get-FujiAiBigram -Text ([string]$e['text'])
@@ -212,7 +238,8 @@ function Select-FujiAiExample {
     return , $out
 }
 
-# The review list's lines of one macro over the last Days days (files with _2 ... included)
+# The review list's lines of one macro over the last Days days (files with _2 ... included): the
+# lines of its own steps, and of the steps of the macros it called (they were run as part of it)
 function Read-FujiAiReviewItem {
     param([Parameter(Mandatory)][string]$Directory, [AllowEmptyString()][string]$MacroId, [AllowEmptyString()][string]$MacroName = '', [int]$Days = 1, [datetime]$Now = (Get-Date))
     $items = New-Object -TypeName 'System.Collections.Generic.List[object]'
@@ -233,11 +260,12 @@ function Read-FujiAiReviewItem {
             # the formula guard of the CSV (a leading apostrophe before = + - @) is taken off again
             for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { ([string]$r[$c]) -replace "^'(?=[=+\-@\t\r])", '' } else { '' }) }
             if ($old) { if ($v['macro'] -ne $MacroId -and ($MacroName -eq '' -or $v['macro'] -ne $MacroName)) { continue } }
-            elseif ($v['macroId'] -ne $MacroId) { continue }
+            elseif ($v['macroId'] -ne $MacroId -and $v['runMacro'] -ne $MacroId) { continue }
             $rowNo = 0
             [void][int]::TryParse($v['row'], [ref]$rowNo)
             $items.Add(@{ File = $f.FullName; Line = $i; Old = $old; Time = $v['time']; Macro = $v['macro']; Step = $v['step']; Row = $rowNo; Command = $v['command']; Name = $v['name']
-                    Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done']; Rerun = $v['rerun'] })
+                    Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done']; Rerun = $v['rerun']
+                    RunMacro = $(if ($v['runMacro']) { $v['runMacro'] } else { $v['macroId'] }); RowPrint = $v['rowPrint'] })
         }
     }
     # a plain array (unrolled into a pipeline; callers take it with @())
@@ -296,6 +324,20 @@ function Set-FujiAiReviewDone {
     return ((Set-FujiAiReviewDoneMany -Items @($Item) -Time $Time) -eq 1)
 }
 
+# The fingerprints of the rows that are run again: row number -> list of prints (a row may be on the
+# list more than once)
+function Get-FujiAiRerunPrint {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items)
+    $out = @{}
+    foreach ($it in $Items) {
+        $p = [string]$it['RowPrint']
+        if (-not $p) { continue }
+        if (-not $out.ContainsKey([int]$it.Row)) { $out[[int]$it.Row] = New-Object -TypeName 'System.Collections.Generic.List[string]' }
+        $out[[int]$it.Row].Add($p)
+    }
+    return $out
+}
+
 # The person's answer of each checked item, from the memory (also for items checked another day)
 function Set-FujiAiReviewFinal {
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [Parameter(Mandatory)][System.Collections.IDictionary]$Memory)
@@ -310,11 +352,12 @@ function Set-FujiAiReviewFinal {
 # Items to run again: checked, with a row number and the person's answer. Left out: spot checks the
 # person left as they were (their answer was used already), an answer a person picked in the run itself
 # (used there: its "rerun" time is the line's own time), and items given to a re-run CSV before
-# (unless IncludeSent).
+# (unless IncludeSent). RunMacroId: only rows of a run of that macro (the row numbers are of its CSV).
 function Get-FujiAiRerunItem {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent)
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent, [string]$RunMacroId = '')
     $out = @(foreach ($it in $Items) {
             if (-not $it.Done -or $it.Row -le 0 -or -not $it.Contains('Final')) { continue }
+            if ($RunMacroId -and [string]$it['RunMacro'] -and [string]$it['RunMacro'] -ne $RunMacroId) { continue }
             if ($it.Kind -eq 'spot' -and [string]$it['Final'] -eq [string]$it.Answer) { continue }
             $sent = [string]$it['Rerun']
             if ($sent -and (-not $IncludeSent -or ($it.Kind -eq 'asked' -and $sent -eq [string]$it['Time']))) { continue }
@@ -324,14 +367,16 @@ function Get-FujiAiRerunItem {
 }
 
 function Get-FujiAiRerunRowNo {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent)
-    $nos = @(foreach ($it in (Get-FujiAiRerunItem -Items $Items -IncludeSent:$IncludeSent)) { [int]$it.Row })
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent, [string]$RunMacroId = '')
+    $nos = @(foreach ($it in (Get-FujiAiRerunItem -Items $Items -IncludeSent:$IncludeSent -RunMacroId $RunMacroId)) { [int]$it.Row })
     return , [int[]]@($nos | Sort-Object -Unique)
 }
 
-# The rows checked in the review, from the loaded CSV, as an error-row CSV (original row numbers kept)
+# The rows checked in the review, from the loaded CSV, as an error-row CSV (original row numbers kept).
+# Prints: row number -> fingerprints written in the review list; a loaded row that is not the row
+# that was run (another CSV loaded, or the CSV changed) stops it, so no other row is entered.
 function New-FujiAiRerunCsv {
-    param([AllowNull()][string[]]$Header, [AllowEmptyCollection()][System.Collections.IList]$Rows, [AllowEmptyCollection()][int[]]$RowNos)
+    param([AllowNull()][string[]]$Header, [AllowEmptyCollection()][System.Collections.IList]$Rows, [AllowEmptyCollection()][int[]]$RowNos, [hashtable]$Prints = @{})
     if ($null -eq $Rows -or $Rows.Count -eq 0) { return @{ Text = ''; Count = 0; Error = (Get-FujiText 'run.aiRerunNoCsv') } }
     $nos = @($RowNos | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
     if ($nos.Count -eq 0) { return @{ Text = ''; Count = 0; Error = (Get-FujiText 'run.aiRerunNoRows') } }
@@ -341,6 +386,16 @@ function New-FujiAiRerunCsv {
     foreach ($n in $nos) {
         if (-not $byNo.ContainsKey([int]$n)) { return @{ Text = ''; Count = 0; Error = (Get-FujiText 'run.aiRerunMissing' $n) } }
         $pick.Add($byNo[[int]$n])
+    }
+    $differ = @(foreach ($p in $pick) {
+            if (-not $Prints.ContainsKey([int]$p.No)) { continue }
+            $now = Get-FujiAiRowPrint -Data ([string[]]$p.Data) -Header $Header
+            foreach ($want in $Prints[[int]$p.No]) { if ($want -and $want -ne $now) { [int]$p.No; break } }
+        })
+    if ($differ.Count -gt 0) {
+        $shown = @($differ | Select-Object -First 10) -join ', '
+        if ($differ.Count -gt 10) { $shown += ' ...' }
+        return @{ Text = ''; Count = 0; Error = (Get-FujiText 'run.aiRerunChanged' $shown) }
     }
     $max = 0
     foreach ($p in $pick) { $max = [Math]::Max($max, @($p.Data).Count) }
@@ -383,9 +438,18 @@ function Get-FujiAiReviewSummary {
 function Get-FujiAiReviewOrder {
     param([object[]]$Items)
     $p = { $v = 0.0; [void][double]::TryParse([string]$_.P, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$v); $v }
-    $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' } | Sort-Object -Property @{ Expression = $p })
+    $open = @($Items | Where-Object { -not $_.Done -and $_.Kind -ne 'spot' -and $_.Kind -ne 'empty' } | Sort-Object -Property @{ Expression = $p })
     $spot = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'spot' } | Sort-Object -Property @{ Expression = $p })
+    # an empty text cannot be checked (see Test-FujiAiReviewCheckable): after what can
+    $empty = @($Items | Where-Object { -not $_.Done -and $_.Kind -eq 'empty' })
     $done = @($Items | Where-Object { $_.Done })
     # a list even for one item (a single hashtable would be returned as itself)
-    return , @($open + $spot + $done)
+    return , @($open + $spot + $empty + $done)
+}
+
+# Whether a person can check this item (its answer is remembered): not a line of the old list, nor a
+# text that was empty (every empty text has one fingerprint: one answer would go to every empty row)
+function Test-FujiAiReviewCheckable {
+    param([Parameter(Mandatory)][hashtable]$Item)
+    return (-not $Item.Old -and [string]$Item.Hash -ne '' -and $Item.Kind -ne 'empty' -and ([string]$Item.Source).Trim() -ne '')
 }

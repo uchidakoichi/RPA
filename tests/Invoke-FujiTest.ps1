@@ -466,14 +466,14 @@ Assert-True ($c.Probs.Contains('other') -and $c.Probs['other'] -eq 0) 'ai: optio
 $none = Read-FujiAiChoice -Response ('{"choices":[{"logprobs":{"content":[{"top_logprobs":[{"token":"x","logprob":-0.1}]}]}}]}' | ConvertFrom-Json) -Options $o
 Assert-True ($none.Covered -eq 0 -and $none.P -eq 0) 'ai: no letter answered'
 $e = New-FujiAiExtractBody -Items $it -Note 'more' -Source 'text'
-Assert-Equal 120 $e.max_tokens 'ai: extract tokens 60 per item'
+Assert-Equal 280 $e.max_tokens 'ai: extract tokens: room for two values of 100 characters'
 Assert-Equal 'json_schema' $e.response_format.type 'ai: extract json schema'
 $sch = $e.response_format.json_schema.schema
 Assert-Equal @('name', 'phone') @($sch.required) 'ai: extract schema requires every item'
 Assert-Equal 100 $sch.properties['name'].maxLength 'ai: extract item max length'
 Assert-True ($e.messages[0].content.Contains('the applicant') -and $e.messages[0].content.Contains('more')) 'ai: extract prompt has items and note'
 $many = Read-FujiAiItem -Text ((1..12 | ForEach-Object { 'v' + $_ }) -join "`n")
-Assert-Equal 600 (New-FujiAiExtractBody -Items $many -Note '' -Source 't').max_tokens 'ai: extract tokens at most 600'
+Assert-Equal (20 + 130 * 12) (New-FujiAiExtractBody -Items $many -Note '' -Source 't').max_tokens 'ai: extract tokens grow with the items (no cap that cuts values)'
 Assert-True (Test-FujiAiInSource -Value 'Nakamura Sakura' -Source ('name: Nakamura' + $fwSpace + 'Sakura')) 'ai: in source, spaces'
 Assert-True (Test-FujiAiInSource -Value '0466-12-3456' -Source ('tel ' + [string][char]0xFF10 + '466-12-3456')) 'ai: in source, full-width digits'
 Assert-True (-not (Test-FujiAiInSource -Value 'Nakamura Hanako' -Source 'name: Nakamura Sakura')) 'ai: not in source'
@@ -488,13 +488,20 @@ try {
     Assert-True ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) 'ai: review csv has a BOM'
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p1).Text).Records
     Assert-Equal 3 $recs.Count 'ai: review csv header + 2 rows'
-    Assert-Equal 17 $recs[0].Count 'ai: review csv 17 columns'
+    Assert-Equal 19 $recs[0].Count 'ai: review csv 19 columns'
     Assert-Equal ("a,b`n""c""" + ('y' * 93)) $recs[1][6] 'ai: review csv keeps comma, quote, newline; source cut to 100'
     Assert-Equal "'=bad" $recs[2][7] 'ai: review csv answer cannot run as a formula'
     # the day's list is open in Excel (locked): the line goes to the next free name
     $lock = [System.IO.File]::Open($p1, 'Open', 'ReadWrite', 'None')
     try { $p2 = Add-FujiAiReviewRow -Directory $aiWork -Now ([datetime]'2026-11-10 09:10') -Row ([ordered]@{ time = '09:10'; macro = 'm'; step = 1; row = 3; command = 'AI_CHOOSE'; name = 'desk'; source = 'x'; answer = 'a'; p = '0.3'; probs = ''; reason = 'r3' }) } finally { $lock.Dispose() }
     Assert-Equal (Join-Path (Join-Path $aiWork 'fujikyun_logs') 'ai_review_2026-11-10_2.csv') $p2 'ai: review csv locked, next name used'
+    # the log folder cannot be written (here: a file of that name): the error comes back, no endless trying
+    $noDir = Join-Path $aiWork 'nodir'
+    [void](New-Item -ItemType Directory -Path $noDir)
+    Write-FujiTextFile -Path (Join-Path $noDir 'fujikyun_logs') -Text 'x'
+    $rvThrew = $false
+    try { [void](Add-FujiAiReviewRow -Directory $noDir -Now ([datetime]'2026-11-10 09:20') -Row ([ordered]@{ time = '09:20'; macro = 'm'; command = 'AI_CHOOSE'; name = 'desk'; source = 'x' })) } catch { $rvThrew = $true }
+    Assert-True ($rvThrew -and @(Get-ChildItem -LiteralPath $noDir).Count -eq 1) 'ai: review csv in a folder that cannot be written throws (tries 9 names at most)'
     $m = Join-Path $aiWork 'ai.json'
     Write-FujiTextFile -Path $m -Text '{"aiVersion":2,"model":"m.gguf","files":{"m.gguf":{"size":5,"sha256":"ab"}},"serverArgs":"-c 4096"}'
     $man = Read-FujiAiManifest -Path $m
@@ -551,6 +558,11 @@ try {
     $sel = Select-FujiAiExample -Memory $mem4 -Key 'k' -Source 'garbage collection day' -Max 3
     Assert-True ($sel.Count -eq 3 -and $sel[0]['text'] -eq 'collection of large garbage' -and $sel[1]['text'] -eq 'garbage collection day for my street' -and -not (@($sel | ForEach-Object { $_['text'] }) -contains 'tax payment')) 'ai review: similar examples top 3, below 0.1 left out'
     Assert-Equal 0 (Select-FujiAiExample -Memory $mem4 -Key 'none' -Source 'x' -Max 3).Count 'ai review: no examples for an unknown step'
+    # a long text is compared over its first 100 characters, as the examples keep them
+    $longSrc = 'garbage collection day for my street' + (' and then some more words about other things' * 20)
+    $mem5 = [ordered]@{}
+    Add-FujiAiRemembered -Memory $mem5 -Key 'k' -Hash 'g1' -Answer 'a' -ExampleText $longSrc
+    Assert-Equal 1 (Select-FujiAiExample -Memory $mem5 -Key 'k' -Source ($longSrc + ' different ending') -Max 3).Count 'ai review: a long text finds the example of the same text'
     # the review list: 16 columns now; an 11-column file (before the review window) is read as old
     $logs = Join-Path $rvWork 'fujikyun_logs'
     [void](New-Item -ItemType Directory -Path $logs)
@@ -561,7 +573,7 @@ try {
     [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:01') -Row ([ordered]@{ time = '2026-11-10 09:01:00'; macro = 'main'; step = 2; row = 1; command = 'AI_CHOOSE'; name = 'desk'; source = 'y'; answer = 'garbage'; p = '0.90'; probs = ''; reason = 'spot'; kind = 'spot'; macroId = 'main'; key = $k1; hash = 'h9' }))
     [void](Add-FujiAiReviewRow -Directory $rvWork -Now ([datetime]'2026-11-10 09:02') -Row ([ordered]@{ time = '2026-11-10 09:02:00'; macro = 'other'; step = 1; row = 1; command = 'AI_CHOOSE'; name = 'v'; source = 'z'; answer = 'a'; p = '0.1'; probs = ''; reason = 'low'; kind = 'low'; macroId = 'other'; key = 'k'; hash = 'h' }))
     $recs = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16).Text).Records
-    Assert-True ($recs[0].Count -eq 17 -and $recs[1].Count -eq 17 -and $recs[1][6] -eq $src -and $recs[1][16] -eq '') 'ai review: 17 columns written, comma and newline kept'
+    Assert-True ($recs[0].Count -eq 19 -and $recs[1].Count -eq 19 -and $recs[1][6] -eq $src -and $recs[1][16] -eq '') 'ai review: 19 columns written, comma and newline kept'
     $items = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 2 -Now ([datetime]'2026-11-10 12:00'))
     Assert-Equal 3 $items.Count 'ai review: items of this macro over two days'
     $old = @($items | Where-Object { $_.Old })
@@ -631,7 +643,7 @@ try {
     Assert-True ($it16.Count -eq 2 -and -not $it16[0].Old -and $it16[0].Rerun -eq '' -and $it16[0].Row -eq 5) 'ai review: a 16-column list is not old'
     Assert-Equal 1 (Set-FujiAiReviewDoneMany -Items @($it16[0]) -Time 'D1') 'ai review: done on a 16-column line'
     $r16 = (ConvertFrom-FujiCsv -Text (Read-FujiCsvText -Path $p16old).Text).Records
-    Assert-True ($r16[0].Count -eq 17 -and $r16[1].Count -eq 17 -and $r16[1][15] -eq 'D1' -and $r16[1][16] -eq '' -and $r16[2].Count -eq 16) 'ai review: the marked line and the header made wide, the other line left'
+    Assert-True ($r16[0].Count -eq 19 -and $r16[1].Count -eq 19 -and $r16[1][15] -eq 'D1' -and $r16[1][16] -eq '' -and $r16[2].Count -eq 16) 'ai review: the marked line and the header made wide, the other line left'
     Assert-Equal 1 (Set-FujiAiReviewDoneMany -Items @($it16[0]) -Time 'R1' -Column 'rerun') 'ai review: rerun time written'
     $it16b = @(Read-FujiAiReviewItem -Directory $rvWork -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-08 12:00'))
     Assert-True ($it16b[0].Done -eq 'D1' -and $it16b[0].Rerun -eq 'R1' -and $it16[0].Rerun -eq 'R1' -and $it16b[1].Done -eq '') 'ai review: rerun time read back, done kept'
@@ -655,6 +667,9 @@ try {
     $ek = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'mm' -Settings $setE
     $lek = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'mm' -Settings $setE -Legacy
     $map = Get-FujiAiStepMap -Macro $mm
+    $mapAll = Get-FujiAiStepMap -Macros @([ordered]@{ id = 'other'; steps = @([ordered]@{ cmd = 'AI_CHOOSE'; val = $val1 }) }, $mm)
+    $otherKey = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'other' -Settings $set1
+    Assert-True ($mapAll.ContainsKey($otherKey) -and $mapAll.ContainsKey($nk) -and $mapAll[$nk].Count -eq 2 -and -not $map.ContainsKey($otherKey)) 'ai review: step map over all the macros (a called macro too)'
     Assert-True ($map[$nk].Count -eq 2 -and $map[$lk1].Count -eq 1 -and $map[$lk2].Count -eq 1 -and $map[$ek].Count -eq 1 -and $map[$lek].Count -eq 1) 'ai review: step map by the keys of today and of before'
     Assert-Equal "tax`npension" (Find-FujiAiReviewStep -Map $map -Item @{ Key = $lk2; Command = 'AI_CHOOSE'; Answer = '' }).Settings['options'] 'ai review: a key of before finds its own step'
     Assert-Equal "tax`npension" (Find-FujiAiReviewStep -Map $map -Item @{ Key = $nk; Command = 'AI_CHOOSE'; Answer = 'pension' }).Settings['options'] 'ai review: a shared key finds the step whose options hold the answer'
@@ -681,6 +696,42 @@ try {
     Assert-Equal 0 (Move-FujiAiMemoryKey -Memory $mv -Macros @($mm)) 'ai review: nothing to move the second time'
     Assert-Equal 0 (Move-FujiAiMemoryKey -Memory $mv -Macros $null) 'ai review: no macros, nothing moved'
     $gone = Remove-FujiAiRemembered -Memory $mv -Key $nk
+    # an item that cannot be remembered: old list, empty text
+    Assert-True ((Test-FujiAiReviewCheckable -Item @{ Old = $false; Hash = 'h'; Kind = 'low'; Source = 'x' }) -and -not (Test-FujiAiReviewCheckable -Item @{ Old = $true; Hash = 'h'; Kind = 'low'; Source = 'x' }) -and -not (Test-FujiAiReviewCheckable -Item @{ Old = $false; Hash = 'h'; Kind = 'empty'; Source = '' }) -and -not (Test-FujiAiReviewCheckable -Item @{ Old = $false; Hash = 'h'; Kind = 'low'; Source = '  ' })) 'ai review: old lines and empty texts cannot be checked'
+    $ordE = Get-FujiAiReviewOrder -Items @(@{ P = ''; Kind = 'empty'; Done = '' }, @{ P = '0.9'; Kind = 'spot'; Done = '' }, @{ P = '0.3'; Kind = 'low'; Done = '' }, @{ P = '0.1'; Kind = 'low'; Done = 'x' })
+    Assert-Equal @('low', 'spot', 'empty', 'low') @($ordE | ForEach-Object { $_.Kind }) 'ai review: empty texts after what can be checked, before what is done'
+    # the fingerprint of a CSV row: the data only (a re-run CSV row has the same one)
+    $pr = Get-FujiAiRowPrint -Data ([string[]]@('Nakamura', '090', '')) -Header $null
+    Assert-True ($pr.Length -eq 16 -and $pr -eq (Get-FujiAiRowPrint -Data ([string[]]@('Nakamura', '090')) -Header $null) -and $pr -ne (Get-FujiAiRowPrint -Data ([string[]]@('Nakamura', '091')) -Header $null)) 'ai review: row print of the data, trailing empty cells aside'
+    $origName = Get-FujiText 'editor.csv.resultHeaderName'
+    Assert-Equal $pr (Get-FujiAiRowPrint -Data ([string[]]@('Nakamura', '090', '', '7', 'err', '10:00')) -Header ([string[]]@('name', 'tel', '', $origName, 'e', 't'))) 'ai review: row print of a re-run CSV row is that of its row'
+    Assert-True ((Get-FujiAiRowPrint -Data ([string[]]@()) -Header $null) -eq '' -and (Get-FujiAiRowPrint -Data $null) -eq '') 'ai review: no row, no print'
+    # a re-run CSV from another CSV (same row numbers, other rows) is refused
+    $rrRows = New-Object -TypeName 'System.Collections.Generic.List[object]'
+    $rrRows.Add(@{ No = 1; Data = [string[]]@('Nakamura', '090') }); $rrRows.Add(@{ No = 2; Data = [string[]]@('Sato', '080') })
+    $okCsv = New-FujiAiRerunCsv -Header $null -Rows $rrRows -RowNos @(1, 2) -Prints @{ 1 = @($pr); 2 = @('') }
+    Assert-True ($okCsv.Error -eq '' -and $okCsv.Count -eq 2) 'ai review: re-run CSV from the same rows'
+    $badCsv = New-FujiAiRerunCsv -Header $null -Rows $rrRows -RowNos @(1, 2) -Prints @{ 1 = @($pr); 2 = @('0000000000000000') }
+    Assert-Equal (Get-FujiText 'run.aiRerunChanged' '2') $badCsv.Error 'ai review: re-run CSV refused when a row is not the one that was run'
+    $rpItems = @(@{ Row = 1; RowPrint = 'p1' }, @{ Row = 1; RowPrint = 'p2' }, @{ Row = 2; RowPrint = '' })
+    $rp = Get-FujiAiRerunPrint -Items $rpItems
+    Assert-True ($rp.Count -eq 1 -and $rp[1].Count -eq 2) 'ai review: prints per row number'
+    # only rows of runs of this macro (a called macro run by itself had another CSV)
+    $rmItems = @(@{ Done = 'x'; Row = 1; Kind = 'low'; Answer = 'a'; Final = 'b'; Rerun = ''; Time = 't'; RunMacro = 'main' }, @{ Done = 'x'; Row = 2; Kind = 'low'; Answer = 'a'; Final = 'b'; Rerun = ''; Time = 't'; RunMacro = 'sub' }, @{ Done = 'x'; Row = 3; Kind = 'low'; Answer = 'a'; Final = 'b'; Rerun = ''; Time = 't'; RunMacro = '' })
+    $rm1 = Get-FujiAiRerunRowNo -Items $rmItems -RunMacroId 'main'
+    $rm2 = Get-FujiAiRerunRowNo -Items $rmItems
+    Assert-Equal @(1, 3) @($rm1) 'ai review: re-run rows of runs of this macro only'
+    Assert-Equal @(1, 2, 3) @($rm2) 'ai review: re-run rows without a macro given'
+    # the lines of a called macro's steps are read for the macro that was run
+    $cmLogs = Join-Path $rvWork 'callmacro'
+    [void](New-Item -ItemType Directory -Path $cmLogs)
+    foreach ($cm in @(@('sub', 'main', 1), @('sub', 'sub', 2), @('main', 'main', 3))) {
+        [void](Add-FujiAiReviewRow -Directory $cmLogs -Now ([datetime]'2026-11-10 09:00') -Row ([ordered]@{ time = '2026-11-10 09:00:00'; macro = 'Main'; step = 1; row = $cm[2]; command = 'AI_CHOOSE'; name = 'desk'; source = 's'; answer = 'a'; p = '0.3'; probs = ''; reason = 'low'; kind = 'low'; macroId = $cm[0]; key = 'k'; hash = 'h'; runMacro = $cm[1]; rowPrint = 'rp' }))
+    }
+    $cmMain = @(Read-FujiAiReviewItem -Directory $cmLogs -MacroId 'main' -Days 1 -Now ([datetime]'2026-11-10 12:00'))
+    $cmSub = @(Read-FujiAiReviewItem -Directory $cmLogs -MacroId 'sub' -Days 1 -Now ([datetime]'2026-11-10 12:00'))
+    Assert-True ($cmMain.Count -eq 2 -and $cmMain[0].RunMacro -eq 'main' -and $cmMain[0].RowPrint -eq 'rp' -and $cmMain[0].MacroId -eq 'sub') 'ai review: a called macro step is listed for the macro that was run'
+    Assert-True ($cmSub.Count -eq 2 -and @($cmSub | Where-Object { $_.RunMacro -eq 'main' }).Count -eq 1) 'ai review: and for the called macro itself'
     Assert-True ($gone.Answers -eq 2 -and $gone.Examples -eq 2 -and -not $mv.Contains($nk) -and $mv.Contains($ek) -and (Remove-FujiAiRemembered -Memory $mv -Key 'nope').Answers -eq 0) 'ai review: one step forgotten'
     # the hints under the window
     $sum = Get-FujiAiReviewSummary -Items @(
@@ -1646,6 +1697,14 @@ $run = New-TestRun -Target '' -Steps (New-AiChooseStep) -Rows @(, [string[]]@('a
 $script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
 [void](Invoke-FujiRun -Run $run)
 Assert-True ($script:Fake.AiReviews[0]['done'] -eq '' -and $script:Fake.AiReviews[0]['rerun'] -eq '' -and $script:Fake.AiRemembered.Count -eq 0) 'ai run: an answer left for later is not checked yet'
+Assert-True ($script:Fake.AiReviews[0]['runMacro'] -eq 'main' -and $script:Fake.AiReviews[0]['rowPrint'] -eq (Get-FujiAiRowPrint -Data ([string[]]@('a')))) 'ai run: the list line has the macro that was run and the row print'
+# an AI step in a called macro: the line is of the called macro's step, in a run of the caller
+$aiSub = [ordered]@{ id = 'aisub'; name = 'AiSub'; targetWindow = ''; steps = [System.Collections.Generic.List[object]]@([ordered]@{ cmd = 'AI_CHOOSE'; val = (New-AiChooseStep)[1]; label = '' }) }
+$run = New-TestRun -Target '' -Steps @(, @('CALL_MACRO', '{"id":"aisub","name":"AiSub"}')) -Other @($aiSub) -Rows @(, [string[]]@('a'))
+$script:Fake.AiReply = New-AiChoiceReply @{ 'A' = 0.4; 'B' = 0.35; 'C' = 0.25 }
+[void](Invoke-FujiRun -Run $run)
+$subRv = $script:Fake.AiReviews[0]
+Assert-True ($script:Fake.AiReviews.Count -eq 1 -and $subRv['macroId'] -eq 'aisub' -and $subRv['runMacro'] -eq 'main' -and $subRv['key'] -eq (Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'aisub' -Settings (ConvertFrom-FujiStepValue -Cmd 'AI_CHOOSE' -Value (New-AiChooseStep)[1]))) 'ai run: a called macro step is listed with the macro that was run'
 
 # tokens: what llama-server counted is in the log of each AI step and in one line at the end of the run
 Assert-Equal 0 (Get-FujiAiTokenCount -Response (New-AiTextReply 'x')) 'ai tokens: 0 when the server did not say'
@@ -1669,6 +1728,8 @@ Assert-True (-not $run.Contains('Ai')) 'ai tokens: no line for a run without AI 
 $aiRvText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'AiReview.ps1'))
 Assert-True ($aiRvText -match "-Column 'rerun'" -and $aiRvText -match 'Get-FujiAiRerunItem' -and $aiRvText -match 'Remove-FujiAiRemembered' -and $aiRvText -match 'Move-FujiAiMemoryKey' -and $aiRvText -notmatch 'function Find-FujiAiReviewStep') 'ai review window: marks re-run rows, forgets a step, moves old keys'
 Assert-True ([System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'RunUi.ps1')) -match 'AiRemember = ') 'ai run: the screen side remembers picked answers'
+Assert-True ([System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'RunUi.ps1')) -match 'Test-FujiEditLocked\)\) \{ Show-FujiAiSettingDialog') 'ai settings: not opened while a run goes'
+Assert-True ($aiRvText -match '\$flush' -and $aiRvText -match 'Add_FormClosing' -and $aiRvText -match 'Test-FujiAiReviewCheckable' -and $aiRvText -match '-RunMacroId' -and $aiRvText -match 'Get-FujiAiRerunPrint') 'ai review window: written together, empty texts, this macro, row prints'
 
 # ----------------------------------------------------------------- authoring tools: debugging, retry, fields, tables, passwords
 # breakpoints and stepping
@@ -2237,6 +2298,11 @@ Assert-True ($aiPal.Count -eq 1 -and $aiPalCmds -contains 'AI_CHOOSE' -and $aiPa
 $aiSrvText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'AiServer.ps1'))
 $aiRunChat = [regex]::Match($aiSrvText, '(?s)function Invoke-FujiAiRunChat \{.*?\r?\n\}').Value
 Assert-True ($aiRunChat -ne '' -and $aiRunChat -notmatch 'Select-FujiAiFolderUi' -and $aiRunChat -match 'run\.aiNoFolder') 'ai: a run without an AI folder stops without a folder window'
+Assert-True ($aiRunChat -match '(?s)try \{.*Start-FujiAiServer.*\} catch \[System\.OperationCanceledException\] \{\s*throw\s*\} catch \{\s*throw \(New-FujiStopException \(Get-FujiText ''run\.aiStartFailed''') 'ai: an AI that cannot start stops the run (not tried again on every row)'
+$aiCopyFn = [regex]::Match($aiSrvText, '(?s)function Copy-FujiAiLocal \{.*?\r?\n\}').Value
+Assert-True ($aiCopyFn.IndexOf('Remove-Item -LiteralPath $localJson') -gt $aiCopyFn.IndexOf('run.aiCopyBad') -and $aiCopyFn -match '\$before\.Files\.Keys') 'ai: the old copy stays usable until the new files are all here; files of the old version taken away'
+$aiUiText = [System.IO.File]::ReadAllText((Join-Path (Join-Path $psRoot 'gui') 'Ai.ps1'))
+Assert-True ($aiUiText -match '\$w\.Enabled = \$false' -and $aiUiText -match "Remove\('ExamplesUsed'\)" -and $aiUiText -match '\$ctx\.Form\.Enabled = \$false') 'ai settings: other windows wait while copying, no extra field in the test, nothing else during the test'
 
 # ----------------------------------------------------------------- source rules
 # a second start (a scheduled task while the app is open) must not stop the open app's AI server:
