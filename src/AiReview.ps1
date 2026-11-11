@@ -8,8 +8,11 @@ $script:FujiAiMemoryFile = 'fujikyun_ai_answers.json'
 $script:FujiAiExampleMax = 30
 $script:FujiAiExampleText = 100
 $script:FujiAiMemoryNotice = ''
-# columns of the review list (the first 11 were there before the review window)
-$script:FujiAiReviewColumns = @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason', 'kind', 'macroId', 'key', 'hash', 'done')
+# columns of the review list (the first 11 were there before the review window; "rerun" is when the
+# checked answer was put to use: given to a re-run CSV, or picked by a person in the run itself)
+$script:FujiAiReviewColumns = @('time', 'macro', 'step', 'row', 'command', 'name', 'source', 'answer', 'p', 'probs', 'reason', 'kind', 'macroId', 'key', 'hash', 'done', 'rerun')
+# a line with at least this many columns can be checked (it has the step key and the fingerprint)
+$script:FujiAiReviewKeyed = 16
 
 function Get-FujiSha16 {
     param([AllowEmptyString()][string]$Text)
@@ -24,9 +27,15 @@ function Get-FujiAiTextHash {
     return (Get-FujiSha16 -Text (ConvertTo-FujiAiPlain -Text $Text))
 }
 
-# Which AI step this is, kept when steps move: the macro, the variable and the options (or the items)
+# Which AI step this is, kept when steps move and when its options or items change: the macro and
+# the variable (AI_CHOOSE), the macro (AI_EXTRACT: its answers are kept per item name).
+# -Legacy: the key before 2026.11.11, which also held the options (or the items).
 function Get-FujiAiStepKey {
-    param([Parameter(Mandatory)][string]$Cmd, [AllowEmptyString()][string]$MacroId, [Parameter(Mandatory)][System.Collections.IDictionary]$Settings)
+    param([Parameter(Mandatory)][string]$Cmd, [AllowEmptyString()][string]$MacroId, [Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [switch]$Legacy)
+    if (-not $Legacy) {
+        if ($Cmd -eq 'AI_EXTRACT') { return (Get-FujiSha16 -Text ($Cmd + '|' + $MacroId)) }
+        return (Get-FujiSha16 -Text ($Cmd + '|' + $MacroId + '|' + ([string]$Settings['name']).Trim()))
+    }
     if ($Cmd -eq 'AI_EXTRACT') { $parts = @(foreach ($it in (Read-FujiAiItem -Text $Settings['items'])) { $it.Name }) }
     else { $parts = @(([string]$Settings['name']).Trim()) + @(foreach ($o in (Read-FujiAiOption -Text $Settings['options'])) { $o.Value }) }
     return (Get-FujiSha16 -Text ($Cmd + '|' + $MacroId + '|' + ($parts -join '|')))
@@ -34,6 +43,89 @@ function Get-FujiAiStepKey {
 
 function New-FujiAiMemoryStep {
     return [ordered]@{ answers = [ordered]@{}; examples = (New-Object -TypeName 'System.Collections.Generic.List[object]') }
+}
+
+# The AI steps of a macro by step key (today's key and the one before): key -> list of @{ Key; Cmd; Settings }
+function Get-FujiAiStepMap {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Macro)
+    $map = @{}
+    foreach ($s in $Macro.steps) {
+        if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
+        $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
+        $step = @{ Key = (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set); Cmd = [string]$s.cmd; Settings = $set }
+        foreach ($k in @($step.Key, (Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$Macro.id) -Settings $set -Legacy))) {
+            if (-not $map.ContainsKey($k)) { $map[$k] = New-Object -TypeName 'System.Collections.Generic.List[object]' }
+            $map[$k].Add($step)
+        }
+    }
+    return $map
+}
+
+# The macro's AI step an item of the review list belongs to, or $null. When steps share a key (two
+# AI_CHOOSE with one variable name): the one whose options hold the AI's answer.
+function Find-FujiAiReviewStep {
+    param([Parameter(Mandatory)][hashtable]$Map, [Parameter(Mandatory)][hashtable]$Item)
+    $key = [string]$Item['Key']
+    if (-not $key -or -not $Map.ContainsKey($key)) { return $null }
+    $steps = $Map[$key]
+    if ($steps.Count -gt 1 -and $Item['Command'] -ne 'AI_EXTRACT' -and $Item['Answer']) {
+        foreach ($s in $steps) { if (@(Read-FujiAiOption -Text $s.Settings['options'] | ForEach-Object { $_.Value }) -contains [string]$Item['Answer']) { return $s } }
+    }
+    return $steps[0]
+}
+
+# Items written with the key of before get today's key (the memory is kept under it)
+function Update-FujiAiReviewKey {
+    param([AllowEmptyCollection()][object[]]$Items, [Parameter(Mandatory)][hashtable]$Map)
+    foreach ($it in $Items) {
+        $s = Find-FujiAiReviewStep -Map $Map -Item $it
+        if ($null -ne $s) { $it['Key'] = $s.Key }
+    }
+}
+
+# What was remembered under the keys of before moves to today's keys (for steps whose options or
+# items are as they were then). Answers already under today's key win. Returns how many steps moved.
+function Move-FujiAiMemoryKey {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Memory, [AllowNull()]$Macros)
+    $moved = 0
+    if ($null -eq $Macros) { return $moved }
+    foreach ($m in $Macros) {
+        foreach ($s in $m.steps) {
+            if ($s.cmd -ne 'AI_CHOOSE' -and $s.cmd -ne 'AI_EXTRACT') { continue }
+            $set = ConvertFrom-FujiStepValue -Cmd $s.cmd -Value $s.val
+            $old = Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$m.id) -Settings $set -Legacy
+            $new = Get-FujiAiStepKey -Cmd $s.cmd -MacroId ([string]$m.id) -Settings $set
+            if (-not $Memory.Contains($old)) { continue }
+            $from = $Memory[$old]
+            if (-not $Memory.Contains($new)) { $Memory[$new] = New-FujiAiMemoryStep }
+            $to = $Memory[$new]
+            foreach ($h in @($from['answers'].Keys)) {
+                $a = $from['answers'][$h]
+                if (-not $to['answers'].Contains($h)) { $to['answers'][$h] = $a; continue }
+                $b = $to['answers'][$h]
+                if ($a -is [System.Collections.IDictionary] -and $b -is [System.Collections.IDictionary]) { foreach ($n in @($a.Keys)) { if (-not $b.Contains($n)) { $b[$n] = $a[$n] } } }
+            }
+            $have = @{}
+            foreach ($e in $to['examples']) { $have[[string]$e['hash']] = $true }
+            $keep = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($e in $from['examples']) { if (-not $have.ContainsKey([string]$e['hash'])) { $keep.Add($e) } }
+            foreach ($e in $to['examples']) { $keep.Add($e) }
+            while ($keep.Count -gt $script:FujiAiExampleMax) { $keep.RemoveAt(0) }
+            $to['examples'] = $keep
+            $Memory.Remove($old)
+            $moved++
+        }
+    }
+    return $moved
+}
+
+# Forgets what a person checked for one step; returns how many answers and examples were there
+function Remove-FujiAiRemembered {
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Memory, [AllowEmptyString()][string]$Key)
+    if (-not $Key -or -not $Memory.Contains($Key)) { return @{ Answers = 0; Examples = 0 } }
+    $n = @{ Answers = $Memory[$Key]['answers'].Count; Examples = $Memory[$Key]['examples'].Count }
+    $Memory.Remove($Key)
+    return $n
 }
 
 # fujikyun_ai_answers.json -> step key -> @{ answers; examples }. A file that cannot be read is kept
@@ -136,7 +228,7 @@ function Read-FujiAiReviewItem {
         for ($i = 1; $i -lt $recs.Count; $i++) {
             $r = $recs[$i]
             if ($r.Count -lt 11) { continue }
-            $old = $r.Count -lt $script:FujiAiReviewColumns.Count
+            $old = $r.Count -lt $script:FujiAiReviewKeyed
             $v = @{}
             # the formula guard of the CSV (a leading apostrophe before = + - @) is taken off again
             for ($c = 0; $c -lt $script:FujiAiReviewColumns.Count; $c++) { $v[$script:FujiAiReviewColumns[$c]] = $(if ($c -lt $r.Count) { ([string]$r[$c]) -replace "^'(?=[=+\-@\t\r])", '' } else { '' }) }
@@ -145,20 +237,25 @@ function Read-FujiAiReviewItem {
             $rowNo = 0
             [void][int]::TryParse($v['row'], [ref]$rowNo)
             $items.Add(@{ File = $f.FullName; Line = $i; Old = $old; Time = $v['time']; Macro = $v['macro']; Step = $v['step']; Row = $rowNo; Command = $v['command']; Name = $v['name']
-                    Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done'] })
+                    Source = $v['source']; Answer = $v['answer']; P = $v['p']; Probs = $v['probs']; Reason = $v['reason']; Kind = $v['kind']; MacroId = $v['macroId']; Key = $v['key']; Hash = $v['hash']; Done = $v['done']; Rerun = $v['rerun'] })
         }
     }
     # a plain array (unrolled into a pipeline; callers take it with @())
     return $items.ToArray()
 }
 
-# Writes the time in the "done" column of these items' lines, one write per file (written beside and
-# put in place). A line is changed only when it is still that item (same time and fingerprint).
+# Writes the time in the "done" (or "rerun") column of these items' lines, one write per file (written
+# beside and put in place). A line is changed only when it is still that item (same time and
+# fingerprint); a line from before the "rerun" column is made as wide as today's. An item with
+# Reopen (its checked answer was changed) also loses its "rerun" time, so it can be run again.
 # Returns how many lines were marked; a file in use (open in Excel) is left as it is.
 function Set-FujiAiReviewDoneMany {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [AllowEmptyString()][string]$Time)
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [AllowEmptyString()][string]$Time, [ValidateSet('done', 'rerun')][string]$Column = 'done')
     $done = 0
-    $last = $script:FujiAiReviewColumns.Count - 1
+    $width = $script:FujiAiReviewColumns.Count
+    $at = [array]::IndexOf($script:FujiAiReviewColumns, $Column)
+    $rerunAt = [array]::IndexOf($script:FujiAiReviewColumns, 'rerun')
+    $head = [string[]]((Get-FujiText 'run.aiReviewHeader') -split ',')
     foreach ($group in @($Items | Where-Object { -not $_.Old } | Group-Object -Property { $_.File })) {
         $file = [string]$group.Name
         $tmp = $file + '.saving'
@@ -168,15 +265,22 @@ function Set-FujiAiReviewDoneMany {
             foreach ($it in $group.Group) {
                 if ($it.Line -lt 1 -or $it.Line -ge $recs.Count) { continue }
                 $row = [string[]]$recs[$it.Line]
-                if ($row.Count -le $last -or $row[14] -ne [string]$it.Hash -or $row[0] -ne [string]$it.Time) { continue }
-                $row[$last] = $Time
+                if ($row.Count -lt $script:FujiAiReviewKeyed -or $row[14] -ne [string]$it.Hash -or $row[0] -ne [string]$it.Time) { continue }
+                if ($row.Count -lt $width) { $row = [string[]]($row + (@('') * ($width - $row.Count))) }
+                $row[$at] = $Time
+                if ($Column -eq 'done' -and $it['Reopen']) { $row[$rerunAt] = '' }
                 $recs[$it.Line] = $row
                 $marked.Add($it)
             }
             if ($marked.Count -eq 0) { continue }
+            if ($recs[0].Count -lt $width -and $head.Count -eq $width) { $recs[0] = $head }
             Write-FujiTextFile -Path $tmp -Text (ConvertTo-FujiCsvText -Rows $recs.ToArray()) -Bom
             Copy-Item -LiteralPath $tmp -Destination $file -Force -ErrorAction Stop
-            foreach ($it in $marked) { $it.Done = $Time }
+            foreach ($it in $marked) {
+                if ($Column -eq 'rerun') { $it['Rerun'] = $Time; continue }
+                $it.Done = $Time
+                if ($it['Reopen']) { $it['Rerun'] = ''; $it.Remove('Reopen') }
+            }
             $done += $marked.Count
         } catch {
             $null = $_
@@ -203,15 +307,25 @@ function Set-FujiAiReviewFinal {
     }
 }
 
-# Rows to run again: checked items with a row number, except spot checks the person left as they were
-# (their answer was used already)
-function Get-FujiAiRerunRowNo {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items)
-    $nos = @(foreach ($it in $Items) {
+# Items to run again: checked, with a row number and the person's answer. Left out: spot checks the
+# person left as they were (their answer was used already), an answer a person picked in the run itself
+# (used there: its "rerun" time is the line's own time), and items given to a re-run CSV before
+# (unless IncludeSent).
+function Get-FujiAiRerunItem {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent)
+    $out = @(foreach ($it in $Items) {
             if (-not $it.Done -or $it.Row -le 0 -or -not $it.Contains('Final')) { continue }
             if ($it.Kind -eq 'spot' -and [string]$it['Final'] -eq [string]$it.Answer) { continue }
-            [int]$it.Row
+            $sent = [string]$it['Rerun']
+            if ($sent -and (-not $IncludeSent -or ($it.Kind -eq 'asked' -and $sent -eq [string]$it['Time']))) { continue }
+            $it
         })
+    return , $out
+}
+
+function Get-FujiAiRerunRowNo {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items, [switch]$IncludeSent)
+    $nos = @(foreach ($it in (Get-FujiAiRerunItem -Items $Items -IncludeSent:$IncludeSent)) { [int]$it.Row })
     return , [int[]]@($nos | Sort-Object -Unique)
 }
 

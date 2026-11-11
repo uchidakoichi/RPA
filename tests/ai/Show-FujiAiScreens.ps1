@@ -55,6 +55,7 @@ if ($Only -eq 'review') {
             [ordered]@{ cmd = 'AI_EXTRACT'; val = (ConvertTo-FujiStepValue -Cmd 'AI_EXTRACT' -Settings $exSet); label = '' }) }
     function Get-FujiCurrentMacro { param($Editor) $null = $Editor; return $script:ReviewMacro }
     $script:Ed.Csv = @{ Rows = @(); Header = $null }
+    $script:Ed.Data = @{ macros = @(, $script:ReviewMacro) }
     $key = Get-FujiAiStepKey -Cmd 'AI_CHOOSE' -MacroId 'm1' -Settings $set
     $exKey = Get-FujiAiStepKey -Cmd 'AI_EXTRACT' -MacroId 'm1' -Settings $exSet
     $logs = Join-Path $work 'fujikyun_logs'
