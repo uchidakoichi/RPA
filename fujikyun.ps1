@@ -6528,7 +6528,7 @@ function Test-FujiWindowPlacementVisible {
 
 $script:FujiText = $null
 # Raised whenever fujikyun_ja.json gets texts the scripts need: an older file is reported at start
-$script:FujiTextVersion = 17
+$script:FujiTextVersion = 18
 
 # Reads a UTF-8 file strictly: bytes that are not UTF-8 (for example a file saved as Shift_JIS)
 # throw instead of turning into replacement characters. A UTF-8 BOM is accepted and dropped.
@@ -6897,7 +6897,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.12.2'
+$script:FujiAppVersion = '2026.11.13'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -7460,6 +7460,8 @@ function Show-FujiAiReviewDialog {
         $ctx.Count.Text = Get-FujiText 'gui.aiReviewCount' $ctx.Items.Count $open
         & $hint
         if ($ctx.List.Items.Count -gt 0) { $ctx.List.Items[0].Selected = $true; $ctx.List.Items[0].Focused = $true } else { & $select $null }
+        # an empty list says what is put on it (otherwise the check button seems to do nothing)
+        if ($ctx.Items.Count -eq 0) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewNoItems' (Get-FujiAiSpotSetting -Settings $script:Settings) }
         # what could not be written stays in sight (choosing an item clears the note)
         if ($ctx.Failed) { $ctx.Note.Text = $ctx.Failed }
     }
@@ -7558,16 +7560,23 @@ function Show-FujiAiReviewDialog {
         for ($k = $at + 1; $k -lt $ctx.List.Items.Count; $k++) { $t = $ctx.List.Items[$k].Tag; if (-not $t.Done -and (Test-FujiAiReviewCheckable -Item $t)) { $ctx.List.Items[$k].Selected = $true; $ctx.List.Items[$k].Focused = $true; $ctx.List.EnsureVisible($k); return } }
     }
     $confirm = {
+        # every press shows something: why nothing was checked, or that a checked item was checked again
         $it = $ctx.Current
-        if ($null -eq $it) { return }
+        if ($null -eq $it) {
+            if ($ctx.Items.Count -eq 0) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewNoItems' (Get-FujiAiSpotSetting -Settings $script:Settings) } else { $ctx.Note.Text = Get-FujiText 'gui.aiReviewPickItem' }
+            return
+        }
         $answer = ''
         if ($it.Command -eq 'AI_EXTRACT') { $answer = $ctx.Value.Text.Trim() }
         elseif ($ctx.Choices.SelectedIndex -ge 0) { $answer = (Read-FujiAiOption -Text $ctx.Step.Settings['options'])[$ctx.Choices.SelectedIndex].Value }
+        elseif ($null -ne $ctx.Step -and (Test-FujiAiReviewCheckable -Item $it)) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewPickChoice'; return }
         else { return }
+        $again = [bool]$it.Done
         if (& $checkOne $it $answer) {
             & $commit @($it)
             foreach ($lvi in $ctx.List.Items) { if ([object]::ReferenceEquals($lvi.Tag, $it)) { & $showRow $it $lvi } }
             & $hint
+            if ($again) { $ctx.Note.Text = Get-FujiText 'gui.aiReviewCheckedAgain' $answer; return }
             & $next
         }
     }

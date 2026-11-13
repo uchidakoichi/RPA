@@ -94,6 +94,7 @@ function Invoke-UiStep {
             foreach ($lvi in $list.Items) { if (($Step.Contains('Kind') -and $lvi.Tag.Kind -eq $Step.Kind) -or ($Step.Contains('Row') -and $lvi.Tag.Row -eq $Step.Row)) { $lvi.Selected = $true } }
         }
         'choose' { (Find-UiType -Root $Window -Type ([System.Windows.Forms.ListBox])).SelectedIndex = $Step.Index }
+        'note' { $script:notes.Add((Find-UiText -Root $Window -Text $Step.Text) -ne $null) }
         'shot' {
             $b = $Window.Bounds
             $bmp = New-Object -TypeName System.Drawing.Bitmap -ArgumentList $b.Width, $b.Height
@@ -127,6 +128,7 @@ $timer.Add_Tick({
         }
     })
 $script:fail = 0
+$script:notes = New-Object -TypeName 'System.Collections.Generic.List[bool]'
 function Assert-Ui { param([bool]$Ok, [string]$Name) if ($Ok) { Write-Output ('ok   ' + $Name) } else { $script:fail++; Write-Output ('FAIL ' + $Name) } }
 function Show-UiReview {
     param([object[]]$Steps)
@@ -143,6 +145,12 @@ function Get-UiRerunRow {
 }
 $timer.Start()
 try {
+    # 0: an empty list: pressing check says what is put on the list
+    $script:Ed.Directory = Join-Path $work 'none'
+    [void](New-Item -ItemType Directory -Path $script:Ed.Directory)
+    Show-UiReview -Steps @(@{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'note'; Text = (Get-FujiText 'gui.aiReviewNoItems' 5) }, @{ Do = 'click'; Text = 'gui.close' })
+    Assert-Ui ($script:notes.Count -eq 1 -and $script:notes[0]) '0 an empty list says why there is nothing to check'
+    $script:Ed.Directory = $work
     # 1: the empty text cannot be checked; then the three unchecked low answers (one of the called
     # macro) as the AI said, then the re-run CSV
     Show-UiReview -Steps @(@{ Do = 'shot'; Name = 'ai_review_ui_1' }, @{ Do = 'pick'; Row = 5 }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'pick'; Row = 2 },
@@ -166,7 +174,8 @@ try {
     Show-UiReview -Steps @(@{ Do = 'click'; Text = 'gui.aiReviewRerun' }, @{ Do = 'click'; Text = 'gui.ok' }, @{ Do = 'tick'; Text = 'gui.aiReviewRerunAll' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
     Assert-Ui ($script:imported -eq 2 -and (Get-UiRerunRow) -eq '1,2,6') '2 no rows without the box (message), rows 1, 2, 6 with the box'
     # 3: the answer picked in the run is changed: only that row is run again
-    Show-UiReview -Steps @(@{ Do = 'pick'; Kind = 'asked' }, @{ Do = 'choose'; Index = 2 }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
+    Show-UiReview -Steps @(@{ Do = 'pick'; Kind = 'asked' }, @{ Do = 'choose'; Index = 2 }, @{ Do = 'click'; Text = 'gui.aiReviewCheck' }, @{ Do = 'note'; Text = (Get-FujiText 'gui.aiReviewCheckedAgain' 'other') }, @{ Do = 'click'; Text = 'gui.aiReviewRerun' })
+    Assert-Ui ($script:notes.Count -eq 2 -and $script:notes[1]) '3 checking a checked item again says so'
     $it = Get-UiItem
     $m = Read-FujiAiMemory -Directory $work
     Assert-Ui ($script:imported -eq 3 -and (Get-UiRerunRow) -eq '4' -and (Get-FujiAiRemembered -Memory $m -Key $newKey -Hash (Get-FujiAiTextHash $texts[3])) -eq 'other') '3 the changed answer is remembered and its row alone is in the re-run CSV'
