@@ -6897,7 +6897,7 @@ function Test-FujiWindowCondition {
 #  a changed fujikyun.ps1 is handed out, so users can tell which one they have.
 # ---------------------------------------------------------------------------------------------
 
-$script:FujiAppVersion = '2026.11.13'
+$script:FujiAppVersion = '2026.11.16'
 
 # ===== src/Vision.ps1 =====
 # ---------------------------------------------------------------------------------------------
@@ -7285,7 +7285,9 @@ function Show-FujiAiSettingDialog {
     [void]$layout.Controls.Add($spotRow)
     $status = New-FujiTextBox -Text '' -Width ($width - (Get-FujiScaled 30)) -Multiline
     $status.ReadOnly = $true
-    $status.Height = Get-FujiScaled 150
+    # the status box takes what is left, so the buttons below it stay in view with large text
+    $status.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $status.MinimumSize = New-Object -TypeName System.Drawing.Size -ArgumentList 0, (Get-FujiScaled 50)
     [void]$layout.Controls.Add($status)
     $actions = New-FujiFlow
     $copyBtn = New-FujiButton -Text (Get-FujiText 'gui.aiCopyNow')
@@ -7293,6 +7295,10 @@ function Show-FujiAiSettingDialog {
     $testBtn = New-FujiButton -Text (Get-FujiText 'gui.aiTest')
     foreach ($b in @($copyBtn, $deleteBtn, $testBtn)) { [void]$actions.Controls.Add($b) }
     [void]$layout.Controls.Add($actions)
+    foreach ($i in 0..4) {
+        $kind = if ($i -eq 3) { [System.Windows.Forms.SizeType]::Percent } else { [System.Windows.Forms.SizeType]::AutoSize }
+        [void]$layout.RowStyles.Add((New-Object -TypeName System.Windows.Forms.RowStyle -ArgumentList $kind, 100))
+    }
     $ctx = @{ Box = $box; Status = $status; Form = $f }
     $refresh = { $ctx.Status.Text = Get-FujiAiStatusText -Folder $ctx.Box.Text.Trim() }
     $pick.Add_Click({ Invoke-FujiUi { $p = Select-FujiAiFolderUi -Start $ctx.Box.Text.Trim(); if ($p) { $ctx.Box.Text = $p }; & $refresh } })
